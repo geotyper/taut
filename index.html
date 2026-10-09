@@ -1,0 +1,60 @@
+<!doctype html>
+<html lang="ru">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>taut</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <main>
+      <canvas id="field"></canvas>
+      <aside>
+        <h1>taut</h1>
+        <p class="hint">
+          Левая кнопка — рисовать камни, правая или Shift — стирать.
+        </p>
+
+        <label>
+          <span>Радиус ядра <output id="radius-out"></output></span>
+          <input id="radius" type="range" min="2" max="24" step="1" value="8" />
+        </label>
+        <label>
+          <span>Порог (давление) <output id="threshold-out"></output></span>
+          <input id="threshold" type="range" min="0.48" max="0.53" step="0.001" value="0.5" />
+        </label>
+        <label>
+          <span>Шум <output id="noise-out"></output></span>
+          <input id="noise" type="range" min="0" max="0.5" step="0.01" value="0.1" />
+        </label>
+        <label>
+          <span>Шагов на кадр <output id="speed-out"></output></span>
+          <input id="speed" type="range" min="1" max="8" step="1" value="3" />
+        </label>
+        <label>
+          <span>Кисть <output id="brush-out"></output></span>
+          <input id="brush" type="range" min="2" max="40" step="1" value="14" />
+        </label>
+        <label class="check">
+          <input id="show-hull" type="checkbox" checked />
+          <span>Показывать выпуклую оболочку</span>
+        </label>
+
+        <div class="buttons">
+          <button id="restart">Запустить волну заново</button>
+          <button id="pause">Пауза</button>
+          <button id="random">Случайные камни</button>
+          <button id="clear">Убрать камни</button>
+        </div>
+
+        <dl>
+          <dt>Шаг</dt>
+          <dd id="stat-steps">0</dd>
+          <dt>Площадь / оболочка</dt>
+          <dd id="stat-ratio">—</dd>
+        </dl>
+      </aside>
+    </main>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
