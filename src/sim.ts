@@ -7,6 +7,26 @@ export interface Params {
   noise: number;
 }
 
+/**
+ * A classic outer-totalistic rule on the Moore neighbourhood: the next state
+ * indexed by how many of the 9 cells (the cell itself included) are inside.
+ */
+export type ClassicRule = readonly number[];
+
+/** Vichniac majority vote, B5678/S45678: inside when 5 or more of 9 are. */
+export const RULE_MAJORITY: ClassicRule = [0, 0, 0, 0, 0, 1, 1, 1, 1, 1];
+/** Vichniac anneal ("twisted majority"), B4678/S35678: 4 and 5 swapped. */
+export const RULE_ANNEAL: ClassicRule = [0, 0, 0, 0, 1, 0, 1, 1, 1, 1];
+
+/**
+ * Where the band starts: along the field border, as an inscribed circle, or
+ * along the border with a randomly pitted edge.
+ */
+export type StartShape = 'square' | 'circle' | 'rough';
+
+/** Depth of the randomly pitted strip of the 'rough' start, in cells. */
+const ROUGH_WIDTH = 4;
+
 /** Cells this close to the field border can never hold a stone. */
 export const STONE_MARGIN = 4;
 
@@ -25,21 +45,42 @@ export class Sim {
 
   private readonly a: Float32Array;
   private readonly b: Float32Array;
+  private readonly counts: Uint8Array;
 
-  constructor(w: number, h: number) {
+  /** Pass another sim's `stones` to run two automata on the same stones. */
+  constructor(w: number, h: number, stones?: Uint8Array) {
     this.w = w;
     this.h = h;
     this.phase = new Uint8Array(w * h);
-    this.stones = new Uint8Array(w * h);
+    this.stones = stones ?? new Uint8Array(w * h);
+    this.counts = new Uint8Array(w * h);
     this.a = new Float32Array(w * h);
     this.b = new Float32Array(w * h);
     this.restart();
   }
 
-  /** Relaunch the wave: the band starts stretched along the field border. */
-  restart(): void {
-    this.phase.fill(1);
+  /** Relaunch the wave from the given starting shape of the band. */
+  restart(start: StartShape = 'square'): void {
+    const { w, h, phase } = this;
+    phase.fill(1);
     this.steps = 0;
+    if (start === 'circle') {
+      const cx = (w - 1) / 2;
+      const cy = (h - 1) / 2;
+      const r = Math.min(w, h) / 2 - 2;
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          if ((x - cx) ** 2 + (y - cy) ** 2 > r * r) phase[y * w + x] = 0;
+        }
+      }
+    } else if (start === 'rough') {
+      for (let y = 0; y < h; y++) {
+        for (let x = 0; x < w; x++) {
+          const edge = Math.min(x, y, w - 1 - x, h - 1 - y);
+          if (edge < ROUGH_WIDTH && Math.random() < 0.5) phase[y * w + x] = 0;
+        }
+      }
+    }
   }
 
   clearStones(): void {
@@ -66,6 +107,39 @@ export class Sim {
       let v = b[i] - p.threshold;
       if (v > -half && v < half) v += (Math.random() - 0.5) * p.noise;
       phase[i] = v > 0 ? 1 : 0;
+    }
+    this.steps++;
+  }
+
+  /**
+   * One synchronous step of a classic two-state automaton: 8 neighbours plus
+   * the cell itself, no weights, no randomness. Stones stay frozen inside.
+   */
+  stepClassic(rule: ClassicRule): void {
+    const { w, h, phase, stones, counts } = this;
+    for (let y = 0; y < h; y++) {
+      const row = y * w;
+      for (let x = 0; x < w; x++) {
+        const i = row + x;
+        let n = phase[i];
+        if (x > 0) n += phase[i - 1];
+        if (x < w - 1) n += phase[i + 1];
+        counts[i] = n;
+      }
+    }
+    for (let y = 0; y < h; y++) {
+      const row = y * w;
+      for (let x = 0; x < w; x++) {
+        const i = row + x;
+        if (stones[i]) {
+          phase[i] = 1;
+          continue;
+        }
+        let n = counts[i];
+        if (y > 0) n += counts[i - w];
+        if (y < h - 1) n += counts[i + w];
+        phase[i] = rule[n];
+      }
     }
     this.steps++;
   }

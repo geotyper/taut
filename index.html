@@ -8,16 +8,49 @@
   </head>
   <body>
     <main>
-      <canvas id="field"></canvas>
+      <div class="fields">
+        <figure>
+          <figcaption>
+            <strong>Классический автомат</strong>
+            <span>окрестность Мура, 9 клеток</span>
+          </figcaption>
+          <canvas id="field-classic"></canvas>
+          <p class="stat" id="stat-classic"></p>
+        </figure>
+        <figure>
+          <figcaption>
+            <strong>Широкое ядро</strong>
+            <span>размытие и порог, с шумом</span>
+          </figcaption>
+          <canvas id="field-wide"></canvas>
+          <p class="stat" id="stat-wide"></p>
+        </figure>
+      </div>
+
       <aside>
         <h1>taut</h1>
         <p class="hint">
-          Левая кнопка — рисовать камни, правая или Shift — стирать.
+          Левая кнопка — рисовать камни, правая или Shift — стирать. Камни общие
+          для обоих полей.
         </p>
 
+        <h2>Классический автомат</h2>
+        <label>
+          <span>Правило</span>
+          <select id="rule">
+            <option value="anneal">Отжиг (4 и 5 переставлены)</option>
+            <option value="majority">Большинство (5 из 9)</option>
+          </select>
+        </label>
+        <label>
+          <span>Шагов на кадр <output id="classic-speed-out"></output></span>
+          <input id="classic-speed" type="range" min="1" max="200" step="1" value="60" />
+        </label>
+
+        <h2>Широкое ядро</h2>
         <label>
           <span>Радиус ядра <output id="radius-out"></output></span>
-          <input id="radius" type="range" min="2" max="24" step="1" value="8" />
+          <input id="radius" type="range" min="1" max="16" step="1" value="5" />
         </label>
         <label>
           <span>Порог (давление) <output id="threshold-out"></output></span>
@@ -29,11 +62,21 @@
         </label>
         <label>
           <span>Шагов на кадр <output id="speed-out"></output></span>
-          <input id="speed" type="range" min="1" max="8" step="1" value="3" />
+          <input id="speed" type="range" min="1" max="8" step="1" value="2" />
+        </label>
+
+        <h2>Общее</h2>
+        <label>
+          <span>Старт волны</span>
+          <select id="start">
+            <option value="rough">Шероховатый край</option>
+            <option value="square">Ровный край</option>
+            <option value="circle">Круг</option>
+          </select>
         </label>
         <label>
           <span>Кисть <output id="brush-out"></output></span>
-          <input id="brush" type="range" min="2" max="40" step="1" value="14" />
+          <input id="brush" type="range" min="1" max="20" step="1" value="7" />
         </label>
         <label class="check">
           <input id="show-hull" type="checkbox" checked />
@@ -46,13 +89,6 @@
           <button id="random">Случайные камни</button>
           <button id="clear">Убрать камни</button>
         </div>
-
-        <dl>
-          <dt>Шаг</dt>
-          <dd id="stat-steps">0</dd>
-          <dt>Площадь / оболочка</dt>
-          <dd id="stat-ratio">—</dd>
-        </dl>
       </aside>
     </main>
     <script type="module" src="/src/main.ts"></script>
