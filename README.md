@@ -1,45 +1,61 @@
 # taut
 
-Резинка на клеточном автомате: внешняя фаза волной идёт от границ поля и
-натягивается на камни.
+A rubber band on a cellular automaton: the outside phase floods in from the
+field borders as a wave and pulls taut around the stones.
 
-Поле бинарное («снаружи / внутри»), контур — граница между фазами, камни
-заморожены во внутренней фазе. Полей два, камни у них общие; для каждого
-выбирается свой автомат и свои опции:
+The field is binary ("outside" / "inside"), the band is the boundary between
+the two phases, and stones are frozen in the inside phase. There are two fields
+sharing the same stones; each one runs its own automaton with its own options:
 
-- **Широкое ядро** — threshold dynamics (Merriman–Bence–Osher): три прохода
-  боксового размытия, порог и шум у фронта.
-- **Классический автомат** — окрестность Мура (9 клеток с самой клеткой), без
-  весов и без случайности. Два правила Вишняка: большинство и отжиг.
-- **Модель Поттса** — Метрополис по клеткам фронта, энергия = натяжение
-  (разнофазные пары соседей) + давление × площадь.
-- **Рост от камней** — клетка становится внутренней, если по обе стороны от неё
-  на равном расстоянии в пределах радиуса уже есть внутренние. Мосты длиннее
-  двух радиусов не строит.
+- **Wide kernel** — threshold dynamics (Merriman–Bence–Osher): three box-blur
+  passes, a threshold, and noise near the front.
+- **Classic automaton** — Moore neighbourhood (9 cells including the cell
+  itself), no weights and no randomness. Two Vichniac rules: majority and anneal.
+- **Potts model** — Metropolis updates on the front cells; energy = tension
+  (unlike neighbour pairs) + pressure × area.
+- **Growth from stones** — a cell becomes inside when, on opposite sides of it
+  at equal distance within the radius, there are already inside cells. It does
+  not bridge gaps wider than two radii.
 
-Опции, которые можно включать на поле вместе:
+Options that can be combined on a field:
 
-- **Трение** — свободные клетки в двух шагах от камня сопротивляются переходу
-  наружу (широкое ядро, классический, Поттс).
-- **Конечная длина** — резинка не короче заданной длины: пока она короче, её
-  распирает изнутри (широкое ядро, Поттс).
+- **Friction** — free cells within two steps of a stone resist turning outside
+  (wide kernel, classic, Potts).
+- **Fixed length** — the band is never shorter than the given length: while it
+  is shorter, it is pushed outwards from the inside (wide kernel, Potts).
 
-Эталон для сверки — точная выпуклая оболочка камней, рисуется пунктиром.
+The reference to check against is the exact convex hull of the stones, drawn as
+a dashed line.
 
-## Запуск
+## Running
 
 ```sh
 npm install
 npm run dev
 ```
 
-## Управление
+## Controls
 
-- Левая кнопка мыши — рисовать камни, правая или Shift — стирать.
-- **Правило** — большинство замирает почти сразу; отжиг стягивается к оболочке,
-  но только с шероховатого края и примерно в сто раз дольше широкого ядра.
-- **Старт волны** — ровный край, вписанный круг или край со случайными выбоинами.
-- **Радиус ядра** — масштаб, ниже которого детали игнорируются, и скорость стягивания.
-- **Порог** — 0.5 даёт чистое натяжение; выше добавляет давление внутрь, и контур
-  провисает между камнями или проскальзывает в щели.
-- **Шум** — снимает залипание фронта на решётке; при нуле контур застревает, не дойдя до оболочки.
+- Left mouse button draws stones, right button or Shift erases.
+- **Mode** — two fields side by side, or the left field alone.
+- **Automaton and options** — chosen above each field; an option is greyed out
+  when the automaton does not support it.
+- **Kernel radius** — the scale below which details are ignored, and how fast
+  the band tightens.
+- **Threshold** — 0.5 is pure tension; higher adds inward pressure, so the band
+  sags between stones or slips through the gaps.
+- **Noise** — unpins the front from the lattice; at zero the band gets stuck
+  before reaching the hull.
+- **Rule** — majority freezes almost at once; anneal tightens onto the hull, but
+  only from a rough edge and about fifty times slower than the wide kernel.
+- **Temperature** and **Pressure** (Potts) — temperature keeps the front
+  moving; positive pressure squeezes the band, negative inflates it.
+- **Neighbourhood radius** (growth) — how far a cell looks for a pair of inside
+  cells around it.
+- **Grip strength** — how hard the cells next to a stone hold on.
+- **Band length** — the target length, in lengths of the convex hull.
+- **Wave start** — a straight edge, an inscribed circle, or an edge with random
+  pits.
+
+The numbers under each field are the step count and the band's area and length
+relative to the convex hull; a taut band reads 1.000 for both.

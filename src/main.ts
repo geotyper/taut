@@ -116,7 +116,7 @@ hullToggle.addEventListener('change', () => (showHull = hullToggle.checked));
 const pauseButton = byId<HTMLButtonElement>('pause');
 pauseButton.addEventListener('click', () => {
   paused = !paused;
-  pauseButton.textContent = paused ? 'Продолжить' : 'Пауза';
+  pauseButton.textContent = paused ? 'Resume' : 'Pause';
 });
 byId('restart').addEventListener('click', restartAll);
 byId('random').addEventListener('click', () => {
@@ -314,13 +314,13 @@ function render(panel: Panel): void {
     ctx.stroke();
   }
 
-  let text = `шаг ${sim.steps}`;
+  let text = `step ${sim.steps}`;
   if (hullArea > 0) {
     const area = (sim.area() / hullArea).toFixed(3);
     const length = (sim.perimeter() / hullLength).toFixed(3);
-    text += ` · площадь ${area} · длина ${length}`;
+    text += ` · area ${area} · length ${length}`;
   }
-  if (panel.algorithm === 'growth' && sim.settled) text += ' · остановился';
+  if (panel.algorithm === 'growth' && sim.settled) text += ' · settled';
   stat.textContent = text;
 }
 

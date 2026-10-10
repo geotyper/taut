@@ -1,5 +1,5 @@
 <!doctype html>
-<html lang="ru">
+<html lang="en">
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
@@ -11,19 +11,19 @@
       <div class="fields" id="fields">
         <figure id="figure-a">
           <figcaption>
-            <select id="algorithm-a" aria-label="Автомат">
-              <option value="wide">Широкое ядро</option>
-              <option value="classic">Классический автомат</option>
-              <option value="potts">Модель Поттса</option>
-              <option value="growth">Рост от камней</option>
+            <select id="algorithm-a" aria-label="Automaton">
+              <option value="wide">Wide kernel</option>
+              <option value="classic">Classic automaton</option>
+              <option value="potts">Potts model</option>
+              <option value="growth">Growth from stones</option>
             </select>
             <label class="check">
               <input id="friction-a" type="checkbox" />
-              <span>трение</span>
+              <span>friction</span>
             </label>
             <label class="check">
               <input id="length-a" type="checkbox" />
-              <span>конечная длина</span>
+              <span>fixed length</span>
             </label>
           </figcaption>
           <canvas id="field-a"></canvas>
@@ -31,19 +31,19 @@
         </figure>
         <figure id="figure-b">
           <figcaption>
-            <select id="algorithm-b" aria-label="Автомат">
-              <option value="wide">Широкое ядро</option>
-              <option value="classic">Классический автомат</option>
-              <option value="potts">Модель Поттса</option>
-              <option value="growth">Рост от камней</option>
+            <select id="algorithm-b" aria-label="Automaton">
+              <option value="wide">Wide kernel</option>
+              <option value="classic">Classic automaton</option>
+              <option value="potts">Potts model</option>
+              <option value="growth">Growth from stones</option>
             </select>
             <label class="check">
               <input id="friction-b" type="checkbox" />
-              <span>трение</span>
+              <span>friction</span>
             </label>
             <label class="check">
               <input id="length-b" type="checkbox" />
-              <span>конечная длина</span>
+              <span>fixed length</span>
             </label>
           </figcaption>
           <canvas id="field-b"></canvas>
@@ -54,116 +54,117 @@
       <aside>
         <h1>taut</h1>
         <p class="hint">
-          Левая кнопка — рисовать камни, правая или Shift — стирать. Камни общие
-          для обоих полей. Площадь и длина под полем — в долях выпуклой оболочки.
+          Left button draws stones, right button or Shift erases. Both fields
+          share the same stones. Area and length under a field are relative to
+          the convex hull.
         </p>
 
         <label>
-          <span>Режим</span>
+          <span>Mode</span>
           <select id="mode">
-            <option value="compare">Сравнение двух полей</option>
-            <option value="single">Одно поле</option>
+            <option value="compare">Compare two fields</option>
+            <option value="single">Single field</option>
           </select>
         </label>
 
         <section id="group-wide">
-          <h2>Широкое ядро</h2>
+          <h2>Wide kernel</h2>
           <label>
-            <span>Радиус ядра <output id="radius-out"></output></span>
+            <span>Kernel radius <output id="radius-out"></output></span>
             <input id="radius" type="range" min="1" max="16" step="1" value="5" />
           </label>
           <label>
-            <span>Порог (давление) <output id="threshold-out"></output></span>
+            <span>Threshold (pressure) <output id="threshold-out"></output></span>
             <input id="threshold" type="range" min="0.48" max="0.53" step="0.001" value="0.5" />
           </label>
           <label>
-            <span>Шум <output id="noise-out"></output></span>
+            <span>Noise <output id="noise-out"></output></span>
             <input id="noise" type="range" min="0" max="0.5" step="0.01" value="0.1" />
           </label>
           <label>
-            <span>Шагов на кадр <output id="speed-out"></output></span>
+            <span>Steps per frame <output id="speed-out"></output></span>
             <input id="speed" type="range" min="1" max="8" step="1" value="2" />
           </label>
         </section>
 
         <section id="group-classic">
-          <h2>Классический автомат</h2>
+          <h2>Classic automaton</h2>
           <label>
-            <span>Правило</span>
+            <span>Rule</span>
             <select id="rule">
-              <option value="anneal">Отжиг (4 и 5 переставлены)</option>
-              <option value="majority">Большинство (5 из 9)</option>
+              <option value="anneal">Anneal (4 and 5 swapped)</option>
+              <option value="majority">Majority (5 of 9)</option>
             </select>
           </label>
           <label>
-            <span>Шагов на кадр <output id="classic-speed-out"></output></span>
+            <span>Steps per frame <output id="classic-speed-out"></output></span>
             <input id="classic-speed" type="range" min="1" max="200" step="1" value="60" />
           </label>
         </section>
 
         <section id="group-potts">
-          <h2>Модель Поттса</h2>
+          <h2>Potts model</h2>
           <label>
-            <span>Температура <output id="temperature-out"></output></span>
+            <span>Temperature <output id="temperature-out"></output></span>
             <input id="temperature" type="range" min="0" max="3" step="0.05" value="0.5" />
           </label>
           <label>
-            <span>Давление <output id="potts-pressure-out"></output></span>
+            <span>Pressure <output id="potts-pressure-out"></output></span>
             <input id="potts-pressure" type="range" min="-0.3" max="0.3" step="0.01" value="0" />
           </label>
           <label>
-            <span>Проходов на кадр <output id="potts-speed-out"></output></span>
+            <span>Sweeps per frame <output id="potts-speed-out"></output></span>
             <input id="potts-speed" type="range" min="1" max="100" step="1" value="40" />
           </label>
         </section>
 
         <section id="group-growth">
-          <h2>Рост от камней</h2>
+          <h2>Growth from stones</h2>
           <label>
-            <span>Радиус окрестности <output id="growth-radius-out"></output></span>
+            <span>Neighbourhood radius <output id="growth-radius-out"></output></span>
             <input id="growth-radius" type="range" min="2" max="48" step="1" value="40" />
           </label>
         </section>
 
         <section id="group-friction">
-          <h2>Трение</h2>
+          <h2>Friction</h2>
           <label>
-            <span>Сила сцепления <output id="friction-out"></output></span>
+            <span>Grip strength <output id="friction-out"></output></span>
             <input id="friction" type="range" min="0" max="1" step="0.05" value="1" />
           </label>
         </section>
 
         <section id="group-length">
-          <h2>Конечная длина</h2>
+          <h2>Fixed length</h2>
           <label>
-            <span>Длина резинки, в оболочках <output id="length-out"></output></span>
+            <span>Band length, in hull lengths <output id="length-out"></output></span>
             <input id="length" type="range" min="1" max="2.5" step="0.01" value="1.3" />
           </label>
         </section>
 
-        <h2>Общее</h2>
+        <h2>General</h2>
         <label>
-          <span>Старт волны</span>
+          <span>Wave start</span>
           <select id="start">
-            <option value="rough">Шероховатый край</option>
-            <option value="square">Ровный край</option>
-            <option value="circle">Круг</option>
+            <option value="rough">Rough edge</option>
+            <option value="square">Straight edge</option>
+            <option value="circle">Circle</option>
           </select>
         </label>
         <label>
-          <span>Кисть <output id="brush-out"></output></span>
+          <span>Brush <output id="brush-out"></output></span>
           <input id="brush" type="range" min="1" max="20" step="1" value="7" />
         </label>
         <label class="check">
           <input id="show-hull" type="checkbox" checked />
-          <span>Показывать выпуклую оболочку</span>
+          <span>Show convex hull</span>
         </label>
 
         <div class="buttons">
-          <button id="restart">Запустить волну заново</button>
-          <button id="pause">Пауза</button>
-          <button id="random">Случайные камни</button>
-          <button id="clear">Убрать камни</button>
+          <button id="restart">Restart the wave</button>
+          <button id="pause">Pause</button>
+          <button id="random">Random stones</button>
+          <button id="clear">Clear stones</button>
         </div>
       </aside>
     </main>
