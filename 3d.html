@@ -32,12 +32,19 @@
         <section id="group-lines">
           <h2>Line majority</h2>
           <label>
-            <span>Line reach <output id="lines-radius-out"></output></span>
-            <input id="lines-radius" type="range" min="4" max="32" step="1" value="10" />
+            <span>Kernel</span>
+            <select id="kernel">
+              <option value="thin">Thin lines</option>
+              <option value="soft">Soft lines (smoother)</option>
+            </select>
           </label>
           <label>
-            <span>Threshold <output id="lines-threshold-out"></output></span>
-            <input id="lines-threshold" type="range" min="0.5" max="0.98" step="0.01" value="0.65" />
+            <span>Line reach <output id="lines-radius-out"></output></span>
+            <input id="lines-radius" type="range" min="4" max="40" step="1" value="10" />
+          </label>
+          <label>
+            <span>Pressure <output id="pressure-out"></output></span>
+            <input id="pressure" type="range" min="-1" max="1" step="0.05" value="0" />
           </label>
           <label>
             <span>Noise <output id="lines-noise-out"></output></span>
@@ -49,7 +56,7 @@
           <h2>Wide kernel</h2>
           <label>
             <span>Kernel radius <output id="film-radius-out"></output></span>
-            <input id="film-radius" type="range" min="1" max="8" step="1" value="3" />
+            <input id="film-radius" type="range" min="1" max="12" step="1" value="3" />
           </label>
           <label>
             <span>Threshold (pressure) <output id="film-threshold-out"></output></span>
@@ -68,6 +75,7 @@
             <option value="64" selected>Low (64³)</option>
             <option value="96">Medium (96³)</option>
             <option value="128">High (128³, slower)</option>
+            <option value="192">Ultra (192³, slow)</option>
           </select>
         </label>
         <label>
@@ -88,6 +96,17 @@
         <label>
           <span>Steps per frame <output id="speed-out"></output></span>
           <input id="speed" type="range" min="1" max="4" step="1" value="1" />
+        </label>
+        <label>
+          <span>Surface</span>
+          <select id="surface">
+            <option value="voxels">Voxels</option>
+            <option value="smooth">Smooth</option>
+          </select>
+        </label>
+        <label id="group-smoothness">
+          <span>Smoothness <output id="smoothness-out"></output></span>
+          <input id="smoothness" type="range" min="0" max="2.5" step="0.1" value="1.2" />
         </label>
         <label>
           <span>Membrane opacity <output id="opacity-out"></output></span>

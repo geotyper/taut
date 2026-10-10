@@ -47,11 +47,33 @@ There are two automata:
   moves the front by mean curvature, so necks pinch off and the membrane ends
   up shrunk onto each stone separately, like a soap film rather than a wrap.
 
-Drag to orbit, scroll to zoom. The membrane can be translucent or opaque, and
-the stones can take its colour so the wrap reads as a single shell; the light
-comes from the camera, so faces turned away darken. Resolution is 64³,
-96³ or 128³, and the radii scale with it. Adding `?steps=200` to the address
-runs that many steps before the first frame, and `?opaque` / `?onecolor` start with those view options on.
+The line automaton has two kernels and a pressure control:
+
+- **Kernel** — *thin lines* sum the raw binary cells; *soft lines* sum the
+  field blurred over each cell's 3×3×3 block, which fattens every line into a
+  soft tube and evens out the lattice staircase.
+- **Pressure** — positive values raise the line threshold, so the membrane
+  sags inwards between the stones, down to a narrow waist. Negative values
+  inflate it: the settled membrane is pushed outwards by up to an eighth of
+  the field and its corners rounded. Inflation is derived from the taut field
+  rather than simulated, because no local rule can inflate to a limit — a rule
+  that makes a flat face advance keeps it advancing.
+
+Drag to orbit, scroll to zoom. View options:
+
+- **Surface** — the raw voxels as cubes (the default), or smooth. The smooth surface is the
+  same binary field read through a coarser mip level of its 3D texture, so the
+  staircase is blurred away in the shader; **Smoothness** sets how strongly.
+- **Membrane** — translucent or opaque, and the stones can take its colour so
+  the wrap reads as a single shell. The light comes from the camera, so
+  surfaces turned away darken.
+- **Resolution** — 64³, 96³, 128³ or 192³; the radii scale with it. A step of
+  the line automaton takes about 3 ms at 64³ once settled and about 50 ms at
+  192³, with the first steps of the wave several times slower.
+
+Address parameters: `?steps=200` runs that many steps before the first frame;
+`?size=128`, `?kernel=soft`, `?pressure=-0.5`, `?opaque`, `?onecolor` and
+`?smooth` preset the page.
 
 ## Running
 

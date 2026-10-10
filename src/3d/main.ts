@@ -1,5 +1,5 @@
-import { Renderer, type Camera } from './renderer.ts';
-import { Sim3, type Params3, type StartShape3 } from './sim3.ts';
+import { Renderer, type Camera, type View } from './renderer.ts';
+import { Sim3, type LineKernel, type Params3, type StartShape3 } from './sim3.ts';
 import { scatterStones } from './stones.ts';
 
 /** Per-frame simulation time limit, in ms; stepping stops early past it. */
@@ -7,14 +7,29 @@ const FRAME_BUDGET = 14;
 
 type Automaton = 'lines' | 'film';
 
+/**
+ * Line threshold at zero and at full inward pressure, per kernel. Below the
+ * first value the membrane stays pinned where it started; towards the second
+ * it sags ever deeper between the stones.
+ */
+const SAG_RANGE: Record<LineKernel, [number, number]> = {
+  thin: [0.6, 0.95],
+  soft: [0.52, 0.9],
+};
+/** Full outward pressure inflates the membrane by this fraction of the field. */
+const INFLATE_REACH = 1 / 8;
+
 const canvas = byId<HTMLCanvasElement>('field-3d');
 const stat = byId('stat-3d');
 const renderer = createRenderer();
 
-const linesParams: Params3 = { radius: 10, threshold: 0.65, noise: 0 };
+const linesParams: Params3 = { radius: 10, threshold: SAG_RANGE.thin[0], noise: 0 };
 const filmParams: Params3 = { radius: 3, threshold: 0.5, noise: 0.1 };
 const camera: Camera = { yaw: 0.7, pitch: 0.45, distance: 1.5 };
 let automaton: Automaton = 'lines';
+let kernel: LineKernel = 'thin';
+/** -1..1: negative inflates the membrane, positive makes it sag inwards. */
+let pressure = 0;
 let start: StartShape3 = 'ball';
 let stoneCount = 5;
 let stoneSpread = 0.88;
@@ -22,6 +37,8 @@ let stepsPerFrame = 1;
 let opacity = 0.3;
 let opaque = false;
 let oneColor = false;
+let smooth = false;
+let smoothness = 1.2;
 let paused = false;
 
 let sim = new Sim3(64);
@@ -30,13 +47,17 @@ let stoneVolume = 0;
 let stepMs = 0;
 
 bindRange('lines-radius', 0, (v) => (linesParams.radius = v));
-bindRange('lines-threshold', 2, (v) => (linesParams.threshold = v));
+bindRange('pressure', 2, (v) => {
+  pressure = v;
+  syncPressure();
+});
 bindRange('lines-noise', 2, (v) => (linesParams.noise = v));
 bindRange('film-radius', 0, (v) => (filmParams.radius = v));
 bindRange('film-threshold', 3, (v) => (filmParams.threshold = v));
 bindRange('film-noise', 2, (v) => (filmParams.noise = v));
 bindRange('speed', 0, (v) => (stepsPerFrame = v));
 bindRange('opacity', 2, (v) => (opacity = v));
+bindRange('smoothness', 1, (v) => (smoothness = v));
 bindRange('stone-count', 0, (v) => (stoneCount = v));
 bindRange('stone-spread', 2, (v) => (stoneSpread = v));
 // Scatter a new set once the slider is released, not on every tick of a drag.
@@ -51,6 +72,13 @@ automatonSelect.addEventListener('change', () => {
   sim.restart(start);
 });
 
+const kernelSelect = byId<HTMLSelectElement>('kernel');
+kernelSelect.addEventListener('change', () => {
+  kernel = kernelSelect.value as LineKernel;
+  syncPressure();
+  sim.restart(start);
+});
+
 const sizeSelect = byId<HTMLSelectElement>('size');
 sizeSelect.addEventListener('change', () => {
   const n = Number(sizeSelect.value);
@@ -62,6 +90,12 @@ sizeSelect.addEventListener('change', () => {
     input.dispatchEvent(new Event('input'));
   }
   rebuild(n);
+});
+
+const surfaceSelect = byId<HTMLSelectElement>('surface');
+surfaceSelect.addEventListener('change', () => {
+  smooth = surfaceSelect.value === 'smooth';
+  syncControls();
 });
 
 const opaqueToggle = byId<HTMLInputElement>('opaque');
@@ -113,10 +147,27 @@ rebuild(sim.n);
 const oneColorToggle = byId<HTMLInputElement>('one-color');
 oneColorToggle.addEventListener('change', () => (oneColor = oneColorToggle.checked));
 
-// "?opaque" and "?onecolor" start with those view options switched on.
+// "?opaque", "?onecolor" and "?smooth" start with those view options chosen.
 const query = new URLSearchParams(location.search);
 if (query.has('opaque')) opaqueToggle.click();
 if (query.has('onecolor')) oneColorToggle.click();
+if (query.has('smooth')) {
+  surfaceSelect.value = 'smooth';
+  surfaceSelect.dispatchEvent(new Event('change'));
+}
+if (query.has('kernel')) {
+  kernelSelect.value = query.get('kernel')!;
+  kernelSelect.dispatchEvent(new Event('change'));
+}
+if (query.has('pressure')) {
+  const input = byId<HTMLInputElement>('pressure');
+  input.value = query.get('pressure')!;
+  input.dispatchEvent(new Event('input'));
+}
+if (query.has('size')) {
+  sizeSelect.value = query.get('size')!;
+  sizeSelect.dispatchEvent(new Event('change'));
+}
 for (let i = Number(query.get('steps')); i > 0; i--) step();
 requestAnimationFrame(frame);
 
@@ -127,16 +178,30 @@ function rebuild(n: number): void {
   scatterStones(sim.stones, n, stoneCount, stoneSpread);
   stoneVolume = 0;
   for (let i = 0; i < sim.stones.length; i++) stoneVolume += sim.stones[i];
+  renderer?.setStones(sim.stones, n);
   sim.restart(start);
+}
+
+/** Inward pressure is the line threshold; outward pressure is handled in `shown`. */
+function syncPressure(): void {
+  const [taut, slack] = SAG_RANGE[kernel];
+  linesParams.threshold = taut + Math.max(0, pressure) * (slack - taut);
+}
+
+/** The field to draw: the membrane itself, or inflated under outward pressure. */
+function shown(): Uint8Array {
+  if (automaton !== 'lines' || pressure >= 0) return sim.phase;
+  return sim.inflated(-pressure * INFLATE_REACH * sim.n);
 }
 
 function syncControls(): void {
   byId('group-lines').hidden = automaton !== 'lines';
   byId('group-film').hidden = automaton !== 'film';
+  byId('group-smoothness').hidden = !smooth;
 }
 
 function step(): void {
-  if (automaton === 'lines') sim.stepLines(linesParams);
+  if (automaton === 'lines') sim.stepLines(linesParams, kernel);
   else sim.stepFilm(filmParams);
 }
 
@@ -151,13 +216,19 @@ function frame(): void {
     }
     stepMs = (performance.now() - begin) / done;
   }
-  const membrane = sim.classify(voxels);
-  renderer?.draw(voxels, sim.n, camera, opaque ? 1 : opacity, oneColor);
+  const view: View = { opacity: opaque ? 1 : opacity, oneColor, smoothness };
+  const field = shown();
+  if (smooth) {
+    renderer?.drawSmooth(field, sim.n, camera, view);
+  } else {
+    sim.classify(voxels, field);
+    renderer?.drawVoxels(voxels, sim.n, camera, view);
+  }
 
-  const volume = stoneVolume > 0 ? (sim.volume() / stoneVolume).toFixed(2) : '—';
+  const volume = stoneVolume > 0 ? (sim.volume(field) / stoneVolume).toFixed(2) : '—';
   stat.textContent =
     `step ${sim.steps} · ${stepMs.toFixed(1)} ms/step · ` +
-    `volume ${volume}× stones · membrane ${membrane} voxels`;
+    `volume ${volume}× stones`;
   requestAnimationFrame(frame);
 }
 

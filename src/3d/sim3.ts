@@ -11,6 +11,14 @@ export interface Params3 {
   noise: number;
 }
 
+/**
+ * What the line automaton sums along its lines: the raw binary cells, or the
+ * field blurred over each cell's 3x3x3 block. The blur fattens every line into
+ * a soft tube, which evens out the lattice staircase and makes the threshold
+ * act as pressure.
+ */
+export type LineKernel = 'thin' | 'soft';
+
 /** Start as a ball inscribed in the field, or as the whole field. */
 export type StartShape3 = 'ball' | 'cube';
 
@@ -18,6 +26,9 @@ export type StartShape3 = 'ball' | 'cube';
 export const VOXEL_EMPTY = 0;
 export const VOXEL_MEMBRANE = 1;
 export const VOXEL_STONE = 2;
+
+/** Blurred-phase level that marks the surface of the inflated membrane. */
+const INFLATE_LEVEL = 0.1;
 
 /**
  * Line directions: every lattice vector with components in -2..2, one from
@@ -49,6 +60,11 @@ export class Sim3 {
   private readonly a: Float32Array;
   private readonly b: Float32Array;
   private readonly flips: Int32Array;
+  private readonly puffed: Uint8Array;
+  /** Bumped whenever the phase changes; tells when `puffed` is stale. */
+  private version = 0;
+  private puffedVersion = -1;
+  private puffedDistance = 0;
 
   constructor(n: number) {
     this.n = n;
@@ -58,6 +74,7 @@ export class Sim3 {
     this.a = new Float32Array(cells);
     this.b = new Float32Array(cells);
     this.flips = new Int32Array(cells);
+    this.puffed = new Uint8Array(cells);
     this.restart();
   }
 
@@ -65,6 +82,7 @@ export class Sim3 {
   restart(start: StartShape3 = 'ball'): void {
     const { n, phase, stones } = this;
     this.steps = 0;
+    this.version++;
     phase.fill(1);
     if (start === 'cube') return;
     const c = (n - 1) / 2;
@@ -85,12 +103,34 @@ export class Sim3 {
    * chords in every direction and is shed; a cell in a dent or a neck sees a
    * long chord and is filled. The front moves by its smallest principal
    * curvature and comes to rest stretched flat between the stones.
+   *
+   * With the soft kernel a cell on a flat face scores about 2/3 and its
+   * outside neighbour about 1/3, so a threshold above 2/3 makes even flat
+   * faces retreat until they sag into a hollow, and one below 1/3 inflates
+   * them into a bulge.
    */
-  stepLines(p: Params3): void {
-    const { n, phase, stones, flips } = this;
+  stepLines(p: Params3, kernel: LineKernel = 'thin'): void {
+    const { n, phase, stones, flips, a, b } = this;
+    // What gets summed along the lines.
+    let field: ArrayLike<number> = phase;
+    if (kernel === 'soft') {
+      boxPass(phase, a, n, 0, 1);
+      boxPass(a, b, n, 1, 1);
+      boxPass(b, a, n, 2, 1);
+      field = a;
+    }
     const n2 = n * n;
     const last = n - 1;
     let flipCount = 0;
+    // Per line: how many cells to look each way, and the index stride.
+    const count = LINES.length;
+    const reaches = new Int32Array(count);
+    const strides = new Int32Array(count);
+    for (let l = 0; l < count; l++) {
+      const { dx, dy, dz, length } = LINES[l];
+      reaches[l] = Math.max(1, Math.round(p.radius / length));
+      strides[l] = dz * n2 + dy * n + dx;
+    }
 
     for (let z = 0; z < n; z++) {
       for (let y = 0; y < n; y++) {
@@ -112,24 +152,25 @@ export class Sim3 {
 
           const threshold = p.threshold + (Math.random() - 0.5) * p.noise;
           let inside = 0;
-          for (let l = 0; l < LINES.length && !inside; l++) {
-            const { dx, dy, dz, length } = LINES[l];
-            const reach = Math.max(1, Math.round(p.radius / length));
+          for (let l = 0; l < count && !inside; l++) {
+            const { dx, dy, dz } = LINES[l];
+            const reach = reaches[l];
             const need = (2 * reach + 1) * threshold;
-            const stride = dz * n2 + dy * n + dx;
-            let count = self;
+            const stride = strides[l];
+            let total = field[i];
             // Forward along the line, as far as the field goes.
             let k = Math.min(reach, room(x, dx, last), room(y, dy, last), room(z, dz, last));
-            for (let j = i + stride; k > 0; k--, j += stride) count += phase[j];
+            for (let j = i + stride; k > 0; k--, j += stride) total += field[j];
             k = Math.min(reach, room(x, -dx, last), room(y, -dy, last), room(z, -dz, last));
-            for (let j = i - stride; k > 0; k--, j -= stride) count += phase[j];
-            if (count > need) inside = 1;
+            for (let j = i - stride; k > 0; k--, j -= stride) total += field[j];
+            if (total > need) inside = 1;
           }
           if (inside !== self) flips[flipCount++] = i;
         }
       }
     }
     for (let f = 0; f < flipCount; f++) phase[flips[f]] ^= 1;
+    if (flipCount > 0) this.version++;
     this.steps++;
   }
 
@@ -160,15 +201,42 @@ export class Sim3 {
       if (v > -half && v < half) v += (Math.random() - 0.5) * p.noise;
       phase[i] = v > 0 ? 1 : 0;
     }
+    this.version++;
     this.steps++;
   }
 
   /**
-   * Fill `out` with what the renderer draws: stones, and the membrane - the
-   * free inside cells that touch the outside phase. Returns the membrane size.
+   * The membrane pushed outwards by `distance` cells all round, as if inflated:
+   * the phase blurred and cut at a low level, which rounds every corner. No
+   * local rule can inflate to a limit by itself - anything that makes a flat
+   * face advance keeps advancing - so the taut field stays the state and this
+   * is derived from it. Recomputed only when the phase or distance changes.
    */
-  classify(out: Uint8Array): number {
-    const { n, phase, stones } = this;
+  inflated(distance: number): Uint8Array {
+    const { n, phase, puffed, a, b } = this;
+    if (this.puffedVersion === this.version && this.puffedDistance === distance) return puffed;
+    // Three box blurs of radius r are near a Gaussian of sigma r + 0.5, which
+    // falls to INFLATE_LEVEL about 1.28 sigma beyond a flat face.
+    const r = Math.max(1, Math.round(distance / 1.28 - 0.5));
+    let src: ArrayLike<number> = phase;
+    for (let k = 0; k < 9; k++) {
+      const dst = k % 2 === 0 ? a : b;
+      boxPass(src, dst, n, k % 3, r);
+      src = dst;
+    }
+    for (let i = 0; i < puffed.length; i++) puffed[i] = phase[i] || a[i] > INFLATE_LEVEL ? 1 : 0;
+    this.puffedVersion = this.version;
+    this.puffedDistance = distance;
+    return puffed;
+  }
+
+  /**
+   * Fill `out` with what the renderer draws for the given inside/outside
+   * field: stones, and the membrane - the free inside cells that touch the
+   * outside. Returns the membrane size.
+   */
+  classify(out: Uint8Array, phase: Uint8Array = this.phase): number {
+    const { n, stones } = this;
     const n2 = n * n;
     let membrane = 0;
     for (let z = 0; z < n; z++) {
@@ -194,9 +262,9 @@ export class Sim3 {
     return membrane;
   }
 
-  volume(): number {
+  volume(phase: Uint8Array = this.phase): number {
     let v = 0;
-    for (let i = 0; i < this.phase.length; i++) v += this.phase[i];
+    for (let i = 0; i < phase.length; i++) v += phase[i];
     return v;
   }
 }

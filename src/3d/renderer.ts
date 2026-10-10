@@ -6,6 +6,16 @@ export interface Camera {
   distance: number;
 }
 
+/** How the membrane and stones are drawn. */
+export interface View {
+  /** Membrane opacity, 0..1; 1 hides everything behind it. */
+  opacity: number;
+  /** Stones take the membrane's colour, so the wrap reads as one shell. */
+  oneColor: boolean;
+  /** Smooth surface only: how strongly the voxel staircase is blurred away. */
+  smoothness: number;
+}
+
 const MEMBRANE_COLOR = [1.0, 0.82, 0.4];
 const STONE_COLOR = [0.55, 0.58, 0.64];
 
@@ -16,12 +26,13 @@ void main() {
   gl_Position = vec4(p * 2.0 - 1.0, 0.0, 1.0);
 }`;
 
-const FRAGMENT = `#version 300 es
+/** Shared by both fragment shaders: uniforms, the ray and its clip to the field. */
+const COMMON = `#version 300 es
 precision highp float;
 precision highp int;
+precision highp sampler3D;
 precision highp usampler3D;
 
-uniform usampler3D uVoxels;
 uniform float uSize;
 uniform vec2 uResolution;
 uniform vec3 uEye;
@@ -34,7 +45,31 @@ out vec4 outColor;
 const vec3 BACKGROUND = vec3(0.043, 0.051, 0.067);
 const vec3 MEMBRANE = vec3(${MEMBRANE_COLOR.join(', ')});
 const float FOCAL = 1.8;
-const int MAX_STEPS = 512;
+
+vec3 rayDirection() {
+  vec2 uv = (gl_FragCoord.xy * 2.0 - uResolution) / uResolution.y;
+  vec3 rd = normalize(uCamera * vec3(uv, FOCAL));
+  return mix(rd, vec3(1e-6), lessThan(abs(rd), vec3(1e-6)));
+}
+
+// Clip the ray to the field, the cube [0, uSize]^3. Returns false on a miss.
+bool clipToField(vec3 rd, out float tEnter, out float tExit, out vec3 entryNormal) {
+  vec3 inv = 1.0 / rd;
+  vec3 t0 = -uEye * inv;
+  vec3 t1 = (vec3(uSize) - uEye) * inv;
+  vec3 tNear = min(t0, t1);
+  vec3 tFar = max(t0, t1);
+  tEnter = max(max(tNear.x, tNear.y), max(tNear.z, 0.0));
+  tExit = min(tFar.x, min(tFar.y, tFar.z));
+  entryNormal = -sign(rd) * vec3(equal(tNear, vec3(tEnter)));
+  return tEnter < tExit;
+}
+`;
+
+const VOXEL_FRAGMENT = `${COMMON}
+uniform usampler3D uVoxels;
+
+const int MAX_STEPS = 640;
 
 // Flat shading of a cube face lit from the camera, so faces turned away from
 // the viewer darken and the shape stays readable even when fully opaque.
@@ -48,31 +83,23 @@ float shade(vec3 normal, vec3 hit, vec3 toEye) {
 }
 
 void main() {
-  vec2 uv = (gl_FragCoord.xy * 2.0 - uResolution) / uResolution.y;
-  vec3 rd = normalize(uCamera * vec3(uv, FOCAL));
-  rd = mix(rd, vec3(1e-6), lessThan(abs(rd), vec3(1e-6)));
-  vec3 inv = 1.0 / rd;
-
-  // Clip the ray to the field, the cube [0, uSize]^3.
-  vec3 t0 = -uEye * inv;
-  vec3 t1 = (vec3(uSize) - uEye) * inv;
-  vec3 tNear = min(t0, t1);
-  vec3 tFar = max(t0, t1);
-  float tEnter = max(max(tNear.x, tNear.y), max(tNear.z, 0.0));
-  float tExit = min(tFar.x, min(tFar.y, tFar.z));
-  if (tEnter >= tExit) {
+  vec3 rd = rayDirection();
+  float tEnter;
+  float tExit;
+  vec3 normal;
+  if (!clipToField(rd, tEnter, tExit, normal)) {
     outColor = vec4(BACKGROUND, 1.0);
     return;
   }
 
   // Walk the ray voxel by voxel (Amanatides-Woo).
+  vec3 inv = 1.0 / rd;
   vec3 start = uEye + rd * (tEnter + 1e-3);
   ivec3 cell = ivec3(clamp(floor(start), 0.0, uSize - 1.0));
   ivec3 stride = ivec3(sign(rd));
   vec3 tDelta = abs(inv);
   vec3 tNext = (vec3(cell) + step(0.0, rd) - uEye) * inv;
   float t = tEnter;
-  vec3 normal = -sign(rd) * vec3(equal(tNear, vec3(tEnter)));
   int size = int(uSize);
 
   vec3 color = vec3(0.0);
@@ -110,58 +137,216 @@ void main() {
   outColor = vec4(color + through * BACKGROUND, 1.0);
 }`;
 
+const SMOOTH_FRAGMENT = `${COMMON}
+uniform sampler3D uPhase;
+uniform sampler3D uStones;
+uniform float uSmooth;
+
+const int MAX_STEPS = 640;
+const int REFINE_STEPS = 6;
+
+// The binary fields, blurred by reading a coarser mip level with trilinear
+// filtering. Stored as 0 or 1 in a byte, hence the scale. 0.5 is the surface.
+float phaseAt(vec3 p) {
+  return textureLod(uPhase, p / uSize, uSmooth).r * 255.0;
+}
+
+float stoneAt(vec3 p) {
+  return textureLod(uStones, p / uSize, uSmooth).r * 255.0;
+}
+
+// A mip level alone leaves a ripple at the pitch of its texels. Averaging
+// four taps at the corners of a tetrahedron half a texel out removes it. Used
+// to place the surface and its normal; the march itself reads a single tap.
+float phaseFine(vec3 p) {
+  vec2 k = vec2(0.5 * exp2(uSmooth), -0.5 * exp2(uSmooth));
+  return 0.25 * (phaseAt(p + k.xxx) + phaseAt(p + k.xyy) + phaseAt(p + k.yxy) + phaseAt(p + k.yyx));
+}
+
+float stoneFine(vec3 p) {
+  vec2 k = vec2(0.5 * exp2(uSmooth), -0.5 * exp2(uSmooth));
+  return 0.25 * (stoneAt(p + k.xxx) + stoneAt(p + k.xyy) + stoneAt(p + k.yxy) + stoneAt(p + k.yyx));
+}
+
+// Outward normals from the gradient of the blurred field.
+vec3 phaseNormal(vec3 p) {
+  vec2 e = vec2(0.75 * exp2(uSmooth), 0.0);
+  vec3 g = vec3(
+    phaseFine(p + e.xyy) - phaseFine(p - e.xyy),
+    phaseFine(p + e.yxy) - phaseFine(p - e.yxy),
+    phaseFine(p + e.yyx) - phaseFine(p - e.yyx));
+  return -normalize(g + 1e-6);
+}
+
+vec3 stoneNormal(vec3 p) {
+  vec2 e = vec2(0.75 * exp2(uSmooth), 0.0);
+  vec3 g = vec3(
+    stoneFine(p + e.xyy) - stoneFine(p - e.xyy),
+    stoneFine(p + e.yxy) - stoneFine(p - e.yxy),
+    stoneFine(p + e.yyx) - stoneFine(p - e.yyx));
+  return -normalize(g + 1e-6);
+}
+
+// Lit from the camera; both sides of the membrane catch the light.
+float shade(vec3 normal, vec3 toEye) {
+  return 0.22 + 0.78 * abs(dot(normal, toEye));
+}
+
+void main() {
+  vec3 rd = rayDirection();
+  float tEnter;
+  float tExit;
+  vec3 entryNormal;
+  if (!clipToField(rd, tEnter, tExit, entryNormal)) {
+    outColor = vec4(BACKGROUND, 1.0);
+    return;
+  }
+
+  // March in fixed steps; where a field crosses 0.5, bisect to the surface.
+  float dt = max(0.6, (tExit - tEnter) / float(MAX_STEPS - 8));
+  float t = tEnter + 1e-3;
+  float previous = t;
+  bool inside = false;
+  vec3 color = vec3(0.0);
+  float through = 1.0;
+
+  for (int i = 0; i < MAX_STEPS; i++) {
+    if (t > tExit) break;
+    vec3 p = uEye + rd * t;
+    float phase = phaseAt(p);
+
+    if (!inside && phase >= 0.5) {
+      float a = previous;
+      float b = t;
+      for (int k = 0; k < REFINE_STEPS; k++) {
+        float m = 0.5 * (a + b);
+        if (phaseFine(uEye + rd * m) >= 0.5) b = m; else a = m;
+      }
+      vec3 hit = uEye + rd * b;
+      // A membrane that starts at the field face has no gradient to read.
+      vec3 normal = i == 0 ? entryNormal : phaseNormal(hit);
+      // Where the membrane lies on a stone the two fields agree, so the stone
+      // field is near 0.5 here too; on a free membrane it is near 0.
+      if (stoneFine(hit) >= 0.25) {
+        color += through * uStoneColor * shade(normal, -rd);
+        through = 0.0;
+        break;
+      }
+      color += through * uOpacity * MEMBRANE * shade(normal, -rd);
+      through *= 1.0 - uOpacity;
+      if (through < 0.02) break;
+      inside = true;
+    } else if (inside && stoneAt(p) >= 0.5) {
+      float a = previous;
+      float b = t;
+      for (int k = 0; k < REFINE_STEPS; k++) {
+        float m = 0.5 * (a + b);
+        if (stoneFine(uEye + rd * m) >= 0.5) b = m; else a = m;
+      }
+      vec3 hit = uEye + rd * b;
+      color += through * uStoneColor * shade(stoneNormal(hit), -rd);
+      through = 0.0;
+      break;
+    } else if (inside && phase < 0.5) {
+      // Leaving through the far wall of the membrane.
+      float a = previous;
+      float b = t;
+      for (int k = 0; k < REFINE_STEPS; k++) {
+        float m = 0.5 * (a + b);
+        if (phaseFine(uEye + rd * m) < 0.5) b = m; else a = m;
+      }
+      color += through * uOpacity * MEMBRANE * shade(phaseNormal(uEye + rd * b), -rd);
+      through *= 1.0 - uOpacity;
+      if (through < 0.02) break;
+      inside = false;
+    }
+    previous = t;
+    t += dt;
+  }
+  outColor = vec4(color + through * BACKGROUND, 1.0);
+}`;
+
 /**
- * Draws a voxel field by casting a ray per pixel through a 3D texture:
- * stones are opaque, membrane voxels are translucent and add up along the ray.
+ * Draws the field by casting a ray per pixel through 3D textures, either as
+ * cubes or as a smooth surface. Stones are opaque; the membrane can be
+ * translucent, adding up along the ray.
  */
 export class Renderer {
   private readonly gl: WebGL2RenderingContext;
-  private readonly program: WebGLProgram;
-  private readonly texture: WebGLTexture;
-  private size = 0;
+  private readonly voxelProgram: WebGLProgram;
+  private readonly smoothProgram: WebGLProgram;
+  /** Voxel classes for the cube view; phase and stones for the smooth view. */
+  private readonly voxelTexture: WebGLTexture;
+  private readonly phaseTexture: WebGLTexture;
+  private readonly stoneTexture: WebGLTexture;
+  private voxelSize = 0;
+  private phaseSize = 0;
 
   constructor(canvas: HTMLCanvasElement) {
     const gl = canvas.getContext('webgl2', { antialias: false });
     if (!gl) throw new Error('WebGL2 is not available in this browser');
     this.gl = gl;
-
-    const program = gl.createProgram()!;
-    for (const [type, source] of [
-      [gl.VERTEX_SHADER, VERTEX],
-      [gl.FRAGMENT_SHADER, FRAGMENT],
-    ] as const) {
-      const shader = gl.createShader(type)!;
-      gl.shaderSource(shader, source);
-      gl.compileShader(shader);
-      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-        throw new Error(`Shader failed to compile: ${gl.getShaderInfoLog(shader)}`);
-      }
-      gl.attachShader(program, shader);
-    }
-    gl.linkProgram(program);
-    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-      throw new Error(`Program failed to link: ${gl.getProgramInfoLog(program)}`);
-    }
-    this.program = program;
-
-    this.texture = gl.createTexture()!;
-    gl.bindTexture(gl.TEXTURE_3D, this.texture);
-    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
-    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
-    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE);
+    this.voxelProgram = this.createProgram(VOXEL_FRAGMENT);
+    this.smoothProgram = this.createProgram(SMOOTH_FRAGMENT);
+    this.voxelTexture = this.createTexture(gl.NEAREST, gl.NEAREST);
+    this.phaseTexture = this.createTexture(gl.LINEAR_MIPMAP_LINEAR, gl.LINEAR);
+    this.stoneTexture = this.createTexture(gl.LINEAR_MIPMAP_LINEAR, gl.LINEAR);
     gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
     // The fullscreen triangle needs no attributes, only a bound vertex array.
     gl.bindVertexArray(gl.createVertexArray());
   }
 
-  /**
-   * Draw n*n*n voxel classes (x fastest, then y, then z). With `oneColor` the
-   * stones take the membrane's colour, so the whole wrap reads as one shell.
-   */
-  draw(voxels: Uint8Array, n: number, camera: Camera, opacity: number, oneColor: boolean): void {
-    const { gl, program } = this;
+  /** Upload the stones (0 or 1 per cell); call whenever they change. */
+  setStones(stones: Uint8Array, n: number): void {
+    const { gl } = this;
+    gl.bindTexture(gl.TEXTURE_3D, this.stoneTexture);
+    gl.texImage3D(gl.TEXTURE_3D, 0, gl.R8, n, n, n, 0, gl.RED, gl.UNSIGNED_BYTE, stones);
+    gl.generateMipmap(gl.TEXTURE_3D);
+  }
+
+  /** Draw n*n*n voxel classes (x fastest, then y, then z) as cubes. */
+  drawVoxels(voxels: Uint8Array, n: number, camera: Camera, view: View): void {
+    const { gl } = this;
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_3D, this.voxelTexture);
+    if (n !== this.voxelSize) {
+      gl.texImage3D(gl.TEXTURE_3D, 0, gl.R8UI, n, n, n, 0, gl.RED_INTEGER, gl.UNSIGNED_BYTE, voxels);
+      this.voxelSize = n;
+    } else {
+      gl.texSubImage3D(gl.TEXTURE_3D, 0, 0, 0, 0, n, n, n, gl.RED_INTEGER, gl.UNSIGNED_BYTE, voxels);
+    }
+    const program = this.voxelProgram;
+    gl.useProgram(program);
+    gl.uniform1i(gl.getUniformLocation(program, 'uVoxels'), 0);
+    this.finish(program, n, camera, view);
+  }
+
+  /** Draw the phase field (0 or 1 per cell) as a smooth surface. */
+  drawSmooth(phase: Uint8Array, n: number, camera: Camera, view: View): void {
+    const { gl } = this;
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_3D, this.stoneTexture);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_3D, this.phaseTexture);
+    if (n !== this.phaseSize) {
+      gl.texImage3D(gl.TEXTURE_3D, 0, gl.R8, n, n, n, 0, gl.RED, gl.UNSIGNED_BYTE, phase);
+      this.phaseSize = n;
+    } else {
+      gl.texSubImage3D(gl.TEXTURE_3D, 0, 0, 0, 0, n, n, n, gl.RED, gl.UNSIGNED_BYTE, phase);
+    }
+    // The coarser mip levels are the blur.
+    gl.generateMipmap(gl.TEXTURE_3D);
+    const program = this.smoothProgram;
+    gl.useProgram(program);
+    gl.uniform1i(gl.getUniformLocation(program, 'uPhase'), 0);
+    gl.uniform1i(gl.getUniformLocation(program, 'uStones'), 1);
+    gl.uniform1f(gl.getUniformLocation(program, 'uSmooth'), view.smoothness);
+    this.finish(program, n, camera, view);
+  }
+
+  /** Set the uniforms both programs share and draw. */
+  private finish(program: WebGLProgram, n: number, camera: Camera, view: View): void {
+    const { gl } = this;
     const canvas = gl.canvas as HTMLCanvasElement;
     const scale = Math.min(window.devicePixelRatio || 1, 2);
     const width = Math.max(1, Math.round(canvas.clientWidth * scale));
@@ -171,14 +356,6 @@ export class Renderer {
       canvas.height = height;
     }
     gl.viewport(0, 0, width, height);
-
-    gl.bindTexture(gl.TEXTURE_3D, this.texture);
-    if (n !== this.size) {
-      gl.texImage3D(gl.TEXTURE_3D, 0, gl.R8UI, n, n, n, 0, gl.RED_INTEGER, gl.UNSIGNED_BYTE, voxels);
-      this.size = n;
-    } else {
-      gl.texSubImage3D(gl.TEXTURE_3D, 0, 0, 0, 0, n, n, n, gl.RED_INTEGER, gl.UNSIGNED_BYTE, voxels);
-    }
 
     // Camera basis: columns are right, up and forward, looking at the centre.
     const cp = Math.cos(camera.pitch);
@@ -193,15 +370,50 @@ export class Renderer {
     const reach = camera.distance * n;
     const eye = off.map((c) => n / 2 + c * reach);
 
-    gl.useProgram(program);
-    gl.uniform1i(gl.getUniformLocation(program, 'uVoxels'), 0);
     gl.uniform1f(gl.getUniformLocation(program, 'uSize'), n);
     gl.uniform2f(gl.getUniformLocation(program, 'uResolution'), width, height);
     gl.uniform3fv(gl.getUniformLocation(program, 'uEye'), eye);
     gl.uniformMatrix3fv(gl.getUniformLocation(program, 'uCamera'), false, [...right, ...up, ...forward]);
-    gl.uniform1f(gl.getUniformLocation(program, 'uOpacity'), opacity);
-    gl.uniform3fv(gl.getUniformLocation(program, 'uStoneColor'), oneColor ? MEMBRANE_COLOR : STONE_COLOR);
+    gl.uniform1f(gl.getUniformLocation(program, 'uOpacity'), view.opacity);
+    gl.uniform3fv(
+      gl.getUniformLocation(program, 'uStoneColor'),
+      view.oneColor ? MEMBRANE_COLOR : STONE_COLOR,
+    );
     gl.drawArrays(gl.TRIANGLES, 0, 3);
+  }
+
+  private createProgram(fragment: string): WebGLProgram {
+    const { gl } = this;
+    const program = gl.createProgram()!;
+    for (const [type, source] of [
+      [gl.VERTEX_SHADER, VERTEX],
+      [gl.FRAGMENT_SHADER, fragment],
+    ] as const) {
+      const shader = gl.createShader(type)!;
+      gl.shaderSource(shader, source);
+      gl.compileShader(shader);
+      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+        throw new Error(`Shader failed to compile: ${gl.getShaderInfoLog(shader)}`);
+      }
+      gl.attachShader(program, shader);
+    }
+    gl.linkProgram(program);
+    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+      throw new Error(`Program failed to link: ${gl.getProgramInfoLog(program)}`);
+    }
+    return program;
+  }
+
+  private createTexture(minFilter: number, magFilter: number): WebGLTexture {
+    const { gl } = this;
+    const texture = gl.createTexture()!;
+    gl.bindTexture(gl.TEXTURE_3D, texture);
+    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, minFilter);
+    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, magFilter);
+    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE);
+    return texture;
   }
 }
 
