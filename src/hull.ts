@@ -55,3 +55,13 @@ export function polygonArea(poly: Point[]): number {
 function cross(o: Point, a: Point, b: Point): number {
   return (a.x - o.x) * (b.y - o.y) - (a.y - o.y) * (b.x - o.x);
 }
+
+export function polygonPerimeter(poly: Point[]): number {
+  let sum = 0;
+  for (let i = 0; i < poly.length; i++) {
+    const p = poly[i];
+    const q = poly[(i + 1) % poly.length];
+    sum += Math.hypot(q.x - p.x, q.y - p.y);
+  }
+  return sum;
+}

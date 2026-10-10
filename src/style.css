@@ -30,6 +30,14 @@ main {
   gap: 16px;
 }
 
+.fields.single {
+  grid-template-columns: 1fr;
+}
+
+[hidden] {
+  display: none !important;
+}
+
 figure {
   margin: 0;
   display: flex;
@@ -44,7 +52,20 @@ figcaption {
   align-items: baseline;
 }
 
-figcaption span,
+figcaption {
+  gap: 6px 14px;
+  align-items: center;
+  min-height: 34px;
+}
+
+figcaption select {
+  font-weight: 600;
+}
+
+label.check:has(input:disabled) {
+  opacity: 0.4;
+}
+
 .stat {
   color: #8a91a0;
 }
@@ -67,6 +88,12 @@ canvas {
 aside {
   width: 280px;
   flex: none;
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+}
+
+aside section {
   display: flex;
   flex-direction: column;
   gap: 14px;
