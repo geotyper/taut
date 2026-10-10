@@ -85,6 +85,15 @@ canvas {
   touch-action: none;
 }
 
+canvas.orbit {
+  image-rendering: auto;
+  cursor: grab;
+}
+
+a {
+  color: #4dd0e1;
+}
+
 aside {
   width: 280px;
   flex: none;

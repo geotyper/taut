@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>taut 3D</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <main>
+      <div class="fields single">
+        <figure>
+          <canvas id="field-3d" class="orbit"></canvas>
+          <p class="stat" id="stat-3d"></p>
+        </figure>
+      </div>
+
+      <aside>
+        <h1>taut 3D</h1>
+        <p class="hint">
+          Drag to orbit, scroll to zoom. <a href="/">2D version</a>
+        </p>
+
+        <label>
+          <span>Automaton</span>
+          <select id="automaton">
+            <option value="lines">Line majority (pulls taut)</option>
+            <option value="film">Wide kernel (soap film)</option>
+          </select>
+        </label>
+
+        <section id="group-lines">
+          <h2>Line majority</h2>
+          <label>
+            <span>Line reach <output id="lines-radius-out"></output></span>
+            <input id="lines-radius" type="range" min="4" max="32" step="1" value="10" />
+          </label>
+          <label>
+            <span>Threshold <output id="lines-threshold-out"></output></span>
+            <input id="lines-threshold" type="range" min="0.5" max="0.98" step="0.01" value="0.65" />
+          </label>
+          <label>
+            <span>Noise <output id="lines-noise-out"></output></span>
+            <input id="lines-noise" type="range" min="0" max="0.3" step="0.01" value="0" />
+          </label>
+        </section>
+
+        <section id="group-film">
+          <h2>Wide kernel</h2>
+          <label>
+            <span>Kernel radius <output id="film-radius-out"></output></span>
+            <input id="film-radius" type="range" min="1" max="8" step="1" value="3" />
+          </label>
+          <label>
+            <span>Threshold (pressure) <output id="film-threshold-out"></output></span>
+            <input id="film-threshold" type="range" min="0.48" max="0.53" step="0.001" value="0.5" />
+          </label>
+          <label>
+            <span>Noise <output id="film-noise-out"></output></span>
+            <input id="film-noise" type="range" min="0" max="0.5" step="0.01" value="0.1" />
+          </label>
+        </section>
+
+        <h2>General</h2>
+        <label>
+          <span>Resolution</span>
+          <select id="size">
+            <option value="64" selected>Low (64³)</option>
+            <option value="96">Medium (96³)</option>
+            <option value="128">High (128³, slower)</option>
+          </select>
+        </label>
+        <label>
+          <span>Wave start</span>
+          <select id="start">
+            <option value="ball">Ball</option>
+            <option value="cube">Whole field</option>
+          </select>
+        </label>
+        <label>
+          <span>Stones <output id="stone-count-out"></output></span>
+          <input id="stone-count" type="range" min="1" max="12" step="1" value="5" />
+        </label>
+        <label>
+          <span>Stone spread <output id="stone-spread-out"></output></span>
+          <input id="stone-spread" type="range" min="0.4" max="1" step="0.01" value="0.88" />
+        </label>
+        <label>
+          <span>Steps per frame <output id="speed-out"></output></span>
+          <input id="speed" type="range" min="1" max="4" step="1" value="1" />
+        </label>
+        <label>
+          <span>Membrane opacity <output id="opacity-out"></output></span>
+          <input id="opacity" type="range" min="0.05" max="1" step="0.01" value="0.3" />
+        </label>
+        <label class="check">
+          <input id="opaque" type="checkbox" />
+          <span>Opaque membrane</span>
+        </label>
+        <label class="check">
+          <input id="one-color" type="checkbox" />
+          <span>Stones in membrane colour</span>
+        </label>
+
+        <div class="buttons">
+          <button id="restart">Restart the wave</button>
+          <button id="pause">Pause</button>
+          <button id="random">New stones</button>
+        </div>
+      </aside>
+    </main>
+    <script type="module" src="/src/3d/main.ts"></script>
+  </body>
+</html>

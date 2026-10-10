@@ -27,6 +27,32 @@ Options that can be combined on a field:
 The reference to check against is the exact convex hull of the stones, drawn as
 a dashed line.
 
+## 3D version
+
+`3d.html` carries the same idea into a voxel field: a membrane floods in from
+outside and pulls taut around stones. The simulation runs on the CPU; the
+voxels are drawn with WebGL2 by casting a ray per pixel through a 3D texture,
+with the membrane translucent and the stones opaque. Stones are rounded boxes
+turned at random angles: each is a signed distance function placed in world
+space first and only then sampled into voxels.
+
+There are two automata:
+
+- **Line majority** — a cell is inside when, along at least one of 49 lines
+  through it, most cells within reach are inside. Convex bumps are shed, dents
+  and necks are filled, and the membrane comes to rest stretched between the
+  stones. It settles inside the convex hull, at roughly 80% of its volume,
+  because sharp ridges of the hull get rounded off.
+- **Wide kernel** — the direct port of the 2D threshold dynamics. In 3D it
+  moves the front by mean curvature, so necks pinch off and the membrane ends
+  up shrunk onto each stone separately, like a soap film rather than a wrap.
+
+Drag to orbit, scroll to zoom. The membrane can be translucent or opaque, and
+the stones can take its colour so the wrap reads as a single shell; the light
+comes from the camera, so faces turned away darken. Resolution is 64³,
+96³ or 128³, and the radii scale with it. Adding `?steps=200` to the address
+runs that many steps before the first frame, and `?opaque` / `?onecolor` start with those view options on.
+
 ## Running
 
 ```sh
