@@ -1,35 +1,65 @@
 /** Cells this close to a field face can never hold a stone. */
 const STONE_MARGIN = 4;
 
+/** Share of the stones that sit on the sphere in the 'sphere' placement. */
+const ON_SPHERE = 0.6;
+
+export interface StoneOptions {
+  count: number;
+  /**
+   * How far from the centre stone centres may land, as a fraction of the
+   * half-field: 1 lets stones reach the faces.
+   */
+  spread: number;
+  /**
+   * 'box': anywhere in a cube around the centre. 'sphere': most stones on the
+   * surface of a sphere, the rest inside it, so the wrap has a clear outline.
+   */
+  placement: 'box' | 'sphere';
+  /** Sharp-edged boxes, fully rounded ones, or each stone somewhere between. */
+  shape: 'mixed' | 'sharp' | 'round';
+}
+
 /**
  * Scatter stones: rounded boxes, anywhere between a cube and a ball, each
  * turned at a random angle. A stone is a signed distance function placed in
  * world space first and only then sampled into voxels, so a turned stone has
  * no staircase baked into its own axes.
- *
- * `spread` is how far from the centre stone centres may land, as a fraction of
- * the half-field: 1 lets stones reach the faces.
  */
-export function scatterStones(
-  stones: Uint8Array,
-  n: number,
-  count: number,
-  spread: number,
-): void {
+export function scatterStones(stones: Uint8Array, n: number, options: StoneOptions): void {
+  const { count, spread, placement, shape } = options;
   const n2 = n * n;
   for (let s = 0; s < count; s++) {
     const hx = n * (0.05 + Math.random() * 0.06);
     const hy = hx * (0.6 + Math.random() * 0.8);
     const hz = hx * (0.6 + Math.random() * 0.8);
-    const rounding = Math.min(hx, hy, hz) * Math.random();
+    const roundness = shape === 'sharp' ? 0 : shape === 'round' ? 1 : Math.random();
+    const rounding = Math.min(hx, hy, hz) * roundness;
     const reach = Math.hypot(hx, hy, hz);
     const rot = randomRotation();
 
     // The whole stone has to stay clear of the faces.
     const range = Math.max(0, (spread * n) / 2 - reach - STONE_MARGIN);
-    const cx = n / 2 + (Math.random() * 2 - 1) * range;
-    const cy = n / 2 + (Math.random() * 2 - 1) * range;
-    const cz = n / 2 + (Math.random() * 2 - 1) * range;
+    let ox: number;
+    let oy: number;
+    let oz: number;
+    if (placement === 'sphere') {
+      // A random direction; the first stones go on the sphere, the rest inside.
+      const z = Math.random() * 2 - 1;
+      const angle = Math.random() * 2 * Math.PI;
+      const ring = Math.sqrt(1 - z * z);
+      const radius = s < Math.ceil(count * ON_SPHERE) ? range : range * Math.cbrt(Math.random());
+      ox = radius * ring * Math.cos(angle);
+      oy = radius * ring * Math.sin(angle);
+      oz = radius * z;
+    } else {
+      ox = (Math.random() * 2 - 1) * range;
+      oy = (Math.random() * 2 - 1) * range;
+      oz = (Math.random() * 2 - 1) * range;
+    }
+    const cx = n / 2 + ox;
+    const cy = n / 2 + oy;
+    const cz = n / 2 + oz;
 
     const lo = (c: number) => Math.max(STONE_MARGIN, Math.floor(c - reach));
     const hi = (c: number) => Math.min(n - 1 - STONE_MARGIN, Math.ceil(c + reach));

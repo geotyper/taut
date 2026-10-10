@@ -1,6 +1,6 @@
 import { Renderer, type Camera, type View } from './renderer.ts';
 import { Sim3, type LineKernel, type Params3, type StartShape3 } from './sim3.ts';
-import { scatterStones } from './stones.ts';
+import { scatterStones, type StoneOptions } from './stones.ts';
 
 /** Per-frame simulation time limit, in ms; stepping stops early past it. */
 const FRAME_BUDGET = 14;
@@ -31,8 +31,7 @@ let kernel: LineKernel = 'thin';
 /** -1..1: negative inflates the membrane, positive makes it sag inwards. */
 let pressure = 0;
 let start: StartShape3 = 'ball';
-let stoneCount = 5;
-let stoneSpread = 0.88;
+const stoneOptions: StoneOptions = { count: 5, spread: 0.88, placement: 'box', shape: 'mixed' };
 let stepsPerFrame = 1;
 let opacity = 0.3;
 let opaque = false;
@@ -58,12 +57,24 @@ bindRange('film-noise', 2, (v) => (filmParams.noise = v));
 bindRange('speed', 0, (v) => (stepsPerFrame = v));
 bindRange('opacity', 2, (v) => (opacity = v));
 bindRange('smoothness', 1, (v) => (smoothness = v));
-bindRange('stone-count', 0, (v) => (stoneCount = v));
-bindRange('stone-spread', 2, (v) => (stoneSpread = v));
+bindRange('stone-count', 0, (v) => (stoneOptions.count = v));
+bindRange('stone-spread', 2, (v) => (stoneOptions.spread = v));
 // Scatter a new set once the slider is released, not on every tick of a drag.
 for (const id of ['stone-count', 'stone-spread']) {
   byId(id).addEventListener('change', () => rebuild(sim.n));
 }
+
+const placementSelect = byId<HTMLSelectElement>('stone-placement');
+placementSelect.addEventListener('change', () => {
+  stoneOptions.placement = placementSelect.value as StoneOptions['placement'];
+  rebuild(sim.n);
+});
+
+const shapeSelect = byId<HTMLSelectElement>('stone-shape');
+shapeSelect.addEventListener('change', () => {
+  stoneOptions.shape = shapeSelect.value as StoneOptions['shape'];
+  rebuild(sim.n);
+});
 
 const automatonSelect = byId<HTMLSelectElement>('automaton');
 automatonSelect.addEventListener('change', () => {
@@ -118,6 +129,31 @@ pauseButton.addEventListener('click', () => {
 byId('restart').addEventListener('click', () => sim.restart(start));
 byId('random').addEventListener('click', () => rebuild(sim.n));
 
+// Keyboard shortcuts, so the view can be switched without reaching for the
+// menu - while recording, scrolling to a control would shift the picture.
+const SHORTCUTS: Record<string, () => void> = {
+  o: () => opaqueToggle.click(),
+  c: () => oneColorToggle.click(),
+  s: () => {
+    surfaceSelect.value = smooth ? 'voxels' : 'smooth';
+    surfaceSelect.dispatchEvent(new Event('change'));
+  },
+  n: () => rebuild(sim.n),
+  r: () => sim.restart(start),
+  ' ': () => pauseButton.click(),
+};
+window.addEventListener('keydown', (e) => {
+  if (e.metaKey || e.ctrlKey || e.altKey) return;
+  // A focused list uses letters to jump between its options, and a focused
+  // button already answers to the space bar.
+  const target = e.target as HTMLElement;
+  if (target.tagName === 'SELECT' || (target.tagName === 'BUTTON' && e.key === ' ')) return;
+  const action = SHORTCUTS[e.key.toLowerCase()];
+  if (!action) return;
+  e.preventDefault();
+  action();
+});
+
 // Orbit with the pointer, zoom with the wheel.
 let dragging = false;
 canvas.addEventListener('pointerdown', (e) => {
@@ -155,6 +191,12 @@ if (query.has('smooth')) {
   surfaceSelect.value = 'smooth';
   surfaceSelect.dispatchEvent(new Event('change'));
 }
+for (const select of [placementSelect, shapeSelect]) {
+  const value = query.get(select.id);
+  if (value === null) continue;
+  select.value = value;
+  select.dispatchEvent(new Event('change'));
+}
 if (query.has('kernel')) {
   kernelSelect.value = query.get('kernel')!;
   kernelSelect.dispatchEvent(new Event('change'));
@@ -175,7 +217,7 @@ requestAnimationFrame(frame);
 function rebuild(n: number): void {
   sim = new Sim3(n);
   voxels = new Uint8Array(sim.phase.length);
-  scatterStones(sim.stones, n, stoneCount, stoneSpread);
+  scatterStones(sim.stones, n, stoneOptions);
   stoneVolume = 0;
   for (let i = 0; i < sim.stones.length; i++) stoneVolume += sim.stones[i];
   renderer?.setStones(sim.stones, n);

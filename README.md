@@ -59,6 +59,20 @@ The line automaton has two kernels and a pressure control:
   rather than simulated, because no local rule can inflate to a limit — a rule
   that makes a flat face advance keeps it advancing.
 
+Is it still a cellular automaton? The state is binary, every cell updates at
+once, and the rule is the same everywhere and local. Three caveats:
+
+- The neighbourhood is large and star-shaped: 49 lines through the cell, a few
+  hundred cells at the default reach.
+- Only cells on the front are evaluated, those with one of their six
+  neighbours in the other phase. This is an optimisation, but it is also part
+  of the rule: "if all six neighbours agree with you, stay as you are" is
+  itself local. A cell far from the front that plain line majority would flip
+  at once instead waits for the front to reach it, so the order of events
+  differs; that the settled shape is the same has not been checked by a run.
+- Inflation under negative pressure and the smooth surface are computed from
+  the automaton's state for display and never fed back into it.
+
 Drag to orbit, scroll to zoom. View options:
 
 - **Surface** — the raw voxels as cubes (the default), or smooth. The smooth surface is the
@@ -67,13 +81,20 @@ Drag to orbit, scroll to zoom. View options:
 - **Membrane** — translucent or opaque, and the stones can take its colour so
   the wrap reads as a single shell. The light comes from the camera, so
   surfaces turned away darken.
+- **Stones** — their number and spread; placed anywhere, or mostly on the
+  surface of a sphere with the rest inside it; all sharp-edged, all rounded,
+  or mixed.
 - **Resolution** — 64³, 96³, 128³ or 192³; the radii scale with it. A step of
   the line automaton takes about 3 ms at 64³ once settled and about 50 ms at
   192³, with the first steps of the wave several times slower.
 
+Keys: `O` opaque membrane, `C` stones in membrane colour, `S` smooth or
+voxels, `N` new stones, `R` restart the wave, `Space` pause.
+
 Address parameters: `?steps=200` runs that many steps before the first frame;
 `?size=128`, `?kernel=soft`, `?pressure=-0.5`, `?opaque`, `?onecolor` and
-`?smooth` preset the page.
+`?smooth` preset the page, as do `?stone-placement=sphere` and
+`?stone-shape=sharp`.
 
 ## Running
 

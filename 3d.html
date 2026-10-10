@@ -20,6 +20,15 @@
         <p class="hint">
           Drag to orbit, scroll to zoom. <a href="/">2D version</a>
         </p>
+        <p class="hint">
+          Keys: <kbd>O</kbd> opaque, <kbd>C</kbd> one colour, <kbd>S</kbd> smooth
+          or voxels, <kbd>N</kbd> new stones, <kbd>R</kbd> restart,
+          <kbd>Space</kbd> pause.
+        </p>
+
+        <div class="buttons">
+          <button id="random">New stones</button>
+        </div>
 
         <label>
           <span>Automaton</span>
@@ -94,6 +103,21 @@
           <input id="stone-spread" type="range" min="0.4" max="1" step="0.01" value="0.88" />
         </label>
         <label>
+          <span>Stone placement</span>
+          <select id="stone-placement">
+            <option value="box">Anywhere</option>
+            <option value="sphere">Mostly on a sphere</option>
+          </select>
+        </label>
+        <label>
+          <span>Stone shape</span>
+          <select id="stone-shape">
+            <option value="mixed">Mixed</option>
+            <option value="sharp">All sharp</option>
+            <option value="round">All rounded</option>
+          </select>
+        </label>
+        <label>
           <span>Steps per frame <output id="speed-out"></output></span>
           <input id="speed" type="range" min="1" max="4" step="1" value="1" />
         </label>
@@ -121,10 +145,9 @@
           <span>Stones in membrane colour</span>
         </label>
 
-        <div class="buttons">
+        <div class="buttons pair">
           <button id="restart">Restart the wave</button>
           <button id="pause">Pause</button>
-          <button id="random">New stones</button>
         </div>
       </aside>
     </main>
