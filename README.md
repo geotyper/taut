@@ -96,6 +96,30 @@ Address parameters: `?steps=200` runs that many steps before the first frame;
 `?smooth` preset the page, as do `?stone-placement=sphere` and
 `?stone-shape=sharp`.
 
+## Clusters
+
+`clusters.html` puts a band around every group of stones instead of one around
+all of them. Tension alone cannot do that: a front moved by curvature always
+ends up convex, whichever side it starts from. What is needed is a finite
+scale, the cluster radius, and three stages of local rules:
+
+1. **Wave from the stones** — every cell keeps the offset to the nearest stone
+   it has heard of and takes a shorter one from its 8 neighbours, up to the
+   cluster radius. This grows each stone by a disc of that radius.
+2. **Labels** — every grown cell starts with its own label and keeps taking
+   the smallest label among its neighbours. Blobs that touch end up with one
+   label, so stones closer than two radii fall into one cluster. This is
+   single-linkage clustering with that distance as the threshold.
+3. **Bands** — each label gets a field of its own with only its stones in it,
+   and a band that starts as a fat blob around them and is pulled taut by the
+   Potts model or the wide kernel.
+
+The bands live on separate layers, so they may cross: each one settles on the
+exact convex hull of its own cluster, drawn dashed. With many small stones the
+Potts model is the default, because the wide kernel erases anything thinner
+than its radius, a band stretched between two small stones included. As the
+radius grows the clusters merge, and at the top it is the single hull again.
+
 ## Running
 
 ```sh

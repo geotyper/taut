@@ -349,12 +349,15 @@ export class Sim {
     this.stonesChanged();
   }
 
-  /** Scatter stones shaped between a circle and a rounded square. */
-  randomStones(count: number): void {
+  /**
+   * Scatter stones shaped between a circle and a rounded square.
+   * `scale` shrinks or enlarges them relative to the default size.
+   */
+  randomStones(count: number, scale = 1): void {
     const { w, h, stones } = this;
     const size = Math.min(w, h);
     for (let n = 0; n < count; n++) {
-      const ra = size * (0.03 + Math.random() * 0.05);
+      const ra = size * scale * (0.03 + Math.random() * 0.05);
       const rb = ra * (0.7 + Math.random() * 0.6);
       const reach = Math.max(ra, rb) * 1.2 + STONE_MARGIN + size * 0.08;
       const cx = reach + Math.random() * (w - 2 * reach);
