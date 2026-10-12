@@ -19,7 +19,7 @@
         <h1>taut clusters</h1>
         <p class="hint">
           A wave grows every stone by the cluster radius, the blobs that touch
-          agree on one label, and each label gets a band of its own. Stones
+          agree on one label, and each label is pulled taut around its own stones. Stones
           closer than two radii share a band. <a href="/">2D version</a>
         </p>
         <p class="hint">
@@ -33,6 +33,15 @@
         </label>
 
         <label>
+          <span>Bands</span>
+          <select id="layout">
+            <option value="rule">One rule</option>
+            <option value="field">Stages on one field</option>
+            <option value="layers">Stages, a layer per cluster</option>
+          </select>
+        </label>
+
+        <label id="pick-algorithm">
           <span>Automaton</span>
           <select id="algorithm">
             <option value="potts">Potts model</option>
@@ -45,6 +54,10 @@
           <label>
             <span>Temperature <output id="temperature-out"></output></span>
             <input id="temperature" type="range" min="0" max="3" step="0.05" value="0.5" />
+          </label>
+          <label id="pick-repulsion">
+            <span>Repulsion between bands <output id="repulsion-out"></output></span>
+            <input id="repulsion" type="range" min="1" max="5" step="0.1" value="3" />
           </label>
           <label>
             <span>Sweeps per frame <output id="potts-speed-out"></output></span>

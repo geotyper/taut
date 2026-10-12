@@ -101,7 +101,7 @@ Address parameters: `?steps=200` runs that many steps before the first frame;
 `clusters.html` puts a band around every group of stones instead of one around
 all of them. Tension alone cannot do that: a front moved by curvature always
 ends up convex, whichever side it starts from. What is needed is a finite
-scale, the cluster radius, and three stages of local rules:
+scale, the cluster radius, and a few stages of local rules:
 
 1. **Wave from the stones** — every cell keeps the offset to the nearest stone
    it has heard of and takes a shorter one from its 8 neighbours, up to the
@@ -110,15 +110,53 @@ scale, the cluster radius, and three stages of local rules:
    the smallest label among its neighbours. Blobs that touch end up with one
    label, so stones closer than two radii fall into one cluster. This is
    single-linkage clustering with that distance as the threshold.
-3. **Bands** — each label gets a field of its own with only its stones in it,
-   and a band that starts as a fat blob around them and is pulled taut by the
-   Potts model or the wide kernel.
+3. **Bands** — every label is pulled taut around its own stones, in one of two
+   ways.
 
-The bands live on separate layers, so they may cross: each one settles on the
-exact convex hull of its own cluster, drawn dashed. With many small stones the
-Potts model is the default, because the wide kernel erases anything thinner
-than its radius, a band stretched between two small stones included. As the
-radius grows the clusters merge, and at the top it is the single hull again.
+**One field, many labels.** Nothing leaves the field: the label is the cell
+state. The labelled blobs first swell by a few cells, an outside cell joining
+the label next to it unless it sees two different ones, which keeps the
+clusters apart and fattens a blob where two of its stones are only just
+linked. Then a single Potts model with as many states as there are labels
+tightens all the bands at once: a front cell copies the state of a random
+neighbour by the Metropolis rule. A pair of cells with two different labels
+costs more than two label-outside pairs, so the outside phase seeps in between
+two bands and they never merge. With that repulsion below 2 they stick together
+like soap bubbles instead. A band cannot pass through another one: where two
+hulls would overlap, the bands press on each other.
+
+**A layer per cluster.** Each label gets a field of its own with only its
+stones in it, and a band that starts as a fat blob around them and is pulled
+taut by the two-state Potts model or the wide kernel. The layers are
+independent, so the bands may cross, and each one settles on the exact convex
+hull of its own cluster.
+
+**One rule.** The stages above are switched from outside: something has to
+notice that the wave or the labels have stopped. This version has no stages
+and no clock. Every cell applies the same rule on every step, all at once,
+reading only its 8 neighbours, and the cell state has four parts updated
+together:
+
+- *nearest stone* — the offset to the nearest stone heard of so far, never
+  limited by a radius, so every cell ends up knowing which stone it belongs to;
+- *label* — within the cluster radius of a stone, the smallest label among
+  such neighbours; further out, the label of the neighbour towards the nearest
+  stone, which spreads every cluster's label over its whole territory;
+- *age* — steps since the label last changed here or nearby;
+- *band* — inside or outside. A young cell close to its stone is inside, so a
+  cluster stays in one fat piece while its labels are still settling. An old
+  cell follows tension: it copies a random neighbour by the Metropolis rule,
+  counting cells of another label as outside.
+
+The rule is probabilistic and the starting state gives every cell a label of
+its own. A band lives inside its cluster's territory, the cells nearer to its
+stones than to any others, so where a hull would reach into a neighbour's
+territory the band is cut along the border between them.
+
+The exact hulls are drawn dashed. With many small stones the Potts model is
+the choice, because the wide kernel erases anything thinner than its radius, a
+band stretched between two small stones included. As the cluster radius grows
+the clusters merge, and at the top it is the single hull again.
 
 ## Running
 

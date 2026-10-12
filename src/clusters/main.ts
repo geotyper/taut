@@ -1,13 +1,14 @@
 import type { Point } from '../hull.ts';
 import { Sim, type Params, type PottsParams } from '../sim.ts';
-import { Clusters } from './clusters.ts';
+import { Clusters, type FieldParams, type Layout } from './clusters.ts';
+import { OneRule, type RuleParams } from './onerule.ts';
 
 const SIZE = 256;
 /** Per-frame time limit for stepping the bands, in ms. */
 const BUDGET = 12;
-/** Steps per frame of the wave and of the labelling, slow enough to watch. */
-const SPREAD_STEPS = 1;
-const LABEL_STEPS = 6;
+/** Steps per frame of the stages before the bands, slow enough to watch. */
+const STAGE_STEPS = { spread: 1, label: 6, swell: 1 };
+const RULE_SETTLING_STEPS = 3;
 
 const COLOR_OUTSIDE = rgb(11, 13, 17);
 const COLOR_INSIDE = rgb(30, 42, 60);
@@ -25,11 +26,14 @@ for (let i = 0; i < HUES; i++) {
 }
 
 type Algorithm = 'potts' | 'wide';
+/** One rule for everything, or the staged version in one of its layouts. */
+type Mode = 'rule' | Layout;
 
 const stones = new Uint8Array(SIZE * SIZE);
 /** Only used to draw and scatter stones on the big field. */
 const editor = new Sim(SIZE, SIZE, stones);
 const clusters = new Clusters(SIZE, SIZE, stones);
+const oneRule = new OneRule(SIZE, SIZE, stones);
 
 const canvas = byId<HTMLCanvasElement>('field');
 canvas.width = SIZE;
@@ -41,6 +45,9 @@ const stat = byId('stat');
 
 const wideParams: Params = { radius: 2, threshold: 0.5, noise: 0.3 };
 const pottsParams: PottsParams = { temperature: 0.5, pressure: 0 };
+const fieldParams: FieldParams = { temperature: 0.5, repulsion: 3 };
+const ruleParams: RuleParams = { temperature: 0.5 };
+let mode: Mode = 'rule';
 let algorithm: Algorithm = 'potts';
 let reach = 10;
 let pottsSteps = 40;
@@ -53,9 +60,14 @@ let paused = false;
 
 bindRange('reach', 0, (v) => {
   reach = v;
-  clusters.restart(reach);
+  restart();
 });
-bindRange('temperature', 2, (v) => (pottsParams.temperature = v));
+bindRange('temperature', 2, (v) => {
+  pottsParams.temperature = v;
+  fieldParams.temperature = v;
+  ruleParams.temperature = v;
+});
+bindRange('repulsion', 1, (v) => (fieldParams.repulsion = v));
 bindRange('potts-speed', 0, (v) => (pottsSteps = v));
 bindRange('radius', 0, (v) => (wideParams.radius = v));
 bindRange('noise', 2, (v) => (wideParams.noise = v));
@@ -64,11 +76,18 @@ bindRange('stone-count', 0, (v) => (stoneCount = v));
 bindRange('stone-size', 2, (v) => (stoneSize = v));
 bindRange('brush', 0, (v) => (brush = v));
 
+const layoutSelect = byId<HTMLSelectElement>('layout');
+layoutSelect.addEventListener('change', () => {
+  mode = layoutSelect.value as Mode;
+  syncControls();
+  restart();
+});
+
 const algorithmSelect = byId<HTMLSelectElement>('algorithm');
 algorithmSelect.addEventListener('change', () => {
   algorithm = algorithmSelect.value as Algorithm;
   syncControls();
-  clusters.restart(reach);
+  restart();
 });
 
 const hullToggle = byId<HTMLInputElement>('show-hull');
@@ -76,17 +95,17 @@ hullToggle.addEventListener('change', () => (showHull = hullToggle.checked));
 
 const pauseButton = byId<HTMLButtonElement>('pause');
 pauseButton.addEventListener('click', togglePause);
-byId('restart').addEventListener('click', () => clusters.restart(reach));
+byId('restart').addEventListener('click', restart);
 byId('random').addEventListener('click', scatter);
 byId('clear').addEventListener('click', () => {
   editor.clearStones();
-  clusters.restart(reach);
+  restart();
 });
 
 window.addEventListener('keydown', (e) => {
   if (e.target instanceof HTMLInputElement || e.target instanceof HTMLSelectElement) return;
   if (e.key === ' ') togglePause();
-  else if (e.key === 'r' || e.key === 'R') clusters.restart(reach);
+  else if (e.key === 'r' || e.key === 'R') restart();
   else if (e.key === 'n' || e.key === 'N') scatter();
   else return;
   e.preventDefault();
@@ -98,7 +117,12 @@ scatter();
 function scatter(): void {
   editor.clearStones();
   editor.randomStones(stoneCount, stoneSize);
-  clusters.restart(reach);
+  restart();
+}
+
+function restart(): void {
+  if (mode === 'rule') oneRule.restart(reach);
+  else clusters.restart(reach, mode);
 }
 
 function togglePause(): void {
@@ -107,8 +131,12 @@ function togglePause(): void {
 }
 
 function syncControls(): void {
-  byId('group-potts').hidden = algorithm !== 'potts';
-  byId('group-wide').hidden = algorithm !== 'wide';
+  // The single field is one Potts model; only the layers can pick an automaton.
+  const layers = mode === 'layers';
+  byId('pick-algorithm').hidden = !layers;
+  byId('group-potts').hidden = layers && algorithm !== 'potts';
+  byId('group-wide').hidden = !layers || algorithm !== 'wide';
+  byId('pick-repulsion').hidden = mode !== 'field';
 }
 
 // Painting stones with the pointer.
@@ -148,7 +176,7 @@ function stroke(from: Point, to: Point): void {
     const y = from.y + (to.y - from.y) * t;
     editor.paintStone(x, y, brush, erasing ? 0 : 1);
   }
-  clusters.restart(reach);
+  restart();
 }
 
 function frame(): void {
@@ -158,74 +186,140 @@ function frame(): void {
 }
 
 function advance(): void {
-  if (clusters.stage === 'spread') {
-    for (let i = 0; i < SPREAD_STEPS; i++) clusters.step();
+  if (mode === 'rule') {
+    // While the labels settle, a few steps a frame are enough to watch.
+    const steps = oneRule.settling ? RULE_SETTLING_STEPS : pottsSteps;
+    const begin = performance.now();
+    for (let i = 0; i < steps; i++) {
+      oneRule.step(ruleParams);
+      if (performance.now() - begin > BUDGET) break;
+    }
     return;
   }
-  if (clusters.stage === 'label') {
-    for (let i = 0; i < LABEL_STEPS; i++) clusters.step();
+  const { stage } = clusters;
+  if (stage !== 'bands') {
+    // A stage may end part-way through the frame; the next one waits its turn.
+    for (let i = 0; i < STAGE_STEPS[stage] && clusters.stage === stage; i++) clusters.step();
     return;
   }
-  const steps = algorithm === 'potts' ? pottsSteps : wideSteps;
+  const potts = mode === 'field' || algorithm === 'potts';
+  const steps = potts ? pottsSteps : wideSteps;
   const begin = performance.now();
   for (let i = 0; i < steps; i++) {
-    for (const { sim } of clusters.bands) {
-      if (algorithm === 'potts') sim.stepPotts(pottsParams);
-      else sim.step(wideParams);
+    if (mode === 'field') {
+      clusters.stepField(fieldParams);
+    } else {
+      for (const { sim } of clusters.bands) {
+        if (potts) sim.stepPotts(pottsParams);
+        else sim.step(wideParams);
+      }
+      clusters.steps++;
     }
-    clusters.steps++;
     if (performance.now() - begin > BUDGET) break;
   }
 }
 
 function render(): void {
   pixels.fill(COLOR_OUTSIDE);
-  if (clusters.stage === 'bands') renderBands();
-  else renderGrowth();
+  if (mode === 'rule') renderRule();
+  else if (clusters.stage === 'spread') renderWave();
+  else if (clusters.stage === 'bands' && mode === 'layers') renderLayers();
+  else renderLabels();
   ctx.putImageData(image, 0, 0);
 
   let text = '';
-  if (clusters.stage === 'spread') text = `wave from the stones · step ${clusters.steps}`;
+  if (mode === 'rule') {
+    const { hullArea } = oneRule;
+    text = oneRule.settling ? 'labels settling' : `${oneRule.hulls.length} clusters`;
+    text += ` · step ${oneRule.steps}`;
+    if (hullArea > 0) text += ` · area ${(oneRule.area() / hullArea).toFixed(3)}`;
+    if (showHull) drawHulls(oneRule.hulls);
+  } else if (clusters.stage === 'spread') text = `wave from the stones · step ${clusters.steps}`;
   else if (clusters.stage === 'label') text = `agreeing on labels · step ${clusters.steps}`;
+  else if (clusters.stage === 'swell') text = `swelling · step ${clusters.steps}`;
   else {
-    let area = 0;
-    let hullArea = 0;
-    for (const band of clusters.bands) {
-      area += band.sim.area();
-      hullArea += band.hullArea;
-    }
-    text = `${clusters.bands.length} clusters · step ${clusters.steps}`;
-    if (hullArea > 0) text += ` · area ${(area / hullArea).toFixed(3)}`;
-    if (showHull) drawHulls();
+    const { hullArea } = clusters;
+    text = `${clusters.hulls.length} clusters · step ${clusters.steps}`;
+    if (hullArea > 0) text += ` · area ${(clusters.area() / hullArea).toFixed(3)}`;
+    if (showHull) drawHulls(clusters.hulls);
   }
   stat.textContent = text;
 }
 
-/** The wave, then the grown blobs coloured by the label each cell holds. */
-function renderGrowth(): void {
-  const { spread, label, stage } = clusters;
+/**
+ * The one-rule automaton: cells inside a band, coloured by their label. The
+ * band is the inside cells that touch anything that is not their own inside.
+ */
+function renderRule(): void {
+  const { inside, label } = oneRule;
+  for (let y = 0; y < SIZE; y++) {
+    for (let x = 0; x < SIZE; x++) {
+      const i = y * SIZE + x;
+      if (!inside[i]) continue;
+      const s = label[i];
+      const front =
+        x === 0 ||
+        y === 0 ||
+        x === SIZE - 1 ||
+        y === SIZE - 1 ||
+        !inside[i - 1] ||
+        !inside[i + 1] ||
+        !inside[i - SIZE] ||
+        !inside[i + SIZE] ||
+        label[i - 1] !== s ||
+        label[i + 1] !== s ||
+        label[i - SIZE] !== s ||
+        label[i + SIZE] !== s;
+      pixels[i] = front ? BRIGHT[hue(s)] : stones[i] ? COLOR_STONE : DIM[hue(s)];
+    }
+  }
+}
+
+/** The wave growing from the stones. */
+function renderWave(): void {
+  const { spread } = clusters;
   for (let y = 0; y < SIZE; y++) {
     for (let x = 0; x < SIZE; x++) {
       const i = y * SIZE + x;
       if (!spread.reached(i)) continue;
-      if (stones[i]) {
-        pixels[i] = COLOR_STONE;
-      } else if (stage === 'label') {
-        pixels[i] = DIM[hue(label[i])];
-      } else {
-        const front =
-          (x > 0 && !spread.reached(i - 1)) ||
-          (x < SIZE - 1 && !spread.reached(i + 1)) ||
-          (y > 0 && !spread.reached(i - SIZE)) ||
-          (y < SIZE - 1 && !spread.reached(i + SIZE));
-        pixels[i] = front ? COLOR_FRONT : COLOR_INSIDE;
-      }
+      const front =
+        (x > 0 && !spread.reached(i - 1)) ||
+        (x < SIZE - 1 && !spread.reached(i + 1)) ||
+        (y > 0 && !spread.reached(i - SIZE)) ||
+        (y < SIZE - 1 && !spread.reached(i + SIZE));
+      pixels[i] = front ? COLOR_FRONT : stones[i] ? COLOR_STONE : COLOR_INSIDE;
+    }
+  }
+}
+
+/**
+ * The single field, coloured by the label each cell holds. Once the labels
+ * have settled, the band is the cells of a label that touch anything else.
+ */
+function renderLabels(): void {
+  const { label, stage } = clusters;
+  for (let y = 0; y < SIZE; y++) {
+    for (let x = 0; x < SIZE; x++) {
+      const i = y * SIZE + x;
+      const s = label[i];
+      if (s === 0) continue;
+      const front =
+        stage !== 'label' &&
+        (x === 0 ||
+          y === 0 ||
+          x === SIZE - 1 ||
+          y === SIZE - 1 ||
+          label[i - 1] !== s ||
+          label[i + 1] !== s ||
+          label[i - SIZE] !== s ||
+          label[i + SIZE] !== s);
+      pixels[i] = front ? BRIGHT[hue(s)] : stones[i] ? COLOR_STONE : DIM[hue(s)];
     }
   }
 }
 
 /** Every band on its own layer: insides first, then stones, then the bands. */
-function renderBands(): void {
+function renderLayers(): void {
   for (const { sim, x0, y0, id } of clusters.bands) {
     const dim = DIM[hue(id)];
     for (let y = 0; y < sim.h; y++) {
@@ -260,9 +354,9 @@ function renderBands(): void {
   }
 }
 
-function drawHulls(): void {
+function drawHulls(hulls: Point[][]): void {
   ctx.beginPath();
-  for (const { hull } of clusters.bands) {
+  for (const hull of hulls) {
     if (hull.length === 0) continue;
     ctx.moveTo(hull[0].x, hull[0].y);
     for (let i = 1; i < hull.length; i++) ctx.lineTo(hull[i].x, hull[i].y);
