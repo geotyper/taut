@@ -53,6 +53,13 @@ vec3 rayDirection() {
 }
 
 // Clip the ray to the field, the cube [0, uSize]^3. Returns false on a miss.
+// Voxel classes from 3 up are membranes coloured by cluster: the class is a hue.
+vec3 hueColor(uint kind) {
+  float h = float(kind - 3u) / 253.0;
+  vec3 c = clamp(abs(fract(h + vec3(0.0, 2.0 / 3.0, 1.0 / 3.0)) * 6.0 - 3.0) - 1.0, 0.0, 1.0);
+  return mix(vec3(1.0), c, 0.7);
+}
+
 bool clipToField(vec3 rd, out float tEnter, out float tExit, out vec3 entryNormal) {
   vec3 inv = 1.0 / rd;
   vec3 t0 = -uEye * inv;
@@ -111,8 +118,9 @@ void main() {
       through = 0.0;
       break;
     }
-    if (voxel == 1u) {
-      color += through * uOpacity * MEMBRANE * shade(normal, uEye + rd * t, -rd);
+    if (voxel == 1u || voxel >= 3u) {
+      vec3 tint = voxel == 1u ? MEMBRANE : hueColor(voxel);
+      color += through * uOpacity * tint * shade(normal, uEye + rd * t, -rd);
       through *= 1.0 - uOpacity;
       if (through < 0.02) break;
     }
@@ -140,6 +148,8 @@ void main() {
 const SMOOTH_FRAGMENT = `${COMMON}
 uniform sampler3D uPhase;
 uniform sampler3D uStones;
+uniform usampler3D uTint;
+uniform bool uTinted;
 uniform float uSmooth;
 
 const int MAX_STEPS = 640;
@@ -187,6 +197,18 @@ vec3 stoneNormal(vec3 p) {
   return -normalize(g + 1e-6);
 }
 
+// The membrane's colour at a point on its surface: one colour, or the hue of
+// the first inside cell found a little way in against the outward normal.
+vec3 membraneColor(vec3 hit, vec3 normal) {
+  if (!uTinted) return MEMBRANE;
+  for (int k = 0; k < 4; k++) {
+    vec3 p = hit - normal * (0.5 + float(k));
+    uint kind = texelFetch(uTint, ivec3(clamp(floor(p), 0.0, uSize - 1.0)), 0).r;
+    if (kind >= 3u) return hueColor(kind);
+  }
+  return MEMBRANE;
+}
+
 // Lit from the camera; both sides of the membrane catch the light.
 float shade(vec3 normal, vec3 toEye) {
   return 0.22 + 0.78 * abs(dot(normal, toEye));
@@ -232,7 +254,7 @@ void main() {
         through = 0.0;
         break;
       }
-      color += through * uOpacity * MEMBRANE * shade(normal, -rd);
+      color += through * uOpacity * membraneColor(hit, normal) * shade(normal, -rd);
       through *= 1.0 - uOpacity;
       if (through < 0.02) break;
       inside = true;
@@ -255,7 +277,9 @@ void main() {
         float m = 0.5 * (a + b);
         if (phaseFine(uEye + rd * m) < 0.5) b = m; else a = m;
       }
-      color += through * uOpacity * MEMBRANE * shade(phaseNormal(uEye + rd * b), -rd);
+      vec3 hit = uEye + rd * b;
+      vec3 normal = phaseNormal(hit);
+      color += through * uOpacity * membraneColor(hit, normal) * shade(normal, -rd);
       through *= 1.0 - uOpacity;
       if (through < 0.02) break;
       inside = false;
@@ -279,8 +303,10 @@ export class Renderer {
   private readonly voxelTexture: WebGLTexture;
   private readonly phaseTexture: WebGLTexture;
   private readonly stoneTexture: WebGLTexture;
+  private readonly tintTexture: WebGLTexture;
   private voxelSize = 0;
   private phaseSize = 0;
+  private tintSize = 0;
 
   constructor(canvas: HTMLCanvasElement) {
     const gl = canvas.getContext('webgl2', { antialias: false });
@@ -291,6 +317,7 @@ export class Renderer {
     this.voxelTexture = this.createTexture(gl.NEAREST, gl.NEAREST);
     this.phaseTexture = this.createTexture(gl.LINEAR_MIPMAP_LINEAR, gl.LINEAR);
     this.stoneTexture = this.createTexture(gl.LINEAR_MIPMAP_LINEAR, gl.LINEAR);
+    this.tintTexture = this.createTexture(gl.NEAREST, gl.NEAREST);
     gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
     // The fullscreen triangle needs no attributes, only a bound vertex array.
     gl.bindVertexArray(gl.createVertexArray());
@@ -321,9 +348,24 @@ export class Renderer {
     this.finish(program, n, camera, view);
   }
 
-  /** Draw the phase field (0 or 1 per cell) as a smooth surface. */
-  drawSmooth(phase: Uint8Array, n: number, camera: Camera, view: View): void {
+  /**
+   * Draw the phase field (0 or 1 per cell) as a smooth surface. With `tint`,
+   * a hue class per inside cell, each membrane takes the colour of its cells.
+   */
+  drawSmooth(phase: Uint8Array, n: number, camera: Camera, view: View, tint?: Uint8Array): void {
     const { gl } = this;
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_3D, this.tintTexture);
+    if (tint && n !== this.tintSize) {
+      gl.texImage3D(gl.TEXTURE_3D, 0, gl.R8UI, n, n, n, 0, gl.RED_INTEGER, gl.UNSIGNED_BYTE, tint);
+      this.tintSize = n;
+    } else if (tint) {
+      gl.texSubImage3D(gl.TEXTURE_3D, 0, 0, 0, 0, n, n, n, gl.RED_INTEGER, gl.UNSIGNED_BYTE, tint);
+    } else if (this.tintSize === 0) {
+      // An integer sampler needs a complete texture even when it is not read.
+      gl.texImage3D(gl.TEXTURE_3D, 0, gl.R8UI, 1, 1, 1, 0, gl.RED_INTEGER, gl.UNSIGNED_BYTE, new Uint8Array(1));
+      this.tintSize = 1;
+    }
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_3D, this.stoneTexture);
     gl.activeTexture(gl.TEXTURE0);
@@ -340,6 +382,8 @@ export class Renderer {
     gl.useProgram(program);
     gl.uniform1i(gl.getUniformLocation(program, 'uPhase'), 0);
     gl.uniform1i(gl.getUniformLocation(program, 'uStones'), 1);
+    gl.uniform1i(gl.getUniformLocation(program, 'uTint'), 2);
+    gl.uniform1i(gl.getUniformLocation(program, 'uTinted'), tint ? 1 : 0);
     gl.uniform1f(gl.getUniformLocation(program, 'uSmooth'), view.smoothness);
     this.finish(program, n, camera, view);
   }

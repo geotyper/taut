@@ -96,6 +96,20 @@ Address parameters: `?steps=200` runs that many steps before the first frame;
 `?smooth` preset the page, as do `?stone-placement=sphere` and
 `?stone-shape=sharp`.
 
+### Clusters in 3D
+
+The third automaton on `3d.html` is the one-rule clusters automaton (see
+[Clusters](#clusters)) carried into the voxel field: a membrane per group of
+stones. The cell state has the same four parts, read from the 26 neighbours:
+nearest stone, label, age and membrane. Only the tension differs. The 2D copy
+rule moves a front by mean curvature, which in 3D pinches necks, so the
+membrane follows the line majority rule instead, counting cells of another
+label as outside. Membranes are coloured by cluster in both views.
+
+While the labels settle a step is about ten times slower than afterwards
+(roughly 45 ms against 6 ms at 64³), and the state takes about 30 bytes per
+cell, so it is built only while this automaton is chosen.
+
 ## Clusters
 
 `clusters.html` puts a band around every group of stones instead of one around

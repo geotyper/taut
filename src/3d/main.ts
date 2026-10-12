@@ -1,3 +1,4 @@
+import { Clusters3 } from './clusters3.ts';
 import { Renderer, type Camera, type View } from './renderer.ts';
 import { Sim3, type LineKernel, type Params3, type StartShape3 } from './sim3.ts';
 import { scatterStones, type StoneOptions } from './stones.ts';
@@ -5,7 +6,7 @@ import { scatterStones, type StoneOptions } from './stones.ts';
 /** Per-frame simulation time limit, in ms; stepping stops early past it. */
 const FRAME_BUDGET = 14;
 
-type Automaton = 'lines' | 'film';
+type Automaton = 'lines' | 'film' | 'clusters';
 
 /**
  * Line threshold at zero and at full inward pressure, per kernel. Below the
@@ -31,7 +32,15 @@ let kernel: LineKernel = 'thin';
 /** -1..1: negative inflates the membrane, positive makes it sag inwards. */
 let pressure = 0;
 let start: StartShape3 = 'ball';
-const stoneOptions: StoneOptions = { count: 5, spread: 0.88, placement: 'box', shape: 'mixed' };
+const stoneOptions: StoneOptions = {
+  count: 5,
+  spread: 0.88,
+  placement: 'box',
+  shape: 'mixed',
+  scale: 1,
+};
+/** Clusters: stones closer than two of these radii share a membrane. In cells. */
+let clusterReach = 5;
 let stepsPerFrame = 1;
 let opacity = 0.3;
 let opaque = false;
@@ -41,7 +50,10 @@ let smoothness = 1.2;
 let paused = false;
 
 let sim = new Sim3(64);
+/** Built only while the clusters automaton is chosen: its state is large. */
+let clusters: Clusters3 | null = null;
 let voxels = new Uint8Array(sim.phase.length);
+let tint = new Uint8Array(sim.phase.length);
 let stoneVolume = 0;
 let stepMs = 0;
 
@@ -57,10 +69,15 @@ bindRange('film-noise', 2, (v) => (filmParams.noise = v));
 bindRange('speed', 0, (v) => (stepsPerFrame = v));
 bindRange('opacity', 2, (v) => (opacity = v));
 bindRange('smoothness', 1, (v) => (smoothness = v));
+bindRange('cluster-reach', 0, (v) => {
+  clusterReach = v;
+  clusters?.restart(clusterReach);
+});
 bindRange('stone-count', 0, (v) => (stoneOptions.count = v));
+bindRange('stone-scale', 2, (v) => (stoneOptions.scale = v));
 bindRange('stone-spread', 2, (v) => (stoneOptions.spread = v));
 // Scatter a new set once the slider is released, not on every tick of a drag.
-for (const id of ['stone-count', 'stone-spread']) {
+for (const id of ['stone-count', 'stone-spread', 'stone-scale']) {
   byId(id).addEventListener('change', () => rebuild(sim.n));
 }
 
@@ -80,14 +97,15 @@ const automatonSelect = byId<HTMLSelectElement>('automaton');
 automatonSelect.addEventListener('change', () => {
   automaton = automatonSelect.value as Automaton;
   syncControls();
-  sim.restart(start);
+  clusters = automaton === 'clusters' ? new Clusters3(sim.n, sim.stones) : null;
+  restartWave();
 });
 
 const kernelSelect = byId<HTMLSelectElement>('kernel');
 kernelSelect.addEventListener('change', () => {
   kernel = kernelSelect.value as LineKernel;
   syncPressure();
-  sim.restart(start);
+  restartWave();
 });
 
 const sizeSelect = byId<HTMLSelectElement>('size');
@@ -95,7 +113,7 @@ sizeSelect.addEventListener('change', () => {
   const n = Number(sizeSelect.value);
   // Radii are in cells: scale them so the membrane behaves the same at any
   // resolution.
-  for (const id of ['lines-radius', 'film-radius']) {
+  for (const id of ['lines-radius', 'film-radius', 'cluster-reach']) {
     const input = byId<HTMLInputElement>(id);
     input.value = String(Math.round((Number(input.value) * n) / sim.n));
     input.dispatchEvent(new Event('input'));
@@ -118,7 +136,7 @@ opaqueToggle.addEventListener('change', () => {
 const startSelect = byId<HTMLSelectElement>('start');
 startSelect.addEventListener('change', () => {
   start = startSelect.value as StartShape3;
-  sim.restart(start);
+  restartWave();
 });
 
 const pauseButton = byId<HTMLButtonElement>('pause');
@@ -126,7 +144,7 @@ pauseButton.addEventListener('click', () => {
   paused = !paused;
   pauseButton.textContent = paused ? 'Resume' : 'Pause';
 });
-byId('restart').addEventListener('click', () => sim.restart(start));
+byId('restart').addEventListener('click', restartWave);
 byId('random').addEventListener('click', () => rebuild(sim.n));
 
 // Keyboard shortcuts, so the view can be switched without reaching for the
@@ -139,7 +157,7 @@ const SHORTCUTS: Record<string, () => void> = {
     surfaceSelect.dispatchEvent(new Event('change'));
   },
   n: () => rebuild(sim.n),
-  r: () => sim.restart(start),
+  r: restartWave,
   ' ': () => pauseButton.click(),
 };
 window.addEventListener('keydown', (e) => {
@@ -191,7 +209,7 @@ if (query.has('smooth')) {
   surfaceSelect.value = 'smooth';
   surfaceSelect.dispatchEvent(new Event('change'));
 }
-for (const select of [placementSelect, shapeSelect]) {
+for (const select of [placementSelect, shapeSelect, automatonSelect]) {
   const value = query.get(select.id);
   if (value === null) continue;
   select.value = value;
@@ -217,11 +235,18 @@ requestAnimationFrame(frame);
 function rebuild(n: number): void {
   sim = new Sim3(n);
   voxels = new Uint8Array(sim.phase.length);
+  tint = new Uint8Array(sim.phase.length);
   scatterStones(sim.stones, n, stoneOptions);
+  clusters = automaton === 'clusters' ? new Clusters3(n, sim.stones) : null;
   stoneVolume = 0;
   for (let i = 0; i < sim.stones.length; i++) stoneVolume += sim.stones[i];
   renderer?.setStones(sim.stones, n);
+  restartWave();
+}
+
+function restartWave(): void {
   sim.restart(start);
+  clusters?.restart(clusterReach);
 }
 
 /** Inward pressure is the line threshold; outward pressure is handled in `shown`. */
@@ -232,18 +257,30 @@ function syncPressure(): void {
 
 /** The field to draw: the membrane itself, or inflated under outward pressure. */
 function shown(): Uint8Array {
+  if (clusters) return clusters.phase;
   if (automaton !== 'lines' || pressure >= 0) return sim.phase;
   return sim.inflated(-pressure * INFLATE_REACH * sim.n);
 }
 
 function syncControls(): void {
-  byId('group-lines').hidden = automaton !== 'lines';
+  // The clusters pull taut by the thin line rule, without pressure.
+  byId('group-lines').hidden = automaton === 'film';
+  byId('pick-kernel').hidden = automaton !== 'lines';
+  byId('pick-pressure').hidden = automaton !== 'lines';
+  byId('pick-start').hidden = automaton === 'clusters';
   byId('group-film').hidden = automaton !== 'film';
+  byId('group-clusters').hidden = automaton !== 'clusters';
   byId('group-smoothness').hidden = !smooth;
 }
 
 function step(): void {
-  if (automaton === 'lines') sim.stepLines(linesParams, kernel);
+  if (clusters) {
+    clusters.step({
+      radius: linesParams.radius,
+      threshold: SAG_RANGE.thin[0],
+      noise: linesParams.noise,
+    });
+  } else if (automaton === 'lines') sim.stepLines(linesParams, kernel);
   else sim.stepFilm(filmParams);
 }
 
@@ -261,16 +298,18 @@ function frame(): void {
   const view: View = { opacity: opaque ? 1 : opacity, oneColor, smoothness };
   const field = shown();
   if (smooth) {
-    renderer?.drawSmooth(field, sim.n, camera, view);
+    clusters?.tint(tint);
+    renderer?.drawSmooth(field, sim.n, camera, view, clusters ? tint : undefined);
   } else {
-    sim.classify(voxels, field);
+    if (clusters) clusters.classify(voxels);
+    else sim.classify(voxels, field);
     renderer?.drawVoxels(voxels, sim.n, camera, view);
   }
 
   const volume = stoneVolume > 0 ? (sim.volume(field) / stoneVolume).toFixed(2) : '—';
-  stat.textContent =
-    `step ${sim.steps} · ${stepMs.toFixed(1)} ms/step · ` +
-    `volume ${volume}× stones`;
+  let text = `step ${clusters ? clusters.steps : sim.steps} · ${stepMs.toFixed(1)} ms/step`;
+  if (clusters) text += clusters.settling ? ' · labels settling' : ` · ${clusters.clusters} clusters`;
+  stat.textContent = `${text} · volume ${volume}× stones`;
   requestAnimationFrame(frame);
 }
 

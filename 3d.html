@@ -35,12 +35,13 @@
           <select id="automaton">
             <option value="lines">Line majority (pulls taut)</option>
             <option value="film">Wide kernel (soap film)</option>
+            <option value="clusters">Clusters (a membrane per group)</option>
           </select>
         </label>
 
         <section id="group-lines">
           <h2>Line majority</h2>
-          <label>
+          <label id="pick-kernel">
             <span>Kernel</span>
             <select id="kernel">
               <option value="thin">Thin lines</option>
@@ -51,13 +52,21 @@
             <span>Line reach <output id="lines-radius-out"></output></span>
             <input id="lines-radius" type="range" min="4" max="40" step="1" value="10" />
           </label>
-          <label>
+          <label id="pick-pressure">
             <span>Pressure <output id="pressure-out"></output></span>
             <input id="pressure" type="range" min="-1" max="1" step="0.05" value="0" />
           </label>
           <label>
             <span>Noise <output id="lines-noise-out"></output></span>
             <input id="lines-noise" type="range" min="0" max="0.3" step="0.01" value="0" />
+          </label>
+        </section>
+
+        <section id="group-clusters">
+          <h2>Clusters</h2>
+          <label>
+            <span>Cluster radius <output id="cluster-reach-out"></output></span>
+            <input id="cluster-reach" type="range" min="1" max="24" step="1" value="5" />
           </label>
         </section>
 
@@ -87,7 +96,7 @@
             <option value="192">Ultra (192³, slow)</option>
           </select>
         </label>
-        <label>
+        <label id="pick-start">
           <span>Wave start</span>
           <select id="start">
             <option value="ball">Ball</option>
@@ -96,7 +105,11 @@
         </label>
         <label>
           <span>Stones <output id="stone-count-out"></output></span>
-          <input id="stone-count" type="range" min="1" max="12" step="1" value="5" />
+          <input id="stone-count" type="range" min="1" max="40" step="1" value="5" />
+        </label>
+        <label>
+          <span>Stone size <output id="stone-scale-out"></output></span>
+          <input id="stone-scale" type="range" min="0.3" max="1" step="0.05" value="1" />
         </label>
         <label>
           <span>Stone spread <output id="stone-spread-out"></output></span>

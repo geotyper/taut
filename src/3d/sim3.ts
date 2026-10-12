@@ -34,7 +34,7 @@ const INFLATE_LEVEL = 0.1;
  * Line directions: every lattice vector with components in -2..2, one from
  * each opposite pair, with no common factor. 49 lines through each cell.
  */
-const LINES: { dx: number; dy: number; dz: number; length: number }[] = [];
+export const LINES: { dx: number; dy: number; dz: number; length: number }[] = [];
 for (let dz = -2; dz <= 2; dz++) {
   for (let dy = -2; dy <= 2; dy++) {
     for (let dx = -2; dx <= 2; dx++) {
@@ -270,7 +270,7 @@ export class Sim3 {
 }
 
 /** How many steps of size |d| fit between coordinate c and the field edge. */
-function room(c: number, d: number, last: number): number {
+export function room(c: number, d: number, last: number): number {
   if (d === 0) return Infinity;
   return Math.floor((d > 0 ? last - c : c) / Math.abs(d));
 }

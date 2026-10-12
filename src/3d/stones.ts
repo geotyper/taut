@@ -18,6 +18,8 @@ export interface StoneOptions {
   placement: 'box' | 'sphere';
   /** Sharp-edged boxes, fully rounded ones, or each stone somewhere between. */
   shape: 'mixed' | 'sharp' | 'round';
+  /** Stone size relative to the default: 1 leaves it as it is. */
+  scale: number;
 }
 
 /**
@@ -27,10 +29,10 @@ export interface StoneOptions {
  * no staircase baked into its own axes.
  */
 export function scatterStones(stones: Uint8Array, n: number, options: StoneOptions): void {
-  const { count, spread, placement, shape } = options;
+  const { count, spread, placement, shape, scale } = options;
   const n2 = n * n;
   for (let s = 0; s < count; s++) {
-    const hx = n * (0.05 + Math.random() * 0.06);
+    const hx = n * scale * (0.05 + Math.random() * 0.06);
     const hy = hx * (0.6 + Math.random() * 0.8);
     const hz = hx * (0.6 + Math.random() * 0.8);
     const roundness = shape === 'sharp' ? 0 : shape === 'round' ? 1 : Math.random();
