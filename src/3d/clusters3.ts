@@ -39,10 +39,13 @@ const NDZ = Int8Array.from({ length: 26 }, (_, k) => NEIGHBOURS[3 * k + 2]);
  *   such neighbours, so stones closer than two radii agree on one. Further
  *   out, the label of the neighbour towards the nearest stone.
  * - **Age**: steps since the label last changed here or near here.
- * - **Membrane**: inside or outside. A young cell close enough to its stone
- *   is inside, so a cluster stays in one piece while its labels settle. An
- *   old cell follows the line majority rule, with cells of another label
- *   counted as outside, so two membranes never merge.
+ * - **Membrane**: inside or outside. A cell within the padding of its stone
+ *   is always inside, so the membrane is pulled taut around the stones grown
+ *   by that much rather than around the bare stones, and keeps some body
+ *   where a cluster is thin. A young cell close enough to its stone is inside
+ *   too, so a cluster stays in one piece while its labels settle. Any other
+ *   cell follows the line majority rule, with cells of another label counted
+ *   as outside, so two membranes never merge.
  */
 export class Clusters3 {
   readonly n: number;
@@ -76,6 +79,7 @@ export class Clusters3 {
   /** The label of every inside cell and 0 for the rest; rebuilt each step. */
   private readonly own: Int32Array;
   private core2 = 1;
+  private pad2 = 0;
   private fat2 = 1;
   private old = 1;
   /** The membrane is all that can still change: the rest of the rule is a no-op. */
@@ -111,16 +115,17 @@ export class Clusters3 {
       const { dx, dy, dz } = LINES[l];
       this.lineStrides[l] = (dz * n + dy) * n + dx;
     }
-    this.restart(1);
+    this.restart(1, 0);
   }
 
   /**
    * The starting state: stones are inside and know they are stones, every
    * cell holds a label of its own, and nothing else is known.
    */
-  restart(reach: number): void {
+  restart(reach: number, padding: number): void {
     const { n, stones } = this;
     const r = Math.max(1, Math.round(reach));
+    this.padding = padding;
     const fat = r + Math.round(n * SLACK);
     this.core2 = r * r;
     this.fat2 = fat * fat;
@@ -141,6 +146,14 @@ export class Clusters3 {
     this.membraneOnly = false;
   }
 
+  /**
+   * How far around a stone its cells are always inside, in cells. Can be
+   * changed while running: the membrane follows.
+   */
+  set padding(cells: number) {
+    this.pad2 = Math.max(0, cells) ** 2;
+  }
+
   /** One synchronous step of the rule on every cell. */
   step(p: Params3): void {
     for (let l = 0; l < LINES.length; l++) {
@@ -153,7 +166,7 @@ export class Clusters3 {
   }
 
   private stepAll(p: Params3): void {
-    const { n, stones, strides, core2, fat2, old } = this;
+    const { n, strides, core2, pad2, fat2, old } = this;
     const { d2, ox, oy, oz, label, age, nd2, nox, noy, noz, nlabel, nage, nphase } = this;
     const { wake, nwake } = this;
     const n2 = n * n;
@@ -174,7 +187,7 @@ export class Clusters3 {
             noz[i] = oz[i];
             nlabel[i] = own;
             nage[i] = age[i];
-            if (stones[i] || (age[i] < old && here <= fat2)) nphase[i] = 1;
+            if (here <= pad2 || (age[i] < old && here <= fat2)) nphase[i] = 1;
             else nphase[i] = this.lineRule(i, x, y, z, p);
             continue;
           }
@@ -242,7 +255,7 @@ export class Clusters3 {
           noz[i] = bz;
           nlabel[i] = low;
           nage[i] = young;
-          if (stones[i] || (age[i] < old && here <= fat2)) nphase[i] = 1;
+          if (here <= pad2 || (age[i] < old && here <= fat2)) nphase[i] = 1;
           else nphase[i] = this.lineRule(i, x, y, z, p);
         }
       }
@@ -273,13 +286,13 @@ export class Clusters3 {
   }
 
   private stepMembrane(p: Params3): void {
-    const { n, stones, nphase } = this;
+    const { n, d2, pad2, nphase } = this;
     const n2 = n * n;
     for (let z = 0; z < n; z++) {
       for (let y = 0; y < n; y++) {
         for (let x = 0; x < n; x++) {
           const i = z * n2 + y * n + x;
-          nphase[i] = stones[i] ? 1 : this.lineRule(i, x, y, z, p);
+          nphase[i] = d2[i] <= pad2 ? 1 : this.lineRule(i, x, y, z, p);
         }
       }
     }

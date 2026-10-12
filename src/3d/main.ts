@@ -41,6 +41,8 @@ const stoneOptions: StoneOptions = {
 };
 /** Clusters: stones closer than two of these radii share a membrane. In cells. */
 let clusterReach = 5;
+/** Clusters: cells this close to a stone are always inside its membrane. */
+let clusterPadding = 3;
 let stepsPerFrame = 1;
 let opacity = 0.3;
 let opaque = false;
@@ -71,7 +73,11 @@ bindRange('opacity', 2, (v) => (opacity = v));
 bindRange('smoothness', 1, (v) => (smoothness = v));
 bindRange('cluster-reach', 0, (v) => {
   clusterReach = v;
-  clusters?.restart(clusterReach);
+  clusters?.restart(clusterReach, clusterPadding);
+});
+bindRange('cluster-padding', 0, (v) => {
+  clusterPadding = v;
+  if (clusters) clusters.padding = v;
 });
 bindRange('stone-count', 0, (v) => (stoneOptions.count = v));
 bindRange('stone-scale', 2, (v) => (stoneOptions.scale = v));
@@ -113,7 +119,7 @@ sizeSelect.addEventListener('change', () => {
   const n = Number(sizeSelect.value);
   // Radii are in cells: scale them so the membrane behaves the same at any
   // resolution.
-  for (const id of ['lines-radius', 'film-radius', 'cluster-reach']) {
+  for (const id of ['lines-radius', 'film-radius', 'cluster-reach', 'cluster-padding']) {
     const input = byId<HTMLInputElement>(id);
     input.value = String(Math.round((Number(input.value) * n) / sim.n));
     input.dispatchEvent(new Event('input'));
@@ -246,7 +252,7 @@ function rebuild(n: number): void {
 
 function restartWave(): void {
   sim.restart(start);
-  clusters?.restart(clusterReach);
+  clusters?.restart(clusterReach, clusterPadding);
 }
 
 /** Inward pressure is the line threshold; outward pressure is handled in `shown`. */

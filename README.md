@@ -106,6 +106,12 @@ rule moves a front by mean curvature, which in 3D pinches necks, so the
 membrane follows the line majority rule instead, counting cells of another
 label as outside. Membranes are coloured by cluster in both views.
 
+Pulled taut around the bare stones, a membrane has no body where a cluster is
+thin: two stones give a narrow bridge, three a flat sheet, one nothing at all.
+So every cell within the padding of its stone is always inside, and the
+membrane is taut around the stones grown by that much. Zero padding gives the
+bare wrap back.
+
 While the labels settle a step is about ten times slower than afterwards
 (roughly 45 ms against 6 ms at 64³), and the state takes about 30 bytes per
 cell, so it is built only while this automaton is chosen.
