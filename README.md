@@ -205,6 +205,8 @@ band in one of them. In its channel a band meets only the clusters that share
 the channel, so it reaches its full hull and runs over a neighbour that lives
 in another one. It is still one rule applied by every cell at once.
 
+![The cyan band reaches its full hull and runs over the edge of the green one](screenshots/2d-overlapping-bands.png)
+
 The clusters are found as before. The channel of a cluster follows from its
 label and from a counter, its turn. A cell takes the largest turn among the
 neighbours of its label, and where it touches a settled cluster of a smaller
