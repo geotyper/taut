@@ -11,6 +11,14 @@ const YOUTH_MARGIN = 16;
 const DX = [1, 1, 0, -1, -1, -1, 0, 1];
 const DY = [0, 1, 1, 1, 0, -1, -1, -1];
 
+/**
+ * Depth is counted in thirds of a cell: a step to a side neighbour costs 3
+ * and a diagonal one 4, which keeps it close to the straight distance.
+ */
+const DEPTH_UNIT = 3;
+const DEPTH_COST = [3, 4, 3, 4, 3, 4, 3, 4];
+const DEPTH_CAP = 255;
+
 export interface RuleParams {
   /** Temperature of the band: how readily a cell makes a move that costs energy. */
   temperature: number;
@@ -19,16 +27,20 @@ export interface RuleParams {
 /**
  * A band per group of stones as one cellular automaton: every cell applies
  * the same rule on every step, all at once, reading only its 8 neighbours.
- * There are no stages and no clock; the cell state has four parts that the
+ * There are no stages and no clock; the cell state has five parts that the
  * rule updates together.
  *
  * - **Nearest stone**: the offset to the nearest stone the cell has heard of;
  *   it takes a shorter one from a neighbour. Never stops at a radius, so in
  *   the end every cell knows which stone it belongs to.
- * - **Label**: within the cluster radius of a stone, the smallest label among
- *   such neighbours, so stones closer than two radii agree on one. Further
- *   out, the label of the neighbour towards the nearest stone, which carries
- *   the label of every cluster over its whole territory.
+ * - **Depth**: for a cell within the cluster radius of a stone, how far it is
+ *   from the nearest cell that is not: one more than the smallest depth among
+ *   its neighbours. It only ever grows towards its final value.
+ * - **Label**: on a stone, or within the cluster radius of one and deep
+ *   enough, the smallest label among such neighbours, so stones closer than
+ *   two radii agree on one unless the bridge between them is too thin.
+ *   Elsewhere, the label of the neighbour towards the nearest stone, which
+ *   carries the label of every cluster over its whole territory.
  * - **Age**: steps since the label last changed here or near here, among
  *   cells of the same label. It stops counting at a limit.
  * - **Band**: inside or outside. A young cell close enough to its stone is
@@ -54,6 +66,8 @@ export class OneRule {
   private ox: Int16Array;
   private oy: Int16Array;
   private age: Uint8Array;
+  private depth: Uint8Array;
+  private ndepth: Uint8Array;
   private nd2: Int32Array;
   private nox: Int16Array;
   private noy: Int16Array;
@@ -61,6 +75,8 @@ export class OneRule {
   private nage: Uint8Array;
   private ninside: Uint8Array;
   private core2 = 1;
+  /** Labels spread only through cells at least this deep; 0 for all of them. */
+  private deep = 0;
   private fat2 = 1;
   private old = 1;
   /** The band is all that can still change: the rest of the rule is a no-op. */
@@ -77,6 +93,8 @@ export class OneRule {
     this.ox = new Int16Array(n);
     this.oy = new Int16Array(n);
     this.age = new Uint8Array(n);
+    this.depth = new Uint8Array(n);
+    this.ndepth = new Uint8Array(n);
     this.nd2 = new Int32Array(n);
     this.nox = new Int16Array(n);
     this.noy = new Int16Array(n);
@@ -88,11 +106,15 @@ export class OneRule {
 
   /**
    * The starting state: stones are inside and know they are stones, every
-   * cell holds a label of its own, and nothing else is known.
+   * cell holds a label of its own, and nothing else is known. Where the
+   * grown stones join by a bridge thinner than `bridge` cells, the clusters
+   * stay apart; 0 joins everything that touches.
    */
-  restart(reach: number): void {
+  restart(reach: number, bridge = 0): void {
     const r = Math.max(1, Math.round(reach));
     this.core2 = r * r;
+    this.deep = bridge > 0 ? Math.min(DEPTH_CAP, Math.round((DEPTH_UNIT * (bridge + 1)) / 2)) : 0;
+    this.depth.fill(0);
     this.fat2 = (r + BAND_SLACK) ** 2;
     this.old = r + BAND_SLACK + YOUTH_MARGIN;
     for (let i = 0; i < this.label.length; i++) {
@@ -124,16 +146,19 @@ export class OneRule {
   }
 
   private stepAll(p: RuleParams): void {
-    const { w, h, stones, core2, fat2, old } = this;
+    const { w, h, stones, core2, deep, fat2, old } = this;
     const { d2, ox, oy, label, age, nd2, nox, noy, nlabel, nage, ninside } = this;
+    const { depth, ndepth } = this;
     let knowing = false;
     let ageing = false;
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
         const i = y * w + x;
         const own = label[i];
-        const core = d2[i] <= core2;
+        const grown = d2[i] <= core2;
+        const core = stones[i] === 1 || (grown && depth[i] >= deep);
 
+        let shallow = grown ? DEPTH_CAP : 0;
         let best = d2[i];
         let bx = ox[i];
         let by = oy[i];
@@ -154,7 +179,10 @@ export class OneRule {
               by = cy;
             }
           }
-          if (core && d2[j] <= core2 && label[j] < low) low = label[j];
+          if (grown && depth[j] + DEPTH_COST[k] < shallow) shallow = depth[j] + DEPTH_COST[k];
+          if (core && label[j] < low && (stones[j] || (d2[j] <= core2 && depth[j] >= deep))) {
+            low = label[j];
+          }
           if (label[j] === own && age[j] + 1 < young) young = age[j] + 1;
         }
         if (!core && d2[i] !== FAR) {
@@ -164,7 +192,8 @@ export class OneRule {
         }
         if (low !== own) young = 0;
 
-        if (best !== d2[i] || low !== own) knowing = true;
+        if (best !== d2[i] || low !== own || shallow !== depth[i]) knowing = true;
+        ndepth[i] = shallow;
         if (young !== age[i]) ageing = true;
         nd2[i] = best;
         nox[i] = bx;
@@ -186,6 +215,8 @@ export class OneRule {
     this.noy = oy;
     this.nlabel = label;
     this.nage = age;
+    this.depth = ndepth;
+    this.ndepth = depth;
 
     if (this.settling && !knowing) {
       this.settling = false;

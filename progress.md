@@ -171,6 +171,36 @@ The three modes answer the same situation differently:
 - **A layer per cluster** — no dent: the large band is the full hull and
   passes over the small cluster.
 
+## Added since: clumps and thin bridges
+
+**Stones in clumps.** Stones scatter around a few centres, with about one in
+eight landing anywhere. 2D: a *Clumps* slider, 5 by default, 0 for the old
+even scatter. 3D: a stone placement *In clumps* with its own count.
+
+**Breaking thin bridges.** A fifth part of the cell state, depth: for a cell
+within the cluster radius of a stone, the distance to the nearest cell that is
+not, counted as one step more than the smallest depth among the neighbours. A
+label spreads only through stones and through cells at least half the chosen
+bridge width deep. Two groups then join only through a neck at least that
+wide.
+
+- The depth starts at zero and only grows to its final value, so at no moment
+  are two groups joined that should stay apart. That matters because a label
+  taken by mistake could not be given back.
+- Checked against a direct calculation (grow, measure depth, flood fill): the
+  same clusters in 18 runs in 2D and 12 in 3D at 64³.
+- A test scene with two 3×3 groups of stones joined by a row of six at the
+  same spacing of 16 cells: one cluster at any radius that keeps the groups
+  whole (6, 7 and 10 tried), eight clusters at radius 10 and bridge 24 — the
+  two groups and six single stones. At bridge 20 it was six, so two
+  links had not broken yet.
+- Costs: one more byte per cell (two with the buffer), and the labels wait for
+  the depth, which adds about half the bridge width in steps. In 3D the step
+  time while settling stayed at 50–60 ms.
+- For two lone stones the bridge width is no more than a smaller radius. It
+  only says something new for three stones or more.
+- Not in the staged modes.
+
 ## What could be improved
 
 ### Both
@@ -183,8 +213,6 @@ The three modes answer the same situation differently:
 - **Other linkage.** Single linkage chains: a line of stones becomes one
   cluster. A density rule (a cell needs several stones within `r`, as in
   DBSCAN) would ignore lone stones and thin bridges.
-- **Clumped stones.** Scatter stones around a few centres, so there are
-  clusters to find. Uniform scatter makes the result look arbitrary.
 - **Overlapping hulls.** Decide what should happen when two hulls intersect:
   cut at the territory border (now), press and dent, or allow both. A band
   that may enter foreign territory but not foreign stones is the open case.
@@ -223,6 +251,4 @@ The three modes answer the same situation differently:
   remove the patches.
 - **Pressure and the soft kernel** for cluster membranes: sag and inflation
   per cluster.
-- **Stone placement for clusters.** A "clumps" option next to "anywhere" and
-  "mostly on a sphere".
 - **Check at higher resolution.** Everything was verified at 64³ only.

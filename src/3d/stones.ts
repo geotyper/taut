@@ -4,6 +4,11 @@ const STONE_MARGIN = 4;
 /** Share of the stones that sit on the sphere in the 'sphere' placement. */
 const ON_SPHERE = 0.6;
 
+/** Share of the stones that ignore the clumps in the 'clumps' placement. */
+const STRAY_STONES = 0.12;
+/** How far stones scatter around the centre of their clump, in field sizes. */
+const CLUMP_SPREAD = 0.07;
+
 export interface StoneOptions {
   count: number;
   /**
@@ -14,8 +19,11 @@ export interface StoneOptions {
   /**
    * 'box': anywhere in a cube around the centre. 'sphere': most stones on the
    * surface of a sphere, the rest inside it, so the wrap has a clear outline.
+   * 'clumps': gathered around a few centres, with a few strays anywhere.
    */
-  placement: 'box' | 'sphere';
+  placement: 'box' | 'sphere' | 'clumps';
+  /** How many centres the 'clumps' placement gathers the stones around. */
+  clumps: number;
   /** Sharp-edged boxes, fully rounded ones, or each stone somewhere between. */
   shape: 'mixed' | 'sharp' | 'round';
   /** Stone size relative to the default: 1 leaves it as it is. */
@@ -31,6 +39,8 @@ export interface StoneOptions {
 export function scatterStones(stones: Uint8Array, n: number, options: StoneOptions): void {
   const { count, spread, placement, shape, scale } = options;
   const n2 = n * n;
+  // Clump centres as fractions of the range each stone is allowed.
+  const centres = placement === 'clumps' ? clumpCentres(options.clumps) : [];
   for (let s = 0; s < count; s++) {
     const hx = n * scale * (0.05 + Math.random() * 0.06);
     const hy = hx * (0.6 + Math.random() * 0.8);
@@ -54,6 +64,13 @@ export function scatterStones(stones: Uint8Array, n: number, options: StoneOptio
       ox = radius * ring * Math.cos(angle);
       oy = radius * ring * Math.sin(angle);
       oz = radius * z;
+    } else if (placement === 'clumps' && Math.random() >= STRAY_STONES) {
+      const centre = centres[s % centres.length];
+      const place = (c: number) =>
+        Math.min(Math.max(c * range + gauss() * n * CLUMP_SPREAD, -range), range);
+      ox = place(centre[0]);
+      oy = place(centre[1]);
+      oz = place(centre[2]);
     } else {
       ox = (Math.random() * 2 - 1) * range;
       oy = (Math.random() * 2 - 1) * range;
@@ -80,6 +97,27 @@ export function scatterStones(stones: Uint8Array, n: number, options: StoneOptio
       }
     }
   }
+}
+
+/** Centres for clumps of stones in a cube from -1 to 1, kept apart from each other. */
+function clumpCentres(count: number): number[][] {
+  const apart = 1.6 / Math.cbrt(Math.max(1, count));
+  const centres: number[][] = [];
+  for (let c = 0; c < Math.max(1, count); c++) {
+    let centre = [0, 0, 0];
+    for (let attempt = 0; attempt < 50; attempt++) {
+      centre = [0, 0, 0].map(() => (Math.random() * 2 - 1) * 0.8);
+      const [x, y, z] = centre;
+      if (centres.every((o) => Math.hypot(o[0] - x, o[1] - y, o[2] - z) >= apart)) break;
+    }
+    centres.push(centre);
+  }
+  return centres;
+}
+
+/** A normally distributed random number. */
+function gauss(): number {
+  return Math.sqrt(-2 * Math.log(1 - Math.random())) * Math.cos(2 * Math.PI * Math.random());
 }
 
 /** Signed distance to a box with half-extents h and rounded edges. */

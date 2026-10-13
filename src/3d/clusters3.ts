@@ -29,15 +29,28 @@ const NDY = Int8Array.from({ length: 26 }, (_, k) => NEIGHBOURS[3 * k + 1]);
 const NDZ = Int8Array.from({ length: 26 }, (_, k) => NEIGHBOURS[3 * k + 2]);
 
 /**
+ * Depth is counted in thirds of a cell: a step to a neighbour costs 3, 4 or 5
+ * as it changes one, two or three coordinates, which keeps it close to the
+ * straight distance.
+ */
+const DEPTH_UNIT = 3;
+const DEPTH_COST = Uint8Array.from(NDX, (dx, k) => 2 + Math.abs(dx) + Math.abs(NDY[k]) + Math.abs(NDZ[k]));
+const DEPTH_CAP = 255;
+
+/**
  * A membrane per group of stones in 3D, as one rule applied by every cell on
  * every step, all at once. The 2D one-rule automaton carried over: the cell
- * state has the same four parts, and only the tension differs.
+ * state has the same five parts, and only the tension differs.
  *
  * - **Nearest stone**: the offset to the nearest stone the cell has heard of;
  *   it takes a shorter one from any of its 26 neighbours.
- * - **Label**: within the cluster radius of a stone, the smallest label among
- *   such neighbours, so stones closer than two radii agree on one. Further
- *   out, the label of the neighbour towards the nearest stone.
+ * - **Depth**: for a cell within the cluster radius of a stone, how far it is
+ *   from the nearest cell that is not: one more than the smallest depth among
+ *   its neighbours.
+ * - **Label**: on a stone, or within the cluster radius of one and deep
+ *   enough, the smallest label among such neighbours, so stones closer than
+ *   two radii agree on one unless the bridge between them is too thin.
+ *   Elsewhere, the label of the neighbour towards the nearest stone.
  * - **Age**: steps since the label last changed here or near here.
  * - **Membrane**: inside or outside. A cell within the padding of its stone
  *   is always inside, so the membrane is pulled taut around the stones grown
@@ -63,6 +76,8 @@ export class Clusters3 {
   private oy: Int16Array;
   private oz: Int16Array;
   private age: Uint8Array;
+  private depth: Uint8Array;
+  private ndepth: Uint8Array;
   private nd2: Int32Array;
   private nox: Int16Array;
   private noy: Int16Array;
@@ -79,6 +94,8 @@ export class Clusters3 {
   /** The label of every inside cell and 0 for the rest; rebuilt each step. */
   private readonly own: Int32Array;
   private core2 = 1;
+  /** Labels spread only through cells at least this deep; 0 for all of them. */
+  private deep = 0;
   private pad2 = 0;
   private fat2 = 1;
   private old = 1;
@@ -100,6 +117,8 @@ export class Clusters3 {
     this.oy = new Int16Array(cells);
     this.oz = new Int16Array(cells);
     this.age = new Uint8Array(cells);
+    this.depth = new Uint8Array(cells);
+    this.ndepth = new Uint8Array(cells);
     this.nd2 = new Int32Array(cells);
     this.nox = new Int16Array(cells);
     this.noy = new Int16Array(cells);
@@ -115,19 +134,24 @@ export class Clusters3 {
       const { dx, dy, dz } = LINES[l];
       this.lineStrides[l] = (dz * n + dy) * n + dx;
     }
-    this.restart(1, 0);
+    this.restart(1, 0, 0);
   }
 
   /**
    * The starting state: stones are inside and know they are stones, every
-   * cell holds a label of its own, and nothing else is known.
+   * cell holds a label of its own, and nothing else is known. Where the
+   * grown stones join by a bridge thinner than `bridge` cells, the clusters
+   * stay apart; 0 joins everything that touches.
    */
-  restart(reach: number, padding: number): void {
+  restart(reach: number, padding: number, bridge: number): void {
     const { n, stones } = this;
     const r = Math.max(1, Math.round(reach));
     this.padding = padding;
     const fat = r + Math.round(n * SLACK);
     this.core2 = r * r;
+    this.deep = bridge > 0 ? Math.min(DEPTH_CAP, Math.round((DEPTH_UNIT * (bridge + 1)) / 2)) : 0;
+    this.depth.fill(0);
+    this.ndepth.fill(0);
     this.fat2 = fat * fat;
     this.old = Math.min(255, fat + Math.round(n * YOUTH_MARGIN));
     for (let i = 0; i < stones.length; i++) {
@@ -166,8 +190,9 @@ export class Clusters3 {
   }
 
   private stepAll(p: Params3): void {
-    const { n, strides, core2, pad2, fat2, old } = this;
+    const { n, stones, strides, core2, deep, pad2, fat2, old } = this;
     const { d2, ox, oy, oz, label, age, nd2, nox, noy, noz, nlabel, nage, nphase } = this;
+    const { depth, ndepth } = this;
     const { wake, nwake } = this;
     const n2 = n * n;
     const last = n - 1;
@@ -187,12 +212,16 @@ export class Clusters3 {
             noz[i] = oz[i];
             nlabel[i] = own;
             nage[i] = age[i];
+            ndepth[i] = depth[i];
             if (here <= pad2 || (age[i] < old && here <= fat2)) nphase[i] = 1;
             else nphase[i] = this.lineRule(i, x, y, z, p);
             continue;
           }
-          const core = here <= core2;
+          // With no bridge to break the depth decides nothing and is left at 0.
+          const grown = deep > 0 && here <= core2;
+          const core = stones[i] === 1 || (here <= core2 && depth[i] >= deep);
 
+          let shallow = grown ? DEPTH_CAP : 0;
           let best = here;
           let bx = ox[i];
           let by = oy[i];
@@ -224,7 +253,10 @@ export class Clusters3 {
                 bz = cz;
               }
             }
-            if (core && there <= core2 && label[j] < low) low = label[j];
+            if (grown && depth[j] + DEPTH_COST[k] < shallow) shallow = depth[j] + DEPTH_COST[k];
+            if (core && label[j] < low && (stones[j] || (there <= core2 && depth[j] >= deep))) {
+              low = label[j];
+            }
             if (label[j] === own && age[j] + 1 < young) young = age[j] + 1;
           }
           if (!core && here !== FAR) {
@@ -233,9 +265,11 @@ export class Clusters3 {
           }
           if (low !== own) young = 0;
 
-          if (best !== here || low !== own) knowing = true;
+          const deeper = shallow !== depth[i];
+          if (best !== here || low !== own || deeper) knowing = true;
           if (young !== age[i]) ageing = true;
-          if (best !== here || low !== own || young !== age[i]) {
+          ndepth[i] = shallow;
+          if (best !== here || low !== own || deeper || young !== age[i]) {
             nwake[i] = 1;
             if (edge) {
               for (let k = 0; k < 26; k++) {
@@ -273,6 +307,8 @@ export class Clusters3 {
     this.noz = oz;
     this.nlabel = label;
     this.nage = age;
+    this.depth = ndepth;
+    this.ndepth = depth;
     this.wake = nwake;
     this.nwake = wake;
 

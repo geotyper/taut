@@ -100,8 +100,8 @@ Address parameters: `?steps=200` runs that many steps before the first frame;
 
 The third automaton on `3d.html` is the one-rule clusters automaton (see
 [Clusters](#clusters)) carried into the voxel field: a membrane per group of
-stones. The cell state has the same four parts, read from the 26 neighbours:
-nearest stone, label, age and membrane. Only the tension differs. The 2D copy
+stones. The cell state has the same five parts, read from the 26 neighbours:
+nearest stone, depth, label, age and membrane. Only the tension differs. The 2D copy
 rule moves a front by mean curvature, which in 3D pinches necks, so the
 membrane follows the line majority rule instead, counting cells of another
 label as outside. Membranes are coloured by cluster in both views.
@@ -154,14 +154,18 @@ hull of its own cluster.
 **One rule.** The stages above are switched from outside: something has to
 notice that the wave or the labels have stopped. This version has no stages
 and no clock. Every cell applies the same rule on every step, all at once,
-reading only its 8 neighbours, and the cell state has four parts updated
+reading only its 8 neighbours, and the cell state has five parts updated
 together:
 
 - *nearest stone* — the offset to the nearest stone heard of so far, never
   limited by a radius, so every cell ends up knowing which stone it belongs to;
-- *label* — within the cluster radius of a stone, the smallest label among
-  such neighbours; further out, the label of the neighbour towards the nearest
-  stone, which spreads every cluster's label over its whole territory;
+- *depth* — for a cell within the cluster radius of a stone, how far it is
+  from the nearest cell that is not: one step more than the smallest depth
+  among its neighbours;
+- *label* — on a stone, or within the cluster radius of one and deep enough,
+  the smallest label among such neighbours; elsewhere, the label of the
+  neighbour towards the nearest stone, which spreads every cluster's label
+  over its whole territory;
 - *age* — steps since the label last changed here or nearby;
 - *band* — inside or outside. A young cell close to its stone is inside, so a
   cluster stays in one fat piece while its labels are still settling. An old
@@ -172,6 +176,21 @@ The rule is probabilistic and the starting state gives every cell a label of
 its own. A band lives inside its cluster's territory, the cells nearer to its
 stones than to any others, so where a hull would reach into a neighbour's
 territory the band is cut along the border between them.
+
+**Thin bridges.** Single linkage chains: a row of stones, each close enough
+to the next, joins two groups that have nothing else in common. The depth is
+there to break such chains. With *Break bridges thinner than* above zero a
+label spreads only through cells at least half that deep, so two groups join
+only where the grown stones meet in a neck at least that wide. A row of
+stones makes a narrow neck and falls apart into single stones; a group whose
+stones surround each other fills in and stays whole. The cluster radius alone
+cannot tell the two apart when the spacing is the same. At zero the depth
+decides nothing and the clusters are the single-linkage ones. The same slider
+is on the 3D page.
+
+Stones are scattered in clumps around a few centres, with a few strays
+anywhere, so that there are clusters to find; *Clumps* at zero scatters them
+evenly. The 3D page has the same as a stone placement.
 
 The exact hulls are drawn dashed. With many small stones the Potts model is
 the choice, because the wide kernel erases anything thinner than its radius, a

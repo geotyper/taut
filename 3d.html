@@ -72,6 +72,10 @@
             <span>Padding around stones <output id="cluster-padding-out"></output></span>
             <input id="cluster-padding" type="range" min="0" max="16" step="1" value="3" />
           </label>
+          <label>
+            <span>Break bridges thinner than <output id="cluster-bridge-out"></output></span>
+            <input id="cluster-bridge" type="range" min="0" max="32" step="1" value="0" />
+          </label>
         </section>
 
         <section id="group-film">
@@ -124,7 +128,12 @@
           <select id="stone-placement">
             <option value="box">Anywhere</option>
             <option value="sphere">Mostly on a sphere</option>
+            <option value="clumps">In clumps</option>
           </select>
+        </label>
+        <label id="pick-clumps">
+          <span>Clumps <output id="stone-clumps-out"></output></span>
+          <input id="stone-clumps" type="range" min="1" max="8" step="1" value="3" />
         </label>
         <label>
           <span>Stone shape</span>

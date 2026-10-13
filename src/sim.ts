@@ -353,15 +353,22 @@ export class Sim {
    * Scatter stones shaped between a circle and a rounded square.
    * `scale` shrinks or enlarges them relative to the default size.
    */
-  randomStones(count: number, scale = 1): void {
+  randomStones(count: number, scale = 1, clumps = 0): void {
     const { w, h, stones } = this;
     const size = Math.min(w, h);
+    const centres = clumpCentres(clumps, w, h);
     for (let n = 0; n < count; n++) {
       const ra = size * scale * (0.03 + Math.random() * 0.05);
       const rb = ra * (0.7 + Math.random() * 0.6);
       const reach = Math.max(ra, rb) * 1.2 + STONE_MARGIN + size * 0.08;
-      const cx = reach + Math.random() * (w - 2 * reach);
-      const cy = reach + Math.random() * (h - 2 * reach);
+      let cx = reach + Math.random() * (w - 2 * reach);
+      let cy = reach + Math.random() * (h - 2 * reach);
+      if (centres.length > 0 && Math.random() >= STRAY_STONES) {
+        // Around one of the centres; the rest stay where they fell.
+        const centre = centres[n % centres.length];
+        cx = clamp(centre.x + gauss() * size * CLUMP_SPREAD, reach, w - reach);
+        cy = clamp(centre.y + gauss() * size * CLUMP_SPREAD, reach, h - reach);
+      }
       const power = 2 + Math.random() * 4;
       const angle = Math.random() * Math.PI;
       const cos = Math.cos(angle);
@@ -511,4 +518,37 @@ function boxPass(
       dst[base + i * cellStride] = sum * norm;
     }
   }
+}
+
+/** Share of the stones that ignore the clumps and land anywhere. */
+const STRAY_STONES = 0.12;
+/** How far stones scatter around the centre of their clump, in field sizes. */
+const CLUMP_SPREAD = 0.055;
+
+/** Centres for clumps of stones, kept apart from each other and the border. */
+function clumpCentres(count: number, w: number, h: number): { x: number; y: number }[] {
+  const size = Math.min(w, h);
+  const margin = size * 0.18;
+  const apart = (0.6 * size) / Math.sqrt(Math.max(1, count));
+  const centres: { x: number; y: number }[] = [];
+  for (let c = 0; c < count; c++) {
+    let x = 0;
+    let y = 0;
+    for (let attempt = 0; attempt < 50; attempt++) {
+      x = margin + Math.random() * (w - 2 * margin);
+      y = margin + Math.random() * (h - 2 * margin);
+      if (centres.every((o) => Math.hypot(o.x - x, o.y - y) >= apart)) break;
+    }
+    centres.push({ x, y });
+  }
+  return centres;
+}
+
+/** A normally distributed random number. */
+function gauss(): number {
+  return Math.sqrt(-2 * Math.log(1 - Math.random())) * Math.cos(2 * Math.PI * Math.random());
+}
+
+function clamp(v: number, lo: number, hi: number): number {
+  return Math.min(Math.max(v, lo), hi);
 }

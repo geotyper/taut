@@ -38,11 +38,14 @@ const stoneOptions: StoneOptions = {
   placement: 'box',
   shape: 'mixed',
   scale: 1,
+  clumps: 3,
 };
 /** Clusters: stones closer than two of these radii share a membrane. In cells. */
 let clusterReach = 5;
 /** Clusters: cells this close to a stone are always inside its membrane. */
 let clusterPadding = 3;
+/** Clusters: a bridge thinner than this many cells does not join them. */
+let clusterBridge = 0;
 let stepsPerFrame = 1;
 let opacity = 0.3;
 let opaque = false;
@@ -73,23 +76,29 @@ bindRange('opacity', 2, (v) => (opacity = v));
 bindRange('smoothness', 1, (v) => (smoothness = v));
 bindRange('cluster-reach', 0, (v) => {
   clusterReach = v;
-  clusters?.restart(clusterReach, clusterPadding);
+  clusters?.restart(clusterReach, clusterPadding, clusterBridge);
 });
 bindRange('cluster-padding', 0, (v) => {
   clusterPadding = v;
   if (clusters) clusters.padding = v;
 });
+bindRange('cluster-bridge', 0, (v) => {
+  clusterBridge = v;
+  clusters?.restart(clusterReach, clusterPadding, clusterBridge);
+});
+bindRange('stone-clumps', 0, (v) => (stoneOptions.clumps = v));
 bindRange('stone-count', 0, (v) => (stoneOptions.count = v));
 bindRange('stone-scale', 2, (v) => (stoneOptions.scale = v));
 bindRange('stone-spread', 2, (v) => (stoneOptions.spread = v));
 // Scatter a new set once the slider is released, not on every tick of a drag.
-for (const id of ['stone-count', 'stone-spread', 'stone-scale']) {
+for (const id of ['stone-count', 'stone-spread', 'stone-scale', 'stone-clumps']) {
   byId(id).addEventListener('change', () => rebuild(sim.n));
 }
 
 const placementSelect = byId<HTMLSelectElement>('stone-placement');
 placementSelect.addEventListener('change', () => {
   stoneOptions.placement = placementSelect.value as StoneOptions['placement'];
+  syncControls();
   rebuild(sim.n);
 });
 
@@ -119,7 +128,8 @@ sizeSelect.addEventListener('change', () => {
   const n = Number(sizeSelect.value);
   // Radii are in cells: scale them so the membrane behaves the same at any
   // resolution.
-  for (const id of ['lines-radius', 'film-radius', 'cluster-reach', 'cluster-padding']) {
+  const radii = ['lines-radius', 'film-radius', 'cluster-reach', 'cluster-padding', 'cluster-bridge'];
+  for (const id of radii) {
     const input = byId<HTMLInputElement>(id);
     input.value = String(Math.round((Number(input.value) * n) / sim.n));
     input.dispatchEvent(new Event('input'));
@@ -252,7 +262,7 @@ function rebuild(n: number): void {
 
 function restartWave(): void {
   sim.restart(start);
-  clusters?.restart(clusterReach, clusterPadding);
+  clusters?.restart(clusterReach, clusterPadding, clusterBridge);
 }
 
 /** Inward pressure is the line threshold; outward pressure is handled in `shown`. */
@@ -277,6 +287,7 @@ function syncControls(): void {
   byId('group-film').hidden = automaton !== 'film';
   byId('group-clusters').hidden = automaton !== 'clusters';
   byId('group-smoothness').hidden = !smooth;
+  byId('pick-clumps').hidden = stoneOptions.placement !== 'clumps';
 }
 
 function step(): void {

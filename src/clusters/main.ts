@@ -50,10 +50,14 @@ const ruleParams: RuleParams = { temperature: 0.5 };
 let mode: Mode = 'rule';
 let algorithm: Algorithm = 'potts';
 let reach = 10;
+/** One rule only: a bridge thinner than this many cells does not join clusters. */
+let bridge = 0;
 let pottsSteps = 40;
 let wideSteps = 4;
 let stoneCount = 40;
 let stoneSize = 0.3;
+/** How many clumps the stones gather in; 0 scatters them evenly. */
+let stoneClumps = 5;
 let brush = 3;
 let showHull = true;
 let paused = false;
@@ -61,6 +65,10 @@ let paused = false;
 bindRange('reach', 0, (v) => {
   reach = v;
   restart();
+});
+bindRange('bridge', 0, (v) => {
+  bridge = v;
+  if (mode === 'rule') restart();
 });
 bindRange('temperature', 2, (v) => {
   pottsParams.temperature = v;
@@ -74,6 +82,7 @@ bindRange('noise', 2, (v) => (wideParams.noise = v));
 bindRange('speed', 0, (v) => (wideSteps = v));
 bindRange('stone-count', 0, (v) => (stoneCount = v));
 bindRange('stone-size', 2, (v) => (stoneSize = v));
+bindRange('stone-clumps', 0, (v) => (stoneClumps = v));
 bindRange('brush', 0, (v) => (brush = v));
 
 const layoutSelect = byId<HTMLSelectElement>('layout');
@@ -116,12 +125,12 @@ scatter();
 
 function scatter(): void {
   editor.clearStones();
-  editor.randomStones(stoneCount, stoneSize);
+  editor.randomStones(stoneCount, stoneSize, stoneClumps);
   restart();
 }
 
 function restart(): void {
-  if (mode === 'rule') oneRule.restart(reach);
+  if (mode === 'rule') oneRule.restart(reach, bridge);
   else clusters.restart(reach, mode);
 }
 
@@ -137,6 +146,7 @@ function syncControls(): void {
   byId('group-potts').hidden = layers && algorithm !== 'potts';
   byId('group-wide').hidden = !layers || algorithm !== 'wide';
   byId('pick-repulsion').hidden = mode !== 'field';
+  byId('pick-bridge').hidden = mode !== 'rule';
 }
 
 // Painting stones with the pointer.
