@@ -251,6 +251,37 @@ the choice, because the wide kernel erases anything thinner than its radius, a
 band stretched between two small stones included. As the cluster radius grows
 the clusters merge, and at the top it is the single hull again.
 
+## Foam
+
+`foam.html` has no stones. Bubbles grow from scattered centres until they
+meet, and the borders between them are soap films. The state of a cell is a
+label: the bubble it belongs to, or air. One rule does the growing and the
+pulling taut, applied by every cell at once: a cell counts the labels in a
+disc around it and takes the one with the highest count, a cell of air
+counting for 0.6 of a cell of a bubble. Only the labels in a cell's 3×3 block
+are candidates, so a cell whose neighbours all agree with it stays as it is.
+
+Against air a bubble wins a cell where it holds a little over a third of the
+disc, which makes it grow, by about a cell a step and nearly round. Between
+two bubbles the rule is threshold dynamics with many phases (Merriman, Bence
+and Osher): a film moves towards its centre of curvature, and where three
+films meet they turn to equal angles. Beyond the walls nothing is counted, so
+a film meets a wall squarely.
+
+Left alone, this is grain growth rather than foam: small bubbles shrink and
+vanish, and the rest get larger. With *Bubbles keep their area* every bubble
+holds on to the area it had when the field filled up, as if the gas could not
+leave it: a bubble below its area counts for more, one above it for less.
+The films then settle into arcs. This part is not local, since a cell has to
+know the area of the whole bubble.
+
+Left button starts a bubble, right button or Shift bursts one: its cells turn
+to air and the neighbours grow in. *Palette* only changes the picture: *Soap
+film* runs the colours of a thin film down every bubble, *Films only* leaves
+the bubbles dark and colours the films. The kernel radius sets how fine a detail
+survives; at a small radius films stick to the lattice, flat along the axes,
+and need more noise to move, which makes them ragged.
+
 ## Running
 
 ```sh

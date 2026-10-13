@@ -304,6 +304,43 @@ lowest voxel layer on the floor or one layer above it. In the browser, one
 run of clumps on the floor at 64³ gave a flat slab of a membrane. The line
 majority and wide kernel automata were not looked at with this option.
 
+## Added since: foam (2D)
+
+A page of its own, `foam.html`, without stones: bubbles grow from centres and
+the borders between them are soap films. One rule, a plurality vote in a
+disc with air counting for less; see the README for the rule.
+
+Checked, on a 320 field with 40 centres unless said otherwise:
+
+- Growth of one bubble: the same reach along an axis and along a diagonal to
+  within 8 cells in 90, at air weights 0.55 and 0.65. At 0.45 the diagonal
+  ran ahead by up to a quarter, at 0.75 the centre died. The weight in use,
+  0.6, lies between the two that worked and was not measured by itself.
+- Without area keeping the foam coarsens: 40 bubbles became 16 after 1000
+  steps and 8 after 3000 (kernel radius 6).
+- With area keeping all 40 stayed and their areas changed by 0.6% on average
+  over 3000 steps. Thirty runs lost no bubble; before a growing bubble was
+  made to defend its starting area, four of thirty lost one around the
+  moment the field filled up.
+- Bursting a bubble and starting new ones were tried once in the browser.
+- A step takes about 5 ms.
+
+Not confirmed: that the junctions are at 120 degrees. The angles were
+estimated from the shares of the three labels in a ring around each
+junction, and they spread by about 12 degrees around 120 both right after
+the field fills and 3000 steps later, so this measure does not tell a
+relaxed junction from a fresh one. By eye the settled junctions are
+three-way and look even.
+
+Found on the way: at kernel radius 4 and noise 0.1 the films froze soon
+after the field filled, with four-way junctions and straight runs along the
+axes left in. A flat film along an axis needs a noise above about a third at
+that radius to move at all. Radius 6 with noise 0.1 relaxes and stays clean,
+and is the default.
+
+The film length in the status line is counted in cell edges, so a diagonal
+film reads up to 1.4 times longer than it is.
+
 ## What could be improved
 
 ### Both
@@ -337,6 +374,18 @@ majority and wide kernel automata were not looked at with this option.
 - **Friction and fixed length** from the main page, per cluster.
 - **Stones taken away on the fly.** A removed stone can split a cluster and
   labels cannot split. It needs labels that can be withdrawn.
+
+### Foam
+
+- **A proper angle measure**: fit the three film directions at a junction
+  beyond the kernel radius, to put a number on the 120 degrees.
+- **Foam in 3D** on the GPU pass that the clusters use, drawing only the
+  films. Plateau borders and four-film vertices would show up there.
+- **Frames instead of walls**: films spanning a fixed outline, the Plateau
+  problem proper.
+- **Area keeping by a local rule**, for instance a pressure field that
+  spreads inside a bubble, instead of the bubble's area known to every cell.
+- **Film length in real units**, not cell edges.
 
 ### 3D
 
