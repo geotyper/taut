@@ -36,6 +36,7 @@
           <span>Bands</span>
           <select id="layout">
             <option value="rule">One rule</option>
+            <option value="channels">One rule, bands may overlap</option>
             <option value="field">Stages on one field</option>
             <option value="layers">Stages, a layer per cluster</option>
           </select>
@@ -44,6 +45,11 @@
         <label id="pick-bridge">
           <span>Break bridges thinner than <output id="bridge-out"></output></span>
           <input id="bridge" type="range" min="0" max="60" step="1" value="0" />
+        </label>
+
+        <label id="pick-channels">
+          <span>Bands a cell has room for <output id="channels-out"></output></span>
+          <input id="channels" type="range" min="1" max="6" step="1" value="4" />
         </label>
 
         <label id="pick-algorithm">

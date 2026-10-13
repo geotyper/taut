@@ -1,5 +1,6 @@
 import type { Point } from '../hull.ts';
 import { Sim, type Params, type PottsParams } from '../sim.ts';
+import { Channels } from './channels.ts';
 import { Clusters, type FieldParams, type Layout } from './clusters.ts';
 import { OneRule, type RuleParams } from './onerule.ts';
 
@@ -14,6 +15,8 @@ const COLOR_OUTSIDE = rgb(11, 13, 17);
 const COLOR_INSIDE = rgb(30, 42, 60);
 const COLOR_STONE = rgb(132, 138, 150);
 const COLOR_FRONT = rgb(255, 209, 102);
+/** Where two bands lie over each other. */
+const COLOR_OVERLAP = rgb(62, 66, 84);
 const COLOR_HULL = '#4dd0e1';
 
 /** One colour per cluster, picked by its label: the band and its dim inside. */
@@ -27,13 +30,15 @@ for (let i = 0; i < HUES; i++) {
 
 type Algorithm = 'potts' | 'wide';
 /** One rule for everything, or the staged version in one of its layouts. */
-type Mode = 'rule' | Layout;
+type Mode = 'rule' | 'channels' | Layout;
 
 const stones = new Uint8Array(SIZE * SIZE);
 /** Only used to draw and scatter stones on the big field. */
 const editor = new Sim(SIZE, SIZE, stones);
 const clusters = new Clusters(SIZE, SIZE, stones);
 const oneRule = new OneRule(SIZE, SIZE, stones);
+/** Built when its mode is first chosen, and again when the channel count changes. */
+let channels: Channels | null = null;
 
 const canvas = byId<HTMLCanvasElement>('field');
 canvas.width = SIZE;
@@ -52,6 +57,8 @@ let algorithm: Algorithm = 'potts';
 let reach = 10;
 /** One rule only: a bridge thinner than this many cells does not join clusters. */
 let bridge = 0;
+/** Overlapping bands: how many bands a cell has room for. */
+let channelCount = 4;
 let pottsSteps = 40;
 let wideSteps = 4;
 let stoneCount = 40;
@@ -68,7 +75,12 @@ bindRange('reach', 0, (v) => {
 });
 bindRange('bridge', 0, (v) => {
   bridge = v;
-  if (mode === 'rule') restart();
+  if (mode === 'rule' || mode === 'channels') restart();
+});
+bindRange('channels', 0, (v) => {
+  channelCount = v;
+  channels = null;
+  if (mode === 'channels') restart();
 });
 bindRange('temperature', 2, (v) => {
   pottsParams.temperature = v;
@@ -140,12 +152,16 @@ function addStone(): void {
 /** The one rule takes new stones in as it is; the stages start again. */
 function stonesAdded(): void {
   if (mode === 'rule') oneRule.addStones();
+  else if (mode === 'channels' && channels) channels.addStones();
   else restart();
 }
 
 function restart(): void {
   if (mode === 'rule') oneRule.restart(reach, bridge);
-  else clusters.restart(reach, mode);
+  else if (mode === 'channels') {
+    channels ??= new Channels(SIZE, SIZE, stones, channelCount);
+    channels.restart(reach, bridge);
+  } else clusters.restart(reach, mode);
 }
 
 function togglePause(): void {
@@ -160,7 +176,8 @@ function syncControls(): void {
   byId('group-potts').hidden = layers && algorithm !== 'potts';
   byId('group-wide').hidden = !layers || algorithm !== 'wide';
   byId('pick-repulsion').hidden = mode !== 'field';
-  byId('pick-bridge').hidden = mode !== 'rule';
+  byId('pick-bridge').hidden = mode !== 'rule' && mode !== 'channels';
+  byId('pick-channels').hidden = mode !== 'channels';
 }
 
 // Painting stones with the pointer.
@@ -212,12 +229,13 @@ function frame(): void {
 }
 
 function advance(): void {
-  if (mode === 'rule') {
+  if (mode === 'rule' || mode === 'channels') {
+    const rule = mode === 'rule' ? oneRule : channels!;
     // While the labels settle, a few steps a frame are enough to watch.
-    const steps = oneRule.settling ? RULE_SETTLING_STEPS : pottsSteps;
+    const steps = rule.settling ? RULE_SETTLING_STEPS : pottsSteps;
     const begin = performance.now();
     for (let i = 0; i < steps; i++) {
-      oneRule.step(ruleParams);
+      rule.step(ruleParams);
       if (performance.now() - begin > BUDGET) break;
     }
     return;
@@ -248,6 +266,7 @@ function advance(): void {
 function render(): void {
   pixels.fill(COLOR_OUTSIDE);
   if (mode === 'rule') renderRule();
+  else if (mode === 'channels') renderChannels();
   else if (clusters.stage === 'spread') renderWave();
   else if (clusters.stage === 'bands' && mode === 'layers') renderLayers();
   else renderLabels();
@@ -260,6 +279,12 @@ function render(): void {
     text += ` · step ${oneRule.steps}`;
     if (hullArea > 0) text += ` · area ${(oneRule.area() / hullArea).toFixed(3)}`;
     if (showHull) drawHulls(oneRule.hulls);
+  } else if (mode === 'channels') {
+    const rule = channels!;
+    text = rule.settling ? 'labels settling' : `${rule.hulls.length} clusters`;
+    text += ` · step ${rule.steps} · ${rule.used()} of ${rule.count} channels in use`;
+    if (rule.hullArea > 0) text += ` · area ${(rule.area() / rule.hullArea).toFixed(3)}`;
+    if (showHull) drawHulls(rule.hulls);
   } else if (clusters.stage === 'spread') text = `wave from the stones · step ${clusters.steps}`;
   else if (clusters.stage === 'label') text = `agreeing on labels · step ${clusters.steps}`;
   else if (clusters.stage === 'swell') text = `swelling · step ${clusters.steps}`;
@@ -297,6 +322,44 @@ function renderRule(): void {
         label[i - SIZE] !== s ||
         label[i + SIZE] !== s;
       pixels[i] = front ? BRIGHT[hue(s)] : stones[i] ? COLOR_STONE : DIM[hue(s)];
+    }
+  }
+}
+
+/**
+ * Bands that may overlap: every channel drawn over the same field. Insides
+ * first, greyed where two lie over each other, then stones, then the bands.
+ */
+function renderChannels(): void {
+  const { inside, owner, count } = channels!;
+  const n = SIZE * SIZE;
+  for (let i = 0; i < n; i++) {
+    let seen = 0;
+    for (let k = 0; k < count; k++) {
+      if (!inside[k * n + i]) continue;
+      pixels[i] = seen++ ? COLOR_OVERLAP : DIM[hue(owner[k * n + i])];
+    }
+    if (stones[i]) pixels[i] = COLOR_STONE;
+  }
+  for (let k = 0; k < count; k++) {
+    const base = k * n;
+    for (let y = 0; y < SIZE; y++) {
+      for (let x = 0; x < SIZE; x++) {
+        const c = base + y * SIZE + x;
+        if (!inside[c]) continue;
+        const s = owner[c];
+        const mine = (j: number) => inside[j] === 1 && owner[j] === s;
+        const front =
+          x === 0 ||
+          y === 0 ||
+          x === SIZE - 1 ||
+          y === SIZE - 1 ||
+          !mine(c - 1) ||
+          !mine(c + 1) ||
+          !mine(c - SIZE) ||
+          !mine(c + SIZE);
+        if (front) pixels[c - base] = BRIGHT[hue(s)];
+      }
     }
   }
 }

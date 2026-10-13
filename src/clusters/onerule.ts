@@ -59,6 +59,8 @@ export class OneRule {
   settling = true;
   label: Int32Array;
   inside: Uint8Array;
+  /** Set by a user that reads the clusters only: the settled band may rest. */
+  bandUnused = false;
   /** Exact convex hull of every cluster's stones; known once labels settle. */
   hulls: Point[][] = [];
   hullArea = 0;
@@ -156,6 +158,20 @@ export class OneRule {
     this.hullArea = 0;
   }
 
+  /** The age of every cell, and the age at which it stops counting. */
+  get ages(): Uint8Array {
+    return this.age;
+  }
+
+  get oldAge(): number {
+    return this.old;
+  }
+
+  /** True once nothing but the band can change any more. */
+  get still(): boolean {
+    return this.bandOnly;
+  }
+
   area(): number {
     let n = 0;
     for (let i = 0; i < this.inside.length; i++) n += this.inside[i];
@@ -164,8 +180,9 @@ export class OneRule {
 
   /** One synchronous step of the rule on every cell. */
   step(p: RuleParams): void {
-    if (this.bandOnly) this.stepBand(p);
-    else this.stepAll(p);
+    if (this.bandOnly) {
+      if (!this.bandUnused) this.stepBand(p);
+    } else this.stepAll(p);
     this.steps++;
   }
 

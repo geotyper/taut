@@ -257,6 +257,40 @@ with labels of their own, and the rule goes on.
   (2D), so a cluster of that size swells whole.
 - The other 3D automata and the staged 2D modes restart on a new stone.
 
+## Added since: bands that may overlap (2D)
+
+A new mode on `clusters.html`, *One rule, bands may overlap*
+(`src/clusters/channels.ts`). The cell state gets K channels, 4 by default,
+each with a band of its own; every cluster keeps its band in one channel.
+
+- **Which channel.** It follows from the cluster's label and a counter, the
+  turn. A cell takes the largest turn among neighbours of its label. Where it
+  touches a settled cell of a smaller label in the same channel, it adds one,
+  so the cluster with the larger label moves to the next channel. This is
+  graph colouring done by the cells.
+- **Leaving a channel.** In each channel a cell keeps a distance to the
+  nearest stone of that channel and the label of that stone, both taken
+  afresh from the neighbours on every step. When a cluster leaves, the
+  distances around its stones grow step by step until they reach those of
+  the next cluster in the channel, or pass a limit and are forgotten.
+- **Result on a test scene**, a ring of 14 stones with a small cluster inside
+  its hull, 6000 steps: the plain one rule leaves the ring's band at 0.78 of
+  its hull, cut by the small cluster's territory; with 2 or 4 channels it is
+  1.01–1.08, the full hull lying over the small cluster.
+- **Channels kept apart.** With 4 channels no two neighbouring clusters
+  shared one in 7 runs (2–7 clusters). With 3 it failed in 2 of 4 runs, with
+  2 in all 4 that had more than two clusters.
+- **Clusters** are the same as in the plain one rule in every run, and no
+  stone was left outside its band.
+- **Speed.** About 500–750 steps until only the bands change, at several ms
+  a step; after that 0.5–2 ms, since only cells with unlike neighbours are
+  worked out.
+- **Cost.** 9 bytes of state per channel per cell on top of the one rule.
+- **Limits.** Two clusters that are not neighbours can share a channel and
+  still cut each other where their hulls meet. A cluster with more neighbours
+  than channels cannot get away from all of them. Distances inside a channel
+  follow the lattice (steps of 3 and 4), not the straight line. Not in 3D.
+
 ## What could be improved
 
 ### Both
@@ -269,9 +303,11 @@ with labels of their own, and the rule goes on.
 - **Other linkage.** Single linkage chains: a line of stones becomes one
   cluster. A density rule (a cell needs several stones within `r`, as in
   DBSCAN) would ignore lone stones and thin bridges.
-- **Overlapping hulls.** Decide what should happen when two hulls intersect:
-  cut at the territory border (now), press and dent, or allow both. A band
-  that may enter foreign territory but not foreign stones is the open case.
+- **Overlapping bands in 3D.** The channels carry over as they are, at the
+  cost of four more textures of state.
+- **Channels by need.** Two clusters now move apart when their territories
+  touch, even if their hulls would never meet. Moving only when the bands
+  actually collide would get by with fewer channels.
 
 ### 2D
 

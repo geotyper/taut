@@ -187,6 +187,25 @@ its own. A band lives inside its cluster's territory, the cells nearer to its
 stones than to any others, so where a hull would reach into a neighbour's
 territory the band is cut along the border between them.
 
+**Bands that may overlap.** In the one rule a cell holds one label, so it
+belongs to one cluster, and a band stops at the border of its territory. In
+*One rule, bands may overlap* a cell has room for several bands: its state
+has a few channels, each with a band of its own, and every cluster keeps its
+band in one of them. In its channel a band meets only the clusters that share
+the channel, so it reaches its full hull and runs over a neighbour that lives
+in another one. It is still one rule applied by every cell at once.
+
+The clusters are found as before. The channel of a cluster follows from its
+label and from a counter, its turn. A cell takes the largest turn among the
+neighbours of its label, and where it touches a settled cluster of a smaller
+label in the same channel it adds one: the cluster with the larger label
+moves on to the next channel. In each channel a cell keeps the distance to
+the nearest stone of that channel, taken afresh from its neighbours on every
+step, so when a cluster leaves a channel the distances around it grow until
+they fit again. With four channels neighbouring clusters ended up apart in
+every run tried; with fewer, some share a channel and cut each other as in
+the plain one rule.
+
 **Thin bridges.** Single linkage chains: a row of stones, each close enough
 to the next, joins two groups that have nothing else in common. The depth is
 there to break such chains. With *Break bridges thinner than* above zero a
