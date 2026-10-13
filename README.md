@@ -3,6 +3,8 @@
 A rubber band on a cellular automaton: the outside phase floods in from the
 field borders as a wave and pulls taut around the stones.
 
+![Two fields with the same stones: the wide kernel on the left, the classic automaton on the right](screenshots/2d-two-automata.png)
+
 The field is binary ("outside" / "inside"), the band is the boundary between
 the two phases, and stones are frozen in the inside phase. There are two fields
 sharing the same stones; each one runs its own automaton with its own options:
@@ -35,6 +37,8 @@ voxels are drawn with WebGL2 by casting a ray per pixel through a 3D texture,
 with the membrane translucent and the stones opaque. Stones are rounded boxes
 turned at random angles: each is a signed distance function placed in world
 space first and only then sampled into voxels.
+
+![A membrane pulled taut around sixteen stones in a 64³ voxel field](screenshots/3d-one-membrane.png)
 
 There are two automata:
 
@@ -106,6 +110,10 @@ rule moves a front by mean curvature, which in 3D pinches necks, so the
 membrane follows the line majority rule instead, counting cells of another
 label as outside. Membranes are coloured by cluster in both views.
 
+![Three clusters of stones at 128³, each in a membrane of its own](screenshots/3d-three-clusters.png)
+
+![Two clusters at 64³: a small one next to a large one](screenshots/3d-two-clusters.png)
+
 Pulled taut around the bare stones, a membrane has no body where a cluster is
 thin: two stones give a narrow bridge, three a flat sheet, one nothing at all.
 So every cell within the padding of its stone is always inside, and the
@@ -127,6 +135,8 @@ while they settle. On the same stones the two versions gave the same clusters
 and the same volume.
 
 ## Clusters
+
+![Six clusters of stones, each with a band of its own, found by the one rule](screenshots/2d-clusters.png)
 
 `clusters.html` puts a band around every group of stones instead of one around
 all of them. Tension alone cannot do that: a front moved by curvature always
