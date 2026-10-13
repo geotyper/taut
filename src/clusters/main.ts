@@ -106,6 +106,7 @@ const pauseButton = byId<HTMLButtonElement>('pause');
 pauseButton.addEventListener('click', togglePause);
 byId('restart').addEventListener('click', restart);
 byId('random').addEventListener('click', scatter);
+byId('add-stone').addEventListener('click', addStone);
 byId('clear').addEventListener('click', () => {
   editor.clearStones();
   restart();
@@ -116,6 +117,7 @@ window.addEventListener('keydown', (e) => {
   if (e.key === ' ') togglePause();
   else if (e.key === 'r' || e.key === 'R') restart();
   else if (e.key === 'n' || e.key === 'N') scatter();
+  else if (e.key === 'a' || e.key === 'A') addStone();
   else return;
   e.preventDefault();
 });
@@ -127,6 +129,18 @@ function scatter(): void {
   editor.clearStones();
   editor.randomStones(stoneCount, stoneSize, stoneClumps);
   restart();
+}
+
+/** One more stone somewhere, taken in without starting over where that works. */
+function addStone(): void {
+  editor.randomStones(1, stoneSize);
+  stonesAdded();
+}
+
+/** The one rule takes new stones in as it is; the stages start again. */
+function stonesAdded(): void {
+  if (mode === 'rule') oneRule.addStones();
+  else restart();
 }
 
 function restart(): void {
@@ -186,7 +200,9 @@ function stroke(from: Point, to: Point): void {
     const y = from.y + (to.y - from.y) * t;
     editor.paintStone(x, y, brush, erasing ? 0 : 1);
   }
-  restart();
+  // A stone taken away can split a cluster, which only a fresh start finds.
+  if (erasing) restart();
+  else stonesAdded();
 }
 
 function frame(): void {

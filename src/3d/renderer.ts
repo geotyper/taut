@@ -332,6 +332,11 @@ export class Renderer {
     gl.generateMipmap(gl.TEXTURE_3D);
   }
 
+  /** The stones as last uploaded: above zero where there is one. */
+  get stones(): WebGLTexture {
+    return this.stoneTexture;
+  }
+
   /**
    * The textures both views read, sized for a field of n cells a side, for a
    * computation on the GPU to fill in place of an upload.

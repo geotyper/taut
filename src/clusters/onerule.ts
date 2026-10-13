@@ -40,7 +40,8 @@ export interface RuleParams {
  *   enough, the smallest label among such neighbours, so stones closer than
  *   two radii agree on one unless the bridge between them is too thin.
  *   Elsewhere, the label of the neighbour towards the nearest stone, which
- *   carries the label of every cluster over its whole territory.
+ *   carries the label of every cluster over its whole territory. A cell that
+ *   hears of a nearer stone takes the label of the neighbour it heard it from.
  * - **Age**: steps since the label last changed here or near here, among
  *   cells of the same label. It stops counting at a limit.
  * - **Band**: inside or outside. A young cell close enough to its stone is
@@ -132,6 +133,29 @@ export class OneRule {
     this.hullArea = 0;
   }
 
+  /**
+   * Take in stones added since the last step, without starting over. A new
+   * stone cell knows it is a stone and gets a label of its own; the rule does
+   * the rest, since a new stone can only join clusters and never splits one.
+   * Removing a stone needs a restart.
+   */
+  addStones(): void {
+    const { stones, d2 } = this;
+    for (let i = 0; i < stones.length; i++) {
+      if (!stones[i] || d2[i] === 0) continue;
+      d2[i] = 0;
+      this.ox[i] = 0;
+      this.oy[i] = 0;
+      this.label[i] = i + 1;
+      this.age[i] = 0;
+      this.inside[i] = 1;
+    }
+    this.settling = true;
+    this.bandOnly = false;
+    this.hulls = [];
+    this.hullArea = 0;
+  }
+
   area(): number {
     let n = 0;
     for (let i = 0; i < this.inside.length; i++) n += this.inside[i];
@@ -163,6 +187,7 @@ export class OneRule {
         let bx = ox[i];
         let by = oy[i];
         let low = own;
+        let heard = own;
         let young = age[i] < old ? age[i] + 1 : old;
         for (let k = 0; k < 8; k++) {
           const nx = x + DX[k];
@@ -177,6 +202,7 @@ export class OneRule {
               best = c;
               bx = cx;
               by = cy;
+              heard = label[j];
             }
           }
           if (grown && depth[j] + DEPTH_COST[k] < shallow) shallow = depth[j] + DEPTH_COST[k];
@@ -185,7 +211,10 @@ export class OneRule {
           }
           if (label[j] === own && age[j] + 1 < young) young = age[j] + 1;
         }
-        if (!core && d2[i] !== FAR) {
+        // The label comes with the stone: whoever tells of a nearer one is
+        // believed about its label too, and the old label is dropped.
+        if (best !== d2[i]) low = heard;
+        else if (!core && d2[i] !== FAR) {
           const tx = x + Math.sign(ox[i]);
           const ty = y + Math.sign(oy[i]);
           if (d2[ty * w + tx] !== FAR) low = label[ty * w + tx];

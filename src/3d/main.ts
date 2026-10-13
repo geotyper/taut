@@ -171,6 +171,7 @@ pauseButton.addEventListener('click', () => {
 });
 byId('restart').addEventListener('click', restartWave);
 byId('random').addEventListener('click', () => rebuild(sim.n));
+byId('add-stone').addEventListener('click', addStone);
 
 // Keyboard shortcuts, so the view can be switched without reaching for the
 // menu - while recording, scrolling to a control would shift the picture.
@@ -182,6 +183,7 @@ const SHORTCUTS: Record<string, () => void> = {
     surfaceSelect.dispatchEvent(new Event('change'));
   },
   n: () => rebuild(sim.n),
+  a: addStone,
   r: restartWave,
   ' ': () => pauseButton.click(),
 };
@@ -267,6 +269,19 @@ function rebuild(n: number): void {
   for (let i = 0; i < sim.stones.length; i++) stoneVolume += sim.stones[i];
   renderer?.setStones(sim.stones, n);
   restartWave();
+}
+
+/**
+ * One more stone somewhere. The clusters take it in as they are; the other
+ * automata start their wave again, since a membrane only ever shrinks.
+ */
+function addStone(): void {
+  scatterStones(sim.stones, sim.n, { ...stoneOptions, count: 1 });
+  stoneVolume = 0;
+  for (let i = 0; i < sim.stones.length; i++) stoneVolume += sim.stones[i];
+  renderer?.setStones(sim.stones, sim.n);
+  if (clusters) clusters.addStones();
+  else restartWave();
 }
 
 function restartWave(): void {

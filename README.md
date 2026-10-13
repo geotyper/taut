@@ -198,6 +198,16 @@ cannot tell the two apart when the spacing is the same. At zero the depth
 decides nothing and the clusters are the single-linkage ones. The same slider
 is on the 3D page.
 
+**Stones on the fly.** *Add a stone* (key `A`) drops one more stone without
+starting over, and so does drawing one; the 3D page has the same button and
+key. A new stone cell is told only that it is a stone and given a label of
+its own. The wave from it, the labels and the band follow by the same rule:
+a new stone can join clusters but never split one, and the labels only ever
+merge. The band swells again around the change, within a few dozen cells of
+it, and is pulled taut once more. Erasing a stone can split a cluster, so it
+starts over. For this to work a cell that hears of a nearer stone takes the
+label of the neighbour it heard it from, dropping the one it had.
+
 Stones are scattered in clumps around a few centres, with a few strays
 anywhere, so that there are clusters to find; *Clumps* at zero scatters them
 evenly. The 3D page has the same as a stone placement.

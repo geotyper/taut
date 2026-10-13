@@ -234,6 +234,29 @@ The time of a step grows with the number of cells, so the shader is the
 limit, not the draw calls; skipping cells that cannot change would be the
 next thing to try.
 
+## Added since: stones on the fly
+
+*Add a stone* (key `A`) on both pages, and drawing a stone in 2D, no longer
+start over in the one-rule modes. The new stone cells are marked as stones
+with labels of their own, and the rule goes on.
+
+- Why it is allowed: a new stone can only join clusters, and the labels can
+  only merge. Taking a stone away could split a cluster, which the rule
+  cannot undo, so erasing still restarts.
+- It first gave wrong clusters, in 4 of 10 test runs: cells around the new
+  stone still held the label of whichever cluster owned that ground before,
+  and handed it to the new stone. Fixed in the rule itself: a cell that hears
+  of a nearer stone takes the label of the neighbour it heard it from.
+- After the fix: stones added one at a time gave the same clusters as a
+  fresh start on the final stones in 10 of 10 runs (6 in 2D with 15 stones
+  added, 4 in 3D on the CPU with 8), and all earlier checks against the
+  direct calculation still pass. In the browser on the GPU, one run with 6
+  stones added: the same clusters and volume as after a restart.
+- The swelling is not very local. The age that makes a band swell spreads
+  through cells of the same label for about the cluster radius plus 28 steps
+  (2D), so a cluster of that size swells whole.
+- The other 3D automata and the staged 2D modes restart on a new stone.
+
 ## What could be improved
 
 ### Both
@@ -263,9 +286,8 @@ next thing to try.
   and against the hull clipped to its territory, to tell a cut from a failure
   to tighten.
 - **Friction and fixed length** from the main page, per cluster.
-- **Live edits.** Painting a stone restarts everything. With age already in
-  the state, a new stone could just be a local label change that re-inflates
-  its neighbourhood.
+- **Stones taken away on the fly.** A removed stone can split a cluster and
+  labels cannot split. It needs labels that can be withdrawn.
 
 ### 3D
 

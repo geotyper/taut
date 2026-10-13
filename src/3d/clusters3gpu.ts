@@ -127,6 +127,7 @@ void main() {
   int best = here;
   ivec3 offset = a.xyz;
   uint low = own;
+  uint heard = own;
   int young = age < uOld ? age + 1 : uOld;
   int sides = 0;
   for (int dz = -1; dz <= 1; dz++) {
@@ -145,6 +146,7 @@ void main() {
           if (through < best) {
             best = through;
             offset = o;
+            heard = nb & LABEL;
           }
         }
         int cost = 2 + abs(dx) + abs(dy) + abs(dz);
@@ -160,7 +162,10 @@ void main() {
       }
     }
   }
-  if (!core && here != FAR) {
+  // The label comes with the stone: whoever tells of a nearer one is believed
+  // about its label too.
+  if (best != here) low = heard;
+  else if (!core && here != FAR) {
     ivec3 p = c + sign(a.xyz);
     if (texelFetch(uA, p, 0).x != UNKNOWN) low = texelFetch(uB, p, 0).r & LABEL;
   }
@@ -174,6 +179,27 @@ void main() {
 
   outA = ivec4(offset, shallow | (young << 8));
   outB = low | (next ? PHASE : 0u) | (b & STONE);
+}`;
+
+/** Copies the state, turning every cell that has become a stone into one. */
+const ADD_FRAGMENT = `${HEADER}
+precision highp sampler3D;
+uniform isampler3D uA;
+uniform sampler3D uStones;
+
+layout(location = 0) out ivec4 outA;
+layout(location = 1) out uint outB;
+
+void main() {
+  ivec3 c = ivec3(ivec2(gl_FragCoord.xy), uLayer);
+  uint b = texelFetch(uB, c, 0).r;
+  if (texelFetch(uStones, c, 0).r > 0.0 && (b & STONE) == 0u) {
+    outA = ivec4(0);
+    outB = uint((c.z * uSize + c.y) * uSize + c.x + 1) | PHASE | STONE;
+  } else {
+    outA = texelFetch(uA, c, 0);
+    outB = b;
+  }
 }`;
 
 /** Turns the state into what the renderer draws; see Clusters3.classify. */
@@ -226,6 +252,7 @@ export class Clusters3Gpu {
   private readonly stones: Uint8Array;
   private readonly stepProgram: WebGLProgram;
   private readonly showProgram: WebGLProgram;
+  private readonly addProgram: WebGLProgram;
   private readonly uniforms = new Map<string, WebGLUniformLocation | null>();
   private a: WebGLTexture;
   private b: WebGLTexture;
@@ -256,6 +283,7 @@ export class Clusters3Gpu {
     this.stones = stones;
     this.stepProgram = createProgram(gl, STEP_FRAGMENT);
     this.showProgram = createProgram(gl, SHOW_FRAGMENT);
+    this.addProgram = createProgram(gl, ADD_FRAGMENT);
     this.a = createTexture(gl, gl.NEAREST, gl.NEAREST);
     this.b = createTexture(gl, gl.NEAREST, gl.NEAREST);
     this.nextA = createTexture(gl, gl.NEAREST, gl.NEAREST);
@@ -306,6 +334,25 @@ export class Clusters3Gpu {
     for (let i = 0; i < stones.length; i++) this.volume += stones[i];
   }
 
+  /**
+   * Take in stones added since the last step, without starting over; see
+   * Clusters3.addStones. Reads the stones the renderer was last given.
+   */
+  addStones(): void {
+    const { gl } = this;
+    const program = this.addProgram;
+    gl.useProgram(program);
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_3D, this.renderer.stones);
+    gl.uniform1i(this.uniform(program, 'uStones'), 2);
+    this.pass(program);
+    this.volume = 0;
+    for (let i = 0; i < this.stones.length; i++) this.volume += this.stones[i];
+    this.settling = true;
+    this.checksum = 0;
+    this.shown = -1;
+  }
+
   /** How far around a stone its cells are always inside, in cells. */
   set padding(cells: number) {
     this.pad2 = Math.max(0, cells) ** 2;
@@ -313,22 +360,12 @@ export class Clusters3Gpu {
 
   /** One synchronous step of the rule on every cell. */
   step(p: Params3): void {
-    const { gl, n } = this;
+    const { gl } = this;
     const program = this.stepProgram;
     for (let l = 0; l < LINES.length; l++) {
       this.reaches[l] = Math.max(1, Math.round(p.radius / LINES[l].length));
     }
-    gl.bindFramebuffer(gl.FRAMEBUFFER, this.stepTarget);
-    gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
-    gl.viewport(0, 0, n, n);
     gl.useProgram(program);
-    gl.activeTexture(gl.TEXTURE1);
-    gl.bindTexture(gl.TEXTURE_3D, this.b);
-    gl.activeTexture(gl.TEXTURE0);
-    gl.bindTexture(gl.TEXTURE_3D, this.a);
-    gl.uniform1i(this.uniform(program, 'uA'), 0);
-    gl.uniform1i(this.uniform(program, 'uB'), 1);
-    gl.uniform1i(this.uniform(program, 'uSize'), n);
     gl.uniform1i(this.uniform(program, 'uCore2'), this.core2);
     gl.uniform1i(this.uniform(program, 'uDeep'), this.deep);
     gl.uniform1i(this.uniform(program, 'uPad2'), this.pad2);
@@ -338,6 +375,27 @@ export class Clusters3Gpu {
     gl.uniform1f(this.uniform(program, 'uNoise'), p.noise);
     gl.uniform1ui(this.uniform(program, 'uSeed'), (Math.random() * 0x100000000) >>> 0);
     gl.uniform1iv(this.uniform(program, 'uReach[0]'), this.reaches);
+    this.pass(program);
+    this.steps++;
+    if (this.steps % this.measureEvery === 0) this.measure();
+  }
+
+  /**
+   * Run `program`, already in use, over the whole field a layer at a time,
+   * from the current state into the spare pair of textures, and swap them.
+   */
+  private pass(program: WebGLProgram): void {
+    const { gl, n } = this;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.stepTarget);
+    gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
+    gl.viewport(0, 0, n, n);
+    gl.activeTexture(gl.TEXTURE1);
+    gl.bindTexture(gl.TEXTURE_3D, this.b);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_3D, this.a);
+    gl.uniform1i(this.uniform(program, 'uA'), 0);
+    gl.uniform1i(this.uniform(program, 'uB'), 1);
+    gl.uniform1i(this.uniform(program, 'uSize'), n);
     const layer = this.uniform(program, 'uLayer');
     for (let z = 0; z < n; z++) {
       gl.framebufferTextureLayer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, this.nextA, 0, z);
@@ -348,8 +406,6 @@ export class Clusters3Gpu {
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     [this.a, this.nextA] = [this.nextA, this.a];
     [this.b, this.nextB] = [this.nextB, this.b];
-    this.steps++;
-    if (this.steps % this.measureEvery === 0) this.measure();
   }
 
   /**
@@ -396,6 +452,7 @@ export class Clusters3Gpu {
     }
     gl.deleteProgram(this.stepProgram);
     gl.deleteProgram(this.showProgram);
+    gl.deleteProgram(this.addProgram);
   }
 
   /**
@@ -435,7 +492,8 @@ export class Clusters3Gpu {
   }
 
   private uniform(program: WebGLProgram, name: string): WebGLUniformLocation | null {
-    const key = `${program === this.stepProgram ? 's' : 'v'}:${name}`;
+    const programs = [this.stepProgram, this.showProgram, this.addProgram];
+    const key = `${programs.indexOf(program)}:${name}`;
     let location = this.uniforms.get(key);
     if (location === undefined) {
       location = this.gl.getUniformLocation(program, name);
