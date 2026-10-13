@@ -201,6 +201,39 @@ wide.
   only says something new for three stones or more.
 - Not in the staged modes.
 
+## Added since: the 3D rule on the GPU
+
+The 3D clusters automaton now runs in WebGL2, on the context the renderer
+already had. WebGPU was the alternative; it would have meant rewriting the
+renderer too and is not in every browser yet.
+
+- State: two 3D textures per cell, 12 bytes. One holds the offset to the
+  nearest stone, the depth and the age; the other the label, the inside bit
+  and the stone bit. With the second pair to write into, 24 bytes a cell:
+  about 170 MB at 192³ (estimate).
+- A step is one fragment shader pass per layer of the field. It is the whole
+  rule every time, without the shortcuts of the CPU version.
+- The picture for both views is made from the state by a second shader, so
+  the state is not copied to the CPU for drawing.
+- Every 32 steps the labels are read back to count the clusters and the
+  volume. "Settled" now means the labels were the same in two readbacks in a
+  row, so it shows up to 32 steps late.
+- Checked in headless Chrome on two sets of stones at 64³, with and without a
+  bridge width: the same number of clusters and the same volume to two
+  decimals as the CPU version.
+- Measured on one machine, with 16 steps a frame: about 140 steps a second at
+  64³, 39 at 128³, 12 at 192³. The CPU version at 128³ took about 400 ms a
+  step while the labels settled.
+- The age has 7 bits, so a cell stays young for at most 127 steps. At 192³
+  with the largest cluster radius the CPU version would allow about 108, so
+  nothing is cut yet.
+- `?cpu` keeps the old version, which is also the fallback.
+
+Not done: the 2D one rule and the other two 3D automata are still on the CPU.
+The time of a step grows with the number of cells, so the shader is the
+limit, not the draw calls; skipping cells that cannot change would be the
+next thing to try.
+
 ## What could be improved
 
 ### Both
@@ -236,12 +269,9 @@ wide.
 
 ### 3D
 
-- **Settling speed.** The 26-neighbour pass dominates. Options: skip
-  unreached cells and cells far from any label change properly, update the
-  distance part on 6 neighbours only, or run the whole rule on the GPU as a 3D
-  texture pass.
-- **Memory.** Drop the stored squared distance (it follows from the offsets),
-  use 8-bit offsets up to 128³: about a third of the state.
+- **Speed on the GPU.** Every cell reads all 26 neighbours on every step.
+  Options: a cheaper pass once the labels have settled, or 8-bit offsets up
+  to 128³ to halve what is read.
 - **Exact 3D hull per cluster** (quickhull) drawn as a wireframe, with volume
   against it, so "stops short of the hull" becomes a number.
 - **Padding as a default tied to `r`.** Padding equal to the cluster radius
@@ -251,4 +281,6 @@ wide.
   remove the patches.
 - **Pressure and the soft kernel** for cluster membranes: sag and inflation
   per cluster.
-- **Check at higher resolution.** Everything was verified at 64³ only.
+- **Check at higher resolution.** Clusters were compared with a direct
+  calculation at 64³ only; at 128³ and 192³ the GPU version was only looked
+  at.

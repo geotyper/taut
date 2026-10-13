@@ -94,7 +94,7 @@ voxels, `N` new stones, `R` restart the wave, `Space` pause.
 Address parameters: `?steps=200` runs that many steps before the first frame;
 `?size=128`, `?kernel=soft`, `?pressure=-0.5`, `?opaque`, `?onecolor` and
 `?smooth` preset the page, as do `?stone-placement=sphere` and
-`?stone-shape=sharp`.
+`?stone-shape=sharp`. `?cpu` keeps the clusters automaton off the GPU.
 
 ### Clusters in 3D
 
@@ -112,9 +112,19 @@ So every cell within the padding of its stone is always inside, and the
 membrane is taut around the stones grown by that much. Zero padding gives the
 bare wrap back.
 
-While the labels settle a step is about ten times slower than afterwards
-(roughly 45 ms against 6 ms at 64³), and the state takes about 30 bytes per
-cell, so it is built only while this automaton is chosen.
+The rule runs on the GPU. The state of a cell is two texels in 3D textures,
+12 bytes in all, and a fragment shader applies the rule to one layer of the
+field at a time, writing into a second pair of textures that then swaps with
+the first. The picture is made from the state on the GPU as well, so nothing
+is copied back apart from the labels every 32 steps, to count the clusters
+and the volume. On one machine that gave about 140 steps a second at 64³, 39
+at 128³ and 12 at 192³.
+
+`?cpu` in the address runs the same rule on the CPU instead, as does a
+browser where the GPU version fails to start. There a step takes about 50 ms
+at 64³ while the labels settle and 7 ms afterwards, and about 400 ms at 128³
+while they settle. On the same stones the two versions gave the same clusters
+and the same volume.
 
 ## Clusters
 

@@ -19,7 +19,7 @@ export interface View {
 const MEMBRANE_COLOR = [1.0, 0.82, 0.4];
 const STONE_COLOR = [0.55, 0.58, 0.64];
 
-const VERTEX = `#version 300 es
+export const VERTEX = `#version 300 es
 void main() {
   // One triangle covering the whole viewport.
   vec2 p = vec2(float((gl_VertexID << 1) & 2), float(gl_VertexID & 2));
@@ -296,7 +296,8 @@ void main() {
  * translucent, adding up along the ray.
  */
 export class Renderer {
-  private readonly gl: WebGL2RenderingContext;
+  /** Shared with whoever computes on the same context. */
+  readonly gl: WebGL2RenderingContext;
   private readonly voxelProgram: WebGLProgram;
   private readonly smoothProgram: WebGLProgram;
   /** Voxel classes for the cube view; phase and stones for the smooth view. */
@@ -312,8 +313,8 @@ export class Renderer {
     const gl = canvas.getContext('webgl2', { antialias: false });
     if (!gl) throw new Error('WebGL2 is not available in this browser');
     this.gl = gl;
-    this.voxelProgram = this.createProgram(VOXEL_FRAGMENT);
-    this.smoothProgram = this.createProgram(SMOOTH_FRAGMENT);
+    this.voxelProgram = createProgram(gl, VOXEL_FRAGMENT);
+    this.smoothProgram = createProgram(gl, SMOOTH_FRAGMENT);
     this.voxelTexture = this.createTexture(gl.NEAREST, gl.NEAREST);
     this.phaseTexture = this.createTexture(gl.LINEAR_MIPMAP_LINEAR, gl.LINEAR);
     this.stoneTexture = this.createTexture(gl.LINEAR_MIPMAP_LINEAR, gl.LINEAR);
@@ -331,12 +332,34 @@ export class Renderer {
     gl.generateMipmap(gl.TEXTURE_3D);
   }
 
-  /** Draw n*n*n voxel classes (x fastest, then y, then z) as cubes. */
-  drawVoxels(voxels: Uint8Array, n: number, camera: Camera, view: View): void {
+  /**
+   * The textures both views read, sized for a field of n cells a side, for a
+   * computation on the GPU to fill in place of an upload.
+   */
+  targets(n: number): { voxels: WebGLTexture; phase: WebGLTexture; tint: WebGLTexture } {
+    const { gl } = this;
+    const fit = (texture: WebGLTexture, format: number, layout: number) => {
+      gl.bindTexture(gl.TEXTURE_3D, texture);
+      gl.texImage3D(gl.TEXTURE_3D, 0, format, n, n, n, 0, layout, gl.UNSIGNED_BYTE, null);
+    };
+    if (n !== this.voxelSize) fit(this.voxelTexture, gl.R8UI, gl.RED_INTEGER);
+    if (n !== this.phaseSize) fit(this.phaseTexture, gl.R8, gl.RED);
+    if (n !== this.tintSize) fit(this.tintTexture, gl.R8UI, gl.RED_INTEGER);
+    this.voxelSize = this.phaseSize = this.tintSize = n;
+    return { voxels: this.voxelTexture, phase: this.phaseTexture, tint: this.tintTexture };
+  }
+
+  /**
+   * Draw n*n*n voxel classes (x fastest, then y, then z) as cubes. With null
+   * the texture is drawn as it was filled on the GPU.
+   */
+  drawVoxels(voxels: Uint8Array | null, n: number, camera: Camera, view: View): void {
     const { gl } = this;
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_3D, this.voxelTexture);
-    if (n !== this.voxelSize) {
+    if (!voxels) {
+      // Filled on the GPU.
+    } else if (n !== this.voxelSize) {
       gl.texImage3D(gl.TEXTURE_3D, 0, gl.R8UI, n, n, n, 0, gl.RED_INTEGER, gl.UNSIGNED_BYTE, voxels);
       this.voxelSize = n;
     } else {
@@ -351,12 +374,21 @@ export class Renderer {
   /**
    * Draw the phase field (0 or 1 per cell) as a smooth surface. With `tint`,
    * a hue class per inside cell, each membrane takes the colour of its cells.
+   * With a null phase both textures are drawn as they were filled on the GPU.
    */
-  drawSmooth(phase: Uint8Array, n: number, camera: Camera, view: View, tint?: Uint8Array): void {
+  drawSmooth(
+    phase: Uint8Array | null,
+    n: number,
+    camera: Camera,
+    view: View,
+    tint?: Uint8Array,
+  ): void {
     const { gl } = this;
     gl.activeTexture(gl.TEXTURE2);
     gl.bindTexture(gl.TEXTURE_3D, this.tintTexture);
-    if (tint && n !== this.tintSize) {
+    if (!phase) {
+      // Filled on the GPU.
+    } else if (tint && n !== this.tintSize) {
       gl.texImage3D(gl.TEXTURE_3D, 0, gl.R8UI, n, n, n, 0, gl.RED_INTEGER, gl.UNSIGNED_BYTE, tint);
       this.tintSize = n;
     } else if (tint) {
@@ -370,7 +402,9 @@ export class Renderer {
     gl.bindTexture(gl.TEXTURE_3D, this.stoneTexture);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_3D, this.phaseTexture);
-    if (n !== this.phaseSize) {
+    if (!phase) {
+      // Filled on the GPU.
+    } else if (n !== this.phaseSize) {
       gl.texImage3D(gl.TEXTURE_3D, 0, gl.R8, n, n, n, 0, gl.RED, gl.UNSIGNED_BYTE, phase);
       this.phaseSize = n;
     } else {
@@ -383,7 +417,7 @@ export class Renderer {
     gl.uniform1i(gl.getUniformLocation(program, 'uPhase'), 0);
     gl.uniform1i(gl.getUniformLocation(program, 'uStones'), 1);
     gl.uniform1i(gl.getUniformLocation(program, 'uTint'), 2);
-    gl.uniform1i(gl.getUniformLocation(program, 'uTinted'), tint ? 1 : 0);
+    gl.uniform1i(gl.getUniformLocation(program, 'uTinted'), tint || !phase ? 1 : 0);
     gl.uniform1f(gl.getUniformLocation(program, 'uSmooth'), view.smoothness);
     this.finish(program, n, camera, view);
   }
@@ -426,39 +460,47 @@ export class Renderer {
     gl.drawArrays(gl.TRIANGLES, 0, 3);
   }
 
-  private createProgram(fragment: string): WebGLProgram {
-    const { gl } = this;
-    const program = gl.createProgram()!;
-    for (const [type, source] of [
-      [gl.VERTEX_SHADER, VERTEX],
-      [gl.FRAGMENT_SHADER, fragment],
-    ] as const) {
-      const shader = gl.createShader(type)!;
-      gl.shaderSource(shader, source);
-      gl.compileShader(shader);
-      if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
-        throw new Error(`Shader failed to compile: ${gl.getShaderInfoLog(shader)}`);
-      }
-      gl.attachShader(program, shader);
-    }
-    gl.linkProgram(program);
-    if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
-      throw new Error(`Program failed to link: ${gl.getProgramInfoLog(program)}`);
-    }
-    return program;
-  }
-
   private createTexture(minFilter: number, magFilter: number): WebGLTexture {
-    const { gl } = this;
-    const texture = gl.createTexture()!;
-    gl.bindTexture(gl.TEXTURE_3D, texture);
-    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, minFilter);
-    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, magFilter);
-    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
-    gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE);
-    return texture;
+    return createTexture(this.gl, minFilter, magFilter);
   }
+}
+
+/** A program that runs `fragment` on one triangle covering the viewport. */
+export function createProgram(gl: WebGL2RenderingContext, fragment: string): WebGLProgram {
+  const program = gl.createProgram()!;
+  for (const [type, source] of [
+    [gl.VERTEX_SHADER, VERTEX],
+    [gl.FRAGMENT_SHADER, fragment],
+  ] as const) {
+    const shader = gl.createShader(type)!;
+    gl.shaderSource(shader, source);
+    gl.compileShader(shader);
+    if (!gl.getShaderParameter(shader, gl.COMPILE_STATUS)) {
+      throw new Error(`Shader failed to compile: ${gl.getShaderInfoLog(shader)}`);
+    }
+    gl.attachShader(program, shader);
+  }
+  gl.linkProgram(program);
+  if (!gl.getProgramParameter(program, gl.LINK_STATUS)) {
+    throw new Error(`Program failed to link: ${gl.getProgramInfoLog(program)}`);
+  }
+  return program;
+}
+
+/** A 3D texture clamped at its faces. */
+export function createTexture(
+  gl: WebGL2RenderingContext,
+  minFilter: number,
+  magFilter: number,
+): WebGLTexture {
+  const texture = gl.createTexture()!;
+  gl.bindTexture(gl.TEXTURE_3D, texture);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MIN_FILTER, minFilter);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_MAG_FILTER, magFilter);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+  gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE);
+  return texture;
 }
 
 function normalize(v: number[]): number[] {

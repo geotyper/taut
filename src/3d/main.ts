@@ -1,4 +1,5 @@
 import { Clusters3 } from './clusters3.ts';
+import { Clusters3Gpu } from './clusters3gpu.ts';
 import { Renderer, type Camera, type View } from './renderer.ts';
 import { Sim3, type LineKernel, type Params3, type StartShape3 } from './sim3.ts';
 import { scatterStones, type StoneOptions } from './stones.ts';
@@ -55,8 +56,16 @@ let smoothness = 1.2;
 let paused = false;
 
 let sim = new Sim3(64);
-/** Built only while the clusters automaton is chosen: its state is large. */
-let clusters: Clusters3 | null = null;
+/**
+ * Built only while the clusters automaton is chosen: its state is large. On
+ * the GPU where there is one, on the CPU otherwise or with `?cpu`.
+ */
+let clusters: Clusters3 | Clusters3Gpu | null = null;
+const clustersOnCpu = new URLSearchParams(location.search).has('cpu');
+/** Steps a second, for an automaton whose steps cannot be timed one by one. */
+let stepRate = 0;
+let rateSince = performance.now();
+let rateSteps = 0;
 let voxels = new Uint8Array(sim.phase.length);
 let tint = new Uint8Array(sim.phase.length);
 let stoneVolume = 0;
@@ -112,7 +121,7 @@ const automatonSelect = byId<HTMLSelectElement>('automaton');
 automatonSelect.addEventListener('change', () => {
   automaton = automatonSelect.value as Automaton;
   syncControls();
-  clusters = automaton === 'clusters' ? new Clusters3(sim.n, sim.stones) : null;
+  clusters = createClusters();
   restartWave();
 });
 
@@ -253,7 +262,7 @@ function rebuild(n: number): void {
   voxels = new Uint8Array(sim.phase.length);
   tint = new Uint8Array(sim.phase.length);
   scatterStones(sim.stones, n, stoneOptions);
-  clusters = automaton === 'clusters' ? new Clusters3(n, sim.stones) : null;
+  clusters = createClusters();
   stoneVolume = 0;
   for (let i = 0; i < sim.stones.length; i++) stoneVolume += sim.stones[i];
   renderer?.setStones(sim.stones, n);
@@ -271,9 +280,23 @@ function syncPressure(): void {
   linesParams.threshold = taut + Math.max(0, pressure) * (slack - taut);
 }
 
+/** The clusters automaton for the current field, replacing the one before it. */
+function createClusters(): Clusters3 | Clusters3Gpu | null {
+  if (clusters instanceof Clusters3Gpu) clusters.dispose();
+  if (automaton !== 'clusters') return null;
+  if (renderer && !clustersOnCpu) {
+    try {
+      return new Clusters3Gpu(renderer, sim.n, sim.stones);
+    } catch (error) {
+      console.warn('Clusters fall back to the CPU:', error);
+    }
+  }
+  return new Clusters3(sim.n, sim.stones);
+}
+
 /** The field to draw: the membrane itself, or inflated under outward pressure. */
 function shown(): Uint8Array {
-  if (clusters) return clusters.phase;
+  if (clusters instanceof Clusters3) return clusters.phase;
   if (automaton !== 'lines' || pressure >= 0) return sim.phase;
   return sim.inflated(-pressure * INFLATE_REACH * sim.n);
 }
@@ -313,18 +336,38 @@ function frame(): void {
     stepMs = (performance.now() - begin) / done;
   }
   const view: View = { opacity: opaque ? 1 : opacity, oneColor, smoothness };
-  const field = shown();
-  if (smooth) {
-    clusters?.tint(tint);
-    renderer?.drawSmooth(field, sim.n, camera, view, clusters ? tint : undefined);
+  let inside: number;
+  if (clusters instanceof Clusters3Gpu) {
+    // The state stays on the GPU: it fills the renderer's textures itself.
+    clusters.show(smooth);
+    if (smooth) renderer?.drawSmooth(null, sim.n, camera, view);
+    else renderer?.drawVoxels(null, sim.n, camera, view);
+    inside = clusters.volume;
   } else {
-    if (clusters) clusters.classify(voxels);
-    else sim.classify(voxels, field);
-    renderer?.drawVoxels(voxels, sim.n, camera, view);
+    const field = shown();
+    if (smooth) {
+      clusters?.tint(tint);
+      renderer?.drawSmooth(field, sim.n, camera, view, clusters ? tint : undefined);
+    } else {
+      if (clusters) clusters.classify(voxels);
+      else sim.classify(voxels, field);
+      renderer?.drawVoxels(voxels, sim.n, camera, view);
+    }
+    inside = sim.volume(field);
   }
 
-  const volume = stoneVolume > 0 ? (sim.volume(field) / stoneVolume).toFixed(2) : '—';
-  let text = `step ${clusters ? clusters.steps : sim.steps} · ${stepMs.toFixed(1)} ms/step`;
+  const volume = stoneVolume > 0 ? (inside / stoneVolume).toFixed(2) : '—';
+  let text = `step ${clusters ? clusters.steps : sim.steps}`;
+  if (clusters instanceof Clusters3Gpu) {
+    // Steps are only queued here and run on the GPU later, so count them a second.
+    const now = performance.now();
+    if (now - rateSince >= 500) {
+      stepRate = ((clusters.steps - rateSteps) * 1000) / (now - rateSince);
+      rateSince = now;
+      rateSteps = clusters.steps;
+    }
+    text += ` · ${Math.max(0, stepRate).toFixed(0)} steps/s on the GPU`;
+  } else text += ` · ${stepMs.toFixed(1)} ms/step`;
   if (clusters) text += clusters.settling ? ' · labels settling' : ` · ${clusters.clusters} clusters`;
   stat.textContent = `${text} · volume ${volume}× stones`;
   requestAnimationFrame(frame);
