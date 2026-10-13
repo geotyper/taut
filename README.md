@@ -87,7 +87,10 @@ Drag to orbit, scroll to zoom. View options:
   surfaces turned away darken.
 - **Stones** — their number and spread; placed anywhere, or mostly on the
   surface of a sphere with the rest inside it; all sharp-edged, all rounded,
-  or mixed.
+  or mixed. With *Stones lie on a floor* the placement only chooses where a
+  stone lands: every stone is dropped onto one horizontal plane and rests on
+  it with its lowest point, so the scene is a layer of stones rather than a
+  cloud.
 - **Resolution** — 64³, 96³, 128³ or 192³; the radii scale with it. A step of
   the line automaton takes about 3 ms at 64³ once settled and about 50 ms at
   192³, with the first steps of the wave several times slower.
@@ -96,8 +99,8 @@ Keys: `O` opaque membrane, `C` stones in membrane colour, `S` smooth or
 voxels, `N` new stones, `R` restart the wave, `Space` pause.
 
 Address parameters: `?steps=200` runs that many steps before the first frame;
-`?size=128`, `?kernel=soft`, `?pressure=-0.5`, `?opaque`, `?onecolor` and
-`?smooth` preset the page, as do `?stone-placement=sphere` and
+`?size=128`, `?kernel=soft`, `?pressure=-0.5`, `?opaque`, `?onecolor`,
+`?smooth` and `?floor` preset the page, as do `?stone-placement=sphere` and
 `?stone-shape=sharp`. `?cpu` keeps the clusters automaton off the GPU.
 
 ### Clusters in 3D

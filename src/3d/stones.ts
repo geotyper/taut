@@ -9,6 +9,9 @@ const STRAY_STONES = 0.12;
 /** How far stones scatter around the centre of their clump, in field sizes. */
 const CLUMP_SPREAD = 0.07;
 
+/** Height of the floor the stones lie on with `onFloor`, in field sizes. */
+const FLOOR_HEIGHT = 0.35;
+
 export interface StoneOptions {
   count: number;
   /**
@@ -24,6 +27,11 @@ export interface StoneOptions {
   placement: 'box' | 'sphere' | 'clumps';
   /** How many centres the 'clumps' placement gathers the stones around. */
   clumps: number;
+  /**
+   * Drop every stone onto a horizontal floor: the placement then sets only
+   * where it lands, and its lowest point touches the floor.
+   */
+  onFloor: boolean;
   /** Sharp-edged boxes, fully rounded ones, or each stone somewhere between. */
   shape: 'mixed' | 'sharp' | 'round';
   /** Stone size relative to the default: 1 leaves it as it is. */
@@ -77,7 +85,14 @@ export function scatterStones(stones: Uint8Array, n: number, options: StoneOptio
       oz = (Math.random() * 2 - 1) * range;
     }
     const cx = n / 2 + ox;
-    const cy = n / 2 + oy;
+    // A stone on the floor is lifted by its extent downwards: the support of a
+    // rounded box along the vertical, which in its own frame is (rot[1], rot[4], rot[7]).
+    const below =
+      Math.abs(rot[1]) * (hx - rounding) +
+      Math.abs(rot[4]) * (hy - rounding) +
+      Math.abs(rot[7]) * (hz - rounding) +
+      rounding;
+    const cy = options.onFloor ? n * FLOOR_HEIGHT + below : n / 2 + oy;
     const cz = n / 2 + oz;
 
     const lo = (c: number) => Math.max(STONE_MARGIN, Math.floor(c - reach));

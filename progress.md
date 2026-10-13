@@ -291,6 +291,19 @@ each with a band of its own; every cluster keeps its band in one channel.
   than channels cannot get away from all of them. Distances inside a channel
   follow the lattice (steps of 3 and 4), not the straight line. Not in 3D.
 
+## Added since: stones on a floor (3D)
+
+*Stones lie on a floor* on the 3D page drops every stone onto one horizontal
+plane. The placement (anywhere, sphere, clumps) then sets only where a stone
+lands; its height follows from its own shape and turn, so that its lowest
+point touches the floor at 0.35 of the field. Stones may still run into each
+other sideways: nothing stacks or pushes apart.
+
+Checked: 200 single stones for each placement and shape at 128³ had their
+lowest voxel layer on the floor or one layer above it. In the browser, one
+run of clumps on the floor at 64³ gave a flat slab of a membrane. The line
+majority and wide kernel automata were not looked at with this option.
+
 ## What could be improved
 
 ### Both

@@ -40,6 +40,7 @@ const stoneOptions: StoneOptions = {
   shape: 'mixed',
   scale: 1,
   clumps: 3,
+  onFloor: false,
 };
 /** Clusters: stones closer than two of these radii share a membrane. In cells. */
 let clusterReach = 5;
@@ -108,6 +109,12 @@ const placementSelect = byId<HTMLSelectElement>('stone-placement');
 placementSelect.addEventListener('change', () => {
   stoneOptions.placement = placementSelect.value as StoneOptions['placement'];
   syncControls();
+  rebuild(sim.n);
+});
+
+const floorToggle = byId<HTMLInputElement>('stone-floor');
+floorToggle.addEventListener('change', () => {
+  stoneOptions.onFloor = floorToggle.checked;
   rebuild(sim.n);
 });
 
@@ -232,6 +239,7 @@ oneColorToggle.addEventListener('change', () => (oneColor = oneColorToggle.check
 const query = new URLSearchParams(location.search);
 if (query.has('opaque')) opaqueToggle.click();
 if (query.has('onecolor')) oneColorToggle.click();
+if (query.has('floor')) floorToggle.click();
 if (query.has('smooth')) {
   surfaceSelect.value = 'smooth';
   surfaceSelect.dispatchEvent(new Event('change'));
