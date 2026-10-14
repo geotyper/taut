@@ -113,6 +113,18 @@
             <option value="fade">Fading behind each film</option>
           </select>
         </label>
+        <label id="pick-contours">
+          <span>Lines across the films (experimental)</span>
+          <select id="contours">
+            <option value="off">None</option>
+            <option value="level">Level, like heights on a map</option>
+            <option value="round">Round the centre</option>
+          </select>
+        </label>
+        <label id="pick-spacing">
+          <span>Cells between those lines <output id="spacing-out"></output></span>
+          <input id="spacing" type="range" min="1.5" max="10" step="0.5" value="3" />
+        </label>
         <label id="pick-lines">
           <span>Edges where films meet <output id="lines-out"></output></span>
           <input id="lines" type="range" min="0" max="1" step="0.01" value="0.25" />

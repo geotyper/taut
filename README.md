@@ -396,6 +396,19 @@ front of a point lets 0.3 of its light through, averaged with the point's
 neighbours so the light fades along the line, and the foam's deeper layers
 show as dimmer and dimmer lines.
 
+*Lines across the films* (experimental) adds lines on the films themselves,
+as the lines of equal height on a map: every film is cut by level planes or
+by spheres round the centre, three cells apart at 96³ by default (a slider
+sets it from 1.5 to 10, and as far in field sizes at others), and where a film meets
+one a thin faint line runs, so the films show how they bend. A face between
+two cells of different labels is on a line when its centre lies within half
+a cell of one of the surfaces; the faces of one film on one surface are
+joined where they lie within 1.5 cells, without being put in order. Faces
+turned along the surfaces are left out, as is the skin of an open cluster
+from the spheres, which it nearly follows: a film lying along the surfaces
+would otherwise come out as a filled patch. The pieces are hidden or faded
+by the films in front, judged at their middles, like the edges.
+
 The page needs WebGL2 with float blending. On one machine it made about 30
 steps a second at 96³ with 60 bubbles and 10 at 160³, the finest
 resolution.

@@ -1,6 +1,15 @@
 import { cameraFrame, FOCAL, Renderer, type Camera, type View } from '../3d/renderer.ts';
 import { Foam3, type Enclosure, type Foam3Params } from './foam3.ts';
-import { extractSkeleton, filmsInFront, inSight, visibleParts, type Skeleton } from './skeleton.ts';
+import {
+  extractContours,
+  extractSkeleton,
+  filmsInFront,
+  inSight,
+  visibleParts,
+  type ContourShape,
+  type Contours,
+  type Skeleton,
+} from './skeleton.ts';
 
 /** A scattered centre starts as a ball this many kernel radii across. */
 const SEED_SIZE = 1.5;
@@ -35,6 +44,12 @@ const FADE = 0.3;
 /** The visible parts of the lines, with a brightness per point in 'fade', and the view they were worked out for. */
 let parts: { points: number[][]; hue: number; light?: number[] }[] = [];
 let corners: number[][] = [];
+/** Lines across the films, if any, and the light of each piece as last seen. */
+let contourShape: ContourShape | 'off' = 'off';
+let contours: Contours | null = null;
+let contourLight = new Float32Array(0);
+/** Contour lines this many cells apart at 96³, and as far in field sizes at others. */
+let contourSpacing = 3;
 let partsFor = '';
 const stat = byId('stat');
 const camera: Camera = { yaw: 0.7, pitch: 0.4, distance: 1.45 };
@@ -95,6 +110,14 @@ onSelect('through', (v) => {
   hiding = v === 'whole' || v === 'fade' ? v : 'cut';
   through = v === 'all' ? Infinity : hiding === 'cut' ? Number(v) : 0;
   partsFor = '';
+});
+onSelect('contours', (v) => {
+  contourShape = v as ContourShape | 'off';
+  syncView();
+});
+bindRange('spacing', 1, (v) => {
+  contourSpacing = v;
+  skeletonStep = -1;
 });
 const lookSelect = onSelect('look', (v) => {
   look = v;
@@ -192,6 +215,10 @@ function frame(): void {
         skeletonAt = now;
         skeletonLabels = foam.readLabels();
         skeleton = extractSkeleton(skeletonLabels, foam.n);
+        contours =
+          contourShape === 'off'
+            ? null
+            : extractContours(skeletonLabels, foam.n, contourShape, (contourSpacing * foam.n) / 96);
         skeletonMs = performance.now() - now;
         partsFor = '';
       }
@@ -220,6 +247,8 @@ function syncView(): void {
   byId('pick-films').hidden = !lit;
   byId('pick-lines').hidden = !lit && !vector;
   byId('pick-through').hidden = !vector;
+  byId('pick-contours').hidden = !vector;
+  byId('pick-spacing').hidden = !vector || contourShape === 'off';
   byId('pick-opacity').hidden = lit || vector;
   byId('pick-surface').hidden = vector;
   vectorCanvas.hidden = !vector;
@@ -268,6 +297,17 @@ function drawSkeleton(n: number): void {
         parts.push({ points: line.points, hue: line.hue, light });
       } else for (const points of visibleParts(line.points, labels, n, eye, through)) parts.push({ points, hue: line.hue });
     }
+    // The contour pieces are hidden or faded by the same rule, judged at their middles.
+    if (contours) {
+      const pieces = contours.pieces;
+      contourLight = new Float32Array(pieces.length / 6);
+      for (let k = 0; k < contourLight.length; k++) {
+        const middle = [0, 1, 2].map((a) => (pieces[k * 6 + a] + pieces[k * 6 + 3 + a]) / 2);
+        if (through === Infinity || !labels) contourLight[k] = 1;
+        else if (hiding === 'fade') contourLight[k] = FADE ** filmsInFront([middle], labels, n, eye, 4)[0];
+        else contourLight[k] = inSight(middle, labels, n, eye, through) ? 1 : 0;
+      }
+    }
   }
   // Screen position and depth of a point, as the ray caster would show it.
   const project = (p: number[]): number[] => {
@@ -312,6 +352,7 @@ function drawSkeleton(n: number): void {
       ctx.stroke();
     }
   }
+  if (contours) drawContours(ctx, contours, project, nearness, strength, scale);
   for (const p of corners) {
     const [x, y, depth] = project(p);
     if (depth <= 1) continue;
@@ -321,6 +362,33 @@ function drawSkeleton(n: number): void {
     ctx.fill();
   }
   ctx.globalCompositeOperation = 'source-over';
+}
+
+/** The pieces of the lines across the films: thin, faint and without a glow. */
+function drawContours(
+  ctx: CanvasRenderingContext2D,
+  { pieces, hues }: Contours,
+  project: (p: number[]) => number[],
+  nearness: (depth: number) => number,
+  strength: number,
+  scale: number,
+): void {
+  ctx.lineWidth = 0.8 * scale;
+  ctx.lineCap = 'butt';
+  for (let k = 0; k < hues.length; k++) {
+    const light = contourLight[k] ?? 0;
+    if (light < 0.01) continue;
+    const a = project([pieces[k * 6], pieces[k * 6 + 1], pieces[k * 6 + 2]]);
+    const b = project([pieces[k * 6 + 3], pieces[k * 6 + 4], pieces[k * 6 + 5]]);
+    if (a[2] <= 1 || b[2] <= 1) continue;
+    const alpha = Math.min(1, 0.45 * strength * light * nearness((a[2] + b[2]) / 2));
+    ctx.strokeStyle = `hsla(${Math.round(hues[k] * 360)}, 60%, 75%, ${alpha})`;
+    ctx.beginPath();
+    ctx.moveTo(a[0], a[1]);
+    ctx.lineTo(b[0], b[1]);
+    ctx.stroke();
+  }
+  ctx.lineCap = 'round';
 }
 
 /**

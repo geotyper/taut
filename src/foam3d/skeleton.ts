@@ -269,3 +269,109 @@ function filmsBefore(p: number[], labels: Uint32Array, n: number, eye: number[],
   }
   return crossed;
 }
+
+/** Lines drawn across the films; see extractContours. */
+export type ContourShape = 'level' | 'round';
+
+/** Short pieces of lines across the films: x1, y1, z1, x2, y2, z2 each, with a hue each. */
+export interface Contours {
+  pieces: Float32Array;
+  hues: Float32Array;
+}
+
+/** A face more nearly facing the surfaces than this is left out; see extractContours. */
+const FACING = 0.75;
+/** Two points of a contour this close, in cells, are joined. */
+const LINK = 1.5;
+
+/**
+ * Lines across the films, as the lines of equal height on a map: every film
+ * is cut by a family of surfaces `spacing` cells apart, level planes or
+ * spheres round the centre, and where a film meets one a line runs. They
+ * show how a film bends, where the edges alone show only its outline.
+ *
+ * A film is the face between two cells of different labels, bubbles or a
+ * bubble and the air; the glass is not one. A face whose centre lies within
+ * half a cell of a surface is on that line, unless it faces along the
+ * surfaces: a film lying along them would come out as a patch. The faces of one film on one
+ * surface are joined where they lie close together; they are not put in order.
+ */
+export function extractContours(labels: Uint32Array, n: number, shape: ContourShape, spacing: number): Contours {
+  const groups = new Map<string, number[]>();
+  const half = n / 2;
+  const n2 = n * n;
+  const steps = [1, n, n2];
+  for (let z = 0; z < n; z++) {
+    for (let y = 0; y < n; y++) {
+      for (let x = 0; x < n; x++) {
+        const i = z * n2 + y * n + x;
+        const a = labels[i];
+        if (a === GLASS) continue;
+        const at = [x, y, z];
+        for (let axis = 0; axis < 3; axis++) {
+          if (at[axis] + 1 >= n) continue;
+          const b = labels[i + steps[axis]];
+          if (b === a || b === GLASS || (a === AIR && b === AIR)) continue;
+          // The skin of an open cluster is itself near a sphere round the
+          // centre, so round surfaces would only cut it into patches.
+          if (shape === 'round' && (a === AIR || b === AIR)) continue;
+          // The centre of the face between the two cells.
+          const p = [x + 0.5, y + 0.5, z + 0.5];
+          p[axis] += 0.5;
+          // A face turned towards the surfaces' own direction belongs to a
+          // film lying along them, which a band half a cell thick would
+          // fill as a whole patch rather than cross in a line.
+          const gradient = shape === 'level' ? [0, 1, 0] : [p[0] - half, p[1] - half, p[2] - half];
+          if (Math.abs(gradient[axis]) > FACING * Math.hypot(gradient[0], gradient[1], gradient[2])) continue;
+          // Level planes run through the middle of a layer of cells: through
+          // their boundaries, the side faces of a layer, all at its middle
+          // height, would never come within half a cell.
+          const value = shape === 'level' ? p[1] - 0.5 : Math.hypot(p[0] - half, p[1] - half, p[2] - half);
+          const level = Math.round(value / spacing);
+          if (Math.abs(value - level * spacing) >= 0.5) continue;
+          const key = `${Math.min(a, b)},${Math.max(a, b)},${level}`;
+          let group = groups.get(key);
+          if (!group) groups.set(key, (group = []));
+          group.push(p[0], p[1], p[2]);
+        }
+      }
+    }
+  }
+
+  const pieces: number[] = [];
+  const hues: number[] = [];
+  for (const [key, points] of groups) {
+    const hue = hueOf(key.split(',').slice(0, 2).join(','));
+    // Points binned by the cell they fall in, so each looks only at its
+    // neighbours' bins: where a film lies along a surface, a group is a whole
+    // patch of faces, not a line.
+    const count = points.length / 3;
+    const bins = new Map<number, number[]>();
+    const binOf = (x: number, y: number, z: number) => (Math.floor(x) * n + Math.floor(y)) * n + Math.floor(z);
+    for (let a = 0; a < count; a++) {
+      const key = binOf(points[a * 3], points[a * 3 + 1], points[a * 3 + 2]);
+      let bin = bins.get(key);
+      if (!bin) bins.set(key, (bin = []));
+      bin.push(a);
+    }
+    for (let a = 0; a < count; a++) {
+      const [ax, ay, az] = [points[a * 3], points[a * 3 + 1], points[a * 3 + 2]];
+      for (let dz = -1; dz <= 1; dz++) {
+        for (let dy = -1; dy <= 1; dy++) {
+          for (let dx = -1; dx <= 1; dx++) {
+            for (const b of bins.get(binOf(ax + dx, ay + dy, az + dz)) ?? []) {
+              if (b <= a) continue;
+              const ex = ax - points[b * 3];
+              const ey = ay - points[b * 3 + 1];
+              const ez = az - points[b * 3 + 2];
+              if (ex * ex + ey * ey + ez * ez > LINK * LINK) continue;
+              pieces.push(ax, ay, az, points[b * 3], points[b * 3 + 1], points[b * 3 + 2]);
+              hues.push(hue);
+            }
+          }
+        }
+      }
+    }
+  }
+  return { pieces: Float32Array.from(pieces), hues: Float32Array.from(hues) };
+}

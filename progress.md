@@ -420,6 +420,22 @@ in front. Looked at in screenshots of the glass sphere at 128³. Fading drew
 beads at first, where the round caps of two pieces overlapped and their light
 added up; butt caps fixed it.
 
+Then lines across the films, experimental (branch `foam-3d-contours`): the
+films cut by level planes or spheres round the centre. Looked at in
+screenshots at 128³: level planes ring an open cluster like a globe and hatch
+the films of a glass sphere; spheres hatch the films round the centre. Three
+things went wrong on the way. Films lying along the surfaces came out as
+filled patches, so faces turned along them are left out, and the skin of an
+open cluster from the spheres. The level planes first ran along the
+boundaries of cell layers, which no side face comes within half a cell of, so
+they caught almost nothing; they now run through the middles of layers. And
+the lines were too faint behind films in the fading choice. Still rough: the
+lines are stepped where a film is steep, the rings of an open cluster stick
+out a little past its outline, and rebuilding takes up to about 120 ms at
+128³. A slider then set how far apart the lines are, 1.5 to 10 cells at 96³;
+checked in screenshots of an open cluster with spheres at 1.5 and 7. Close
+together the lines show where the pieces join in short straight bits.
+
 Not done: the smooth view blurs the films, which are only a voxel or two
 thick, into a haze; the voxel view is the one to use. Pop mode in the open
 was run only at a high rate, where the foam spends most of its time growing
