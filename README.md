@@ -388,6 +388,14 @@ hid every line lying in a groove between two bulging bubbles from all but
 straight on. The parts in sight are worked out again whenever the view or
 the lines change.
 
+A line that goes out of sight halfway is cut there, and its loose end looks
+like a gap. Two more choices spare those ends. *Whole lines, if mostly in
+sight* keeps a line entire when at least 0.6 of its points are in sight and
+drops it otherwise. *Fading behind each film* hides nothing: every film in
+front of a point lets 0.3 of its light through, averaged with the point's
+neighbours so the light fades along the line, and the foam's deeper layers
+show as dimmer and dimmer lines.
+
 The page needs WebGL2 with float blending. On one machine it made about 30
 steps a second at 96³ with 60 bubbles and 10 at 160³, the finest
 resolution.

@@ -229,6 +229,11 @@ export function visibleParts(
   return parts;
 }
 
+/** For each point of a line, the films in front of it seen from the eye, counted up to `most`. */
+export function filmsInFront(points: number[][], labels: Uint32Array, n: number, eye: number[], most: number): number[] {
+  return points.map((p) => Math.min(most, filmsBefore(p, labels, n, eye, most)));
+}
+
 /** Whether p is seen from the eye through at most `films` films. */
 export function inSight(p: number[], labels: Uint32Array, n: number, eye: number[], films: number): boolean {
   return filmsBefore(p, labels, n, eye, films) <= films;

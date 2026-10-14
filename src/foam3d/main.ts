@@ -1,6 +1,6 @@
 import { cameraFrame, FOCAL, Renderer, type Camera, type View } from '../3d/renderer.ts';
 import { Foam3, type Enclosure, type Foam3Params } from './foam3.ts';
-import { extractSkeleton, inSight, visibleParts, type Skeleton } from './skeleton.ts';
+import { extractSkeleton, filmsInFront, inSight, visibleParts, type Skeleton } from './skeleton.ts';
 
 /** A scattered centre starts as a ball this many kernel radii across. */
 const SEED_SIZE = 1.5;
@@ -22,8 +22,18 @@ let skeletonMs = 0;
 let skeletonLabels: Uint32Array | null = null;
 /** How many films a line may be seen through; Infinity shows all. */
 let through = Infinity;
-/** The visible parts of the lines, and the view they were worked out for. */
-let parts: { points: number[][]; hue: number }[] = [];
+/**
+ * Two ways to spare the cut ends of lines half in sight: 'whole' keeps or
+ * hides a line as a whole, 'fade' dims every point by the films in front of
+ * it, smoothly along the line. 'cut' cuts lines where they go out of sight.
+ */
+let hiding: 'cut' | 'whole' | 'fade' = 'cut';
+/** A line in 'whole' is shown when at least this share of its points is in sight. */
+const MOSTLY = 0.6;
+/** In 'fade', each film in front of a point lets this much of its light through. */
+const FADE = 0.3;
+/** The visible parts of the lines, with a brightness per point in 'fade', and the view they were worked out for. */
+let parts: { points: number[][]; hue: number; light?: number[] }[] = [];
 let corners: number[][] = [];
 let partsFor = '';
 const stat = byId('stat');
@@ -82,7 +92,8 @@ const surfaceSelect = onSelect('surface', (v) => {
   syncView();
 });
 onSelect('through', (v) => {
-  through = v === 'all' ? Infinity : Number(v);
+  hiding = v === 'whole' || v === 'fade' ? v : 'cut';
+  through = v === 'all' ? Infinity : hiding === 'cut' ? Number(v) : 0;
   partsFor = '';
 });
 const lookSelect = onSelect('look', (v) => {
@@ -235,15 +246,27 @@ function drawSkeleton(n: number): void {
   const middle = camera.distance * n;
   // Which parts of the lines are in sight, worked out again only when the
   // view or the lines change.
-  const view = `${camera.yaw},${camera.pitch},${camera.distance},${through}`;
+  const view = `${camera.yaw},${camera.pitch},${camera.distance},${through},${hiding}`;
   if (view !== partsFor) {
     partsFor = view;
     parts = [];
     const labels = skeletonLabels;
     corners = through === Infinity || !labels ? skeleton.points : skeleton.points.filter((p) => inSight(p, labels, n, eye, through));
     for (const line of skeleton.lines) {
-      if (through === Infinity || !skeletonLabels) parts.push(line);
-      else for (const points of visibleParts(line.points, skeletonLabels, n, eye, through)) parts.push({ points, hue: line.hue });
+      if (through === Infinity || !labels) parts.push(line);
+      else if (hiding === 'whole') {
+        const front = filmsInFront(line.points, labels, n, eye, 1);
+        if (front.filter((f) => f === 0).length >= MOSTLY * front.length) parts.push(line);
+      } else if (hiding === 'fade') {
+        const front = filmsInFront(line.points, labels, n, eye, 4);
+        // Averaged with the neighbours, so the light fades out along the line.
+        const raw = front.map((f) => FADE ** f);
+        const light = raw.map((_, k) => {
+          const near = raw.slice(Math.max(0, k - 1), k + 2);
+          return near.reduce((a, b) => a + b, 0) / near.length;
+        });
+        parts.push({ points: line.points, hue: line.hue, light });
+      } else for (const points of visibleParts(line.points, labels, n, eye, through)) parts.push({ points, hue: line.hue });
     }
   }
   // Screen position and depth of a point, as the ray caster would show it.
@@ -270,7 +293,12 @@ function drawSkeleton(n: number): void {
       if (screen.some((s) => s[2] <= 1)) continue;
       const depth = screen.reduce((sum, s) => sum + s[2], 0) / screen.length;
       const alpha = Math.min(1, pass.alpha * strength * nearness(depth));
-      ctx.strokeStyle = `hsla(${Math.round(line.hue * 360)}, 70%, 78%, ${alpha})`;
+      const hue = Math.round(line.hue * 360);
+      if (line.light) {
+        strokeFading(ctx, screen, line.light, hue, alpha);
+        continue;
+      }
+      ctx.strokeStyle = `hsla(${hue}, 70%, 78%, ${alpha})`;
       ctx.beginPath();
       ctx.moveTo(screen[0][0], screen[0][1]);
       // Through the midpoints, so the line bends smoothly at its points.
@@ -293,6 +321,36 @@ function drawSkeleton(n: number): void {
     ctx.fill();
   }
   ctx.globalCompositeOperation = 'source-over';
+}
+
+/**
+ * A line whose light changes along it: a piece around each point, from the
+ * midpoint before it to the midpoint after, bent through the point, in that
+ * point's light.
+ */
+function strokeFading(
+  ctx: CanvasRenderingContext2D,
+  screen: number[][],
+  light: number[],
+  hue: number,
+  alpha: number,
+): void {
+  const last = screen.length - 1;
+  const mid = (a: number[], b: number[]) => [(a[0] + b[0]) / 2, (a[1] + b[1]) / 2];
+  // Round caps would overlap where two pieces meet and, the light adding up,
+  // string the line with beads.
+  ctx.lineCap = 'butt';
+  for (let k = 0; k <= last; k++) {
+    if (light[k] < 0.01) continue;
+    const from = k === 0 ? screen[0] : mid(screen[k - 1], screen[k]);
+    const to = k === last ? screen[last] : mid(screen[k], screen[k + 1]);
+    ctx.strokeStyle = `hsla(${hue}, 70%, 78%, ${alpha * light[k]})`;
+    ctx.beginPath();
+    ctx.moveTo(from[0], from[1]);
+    ctx.quadraticCurveTo(screen[k][0], screen[k][1], to[0], to[1]);
+    ctx.stroke();
+  }
+  ctx.lineCap = 'round';
 }
 
 /** The bursts or pops due over this many steps; none while the bubbles grow. */

@@ -414,6 +414,12 @@ only the lines facing the camera straight on survived, so the skin is left
 out, as the glass is. How long the rays take as the view turns was not
 measured.
 
+Then two more choices against the loose ends of half-hidden lines (branch
+`foam-3d-soft-ends`): whole lines if mostly in sight, and fading by the films
+in front. Looked at in screenshots of the glass sphere at 128³. Fading drew
+beads at first, where the round caps of two pieces overlapped and their light
+added up; butt caps fixed it.
+
 Not done: the smooth view blurs the films, which are only a voxel or two
 thick, into a haze; the voxel view is the one to use. Pop mode in the open
 was run only at a high rate, where the foam spends most of its time growing
