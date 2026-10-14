@@ -20,6 +20,8 @@ uniform sampler2D uCells;
 uniform sampler2D uReach;
 uniform float uTime;
 uniform int uMode;
+/** One cell, in texture coordinates. */
+uniform vec2 uTexel;
 in vec2 vAt;
 out vec4 outColor;
 
@@ -81,6 +83,17 @@ void main() {
   vec2 cell = texture(uCells, vAt).rg;
   // In cells; the texture is filtered, so this is smooth across cells.
   vec2 reaches = texture(uReach, vAt).rg * 255.0 / ${STEP}.0;
+  if (uMode == 4) {
+    // Blurred over about a cell, so the fringes do not follow the steps of
+    // the cells a film runs along.
+    vec2 sum = 4.0 * reaches;
+    for (int k = 0; k < 8; k++) {
+      vec2 d = vec2(k < 3 ? -1.0 : k > 4 ? 1.0 : 0.0, k == 0 || k == 3 || k == 5 ? -1.0 : k == 2 || k == 4 || k == 7 ? 1.0 : 0.0);
+      float weight = d.x == 0.0 || d.y == 0.0 ? 2.0 : 1.0;
+      sum += weight * texture(uReach, vAt + d * uTexel).rg * 255.0 / ${STEP}.0;
+    }
+    reaches = sum / 16.0;
+  }
   float reach = reaches.r;
   // How far to the nearest place where three bubbles meet.
   float corner = reaches.g;
@@ -98,7 +111,7 @@ void main() {
 
   vec3 color;
   vec3 film;
-  if (uMode == 2 || uMode == 3) {
+  if (uMode >= 2) {
     // Stress gathers along the films and most where they meet, so the fringes
     // crowd in towards them; inside, every bubble is strained a little
     // differently, and the strain drifts.
@@ -107,7 +120,10 @@ void main() {
     // others, as at the corners of a strained part, and fade along a long
     // straight film, not the same band round every bubble.
     float gather = exp(-corner / 14.0);
-    float strain = 450.0 + 500.0 * own + 150.0 * swirl + 80.0 * sin(uTime * 0.15 + own * 6.2832)
+    // Smoothed, the bubbles' own levels meet at their film, so the colour runs
+    // on across it and does not change in the steps of the cells.
+    float level = uMode == 4 ? mix(0.5, own, smoothstep(0.5, 4.0, reach)) : own;
+    float strain = 450.0 + 500.0 * level + 150.0 * swirl + 80.0 * sin(uTime * 0.15 + level * 6.2832)
                  + (150.0 + 750.0 * gather) * exp(-reach / (3.0 + 6.0 * gather));
     color = interference(TINT + strain);
     // As vivid as a photograph of it.
@@ -115,6 +131,12 @@ void main() {
     // Lifted towards the light pink of a photograph, which sees the sheet against a bright lamp.
     if (cell.g < 0.5) color = mix(interference(TINT_AIR), vec3(1.0, 0.55, 0.75), 0.55);
     float edge = 1.0 - smoothstep(0.5, 1.0, reach);
+    if (uMode == 4) {
+      // The same light rim on the blurred distance, which no longer starts at half a cell.
+      edge = (1.0 - smoothstep(0.55, 1.05, reach)) * (1.0 - 0.5 * exp(-corner / 2.0));
+      outColor = vec4(mix(color, vec3(1.0, 0.97, 0.98), edge * 0.6), 1.0);
+      return;
+    }
     if (uMode == 3) {
       // A film as the bright rim of a clear edge instead of a dark line,
       // thinner and fainter where films meet, so a corner does not fill in.
@@ -129,7 +151,8 @@ void main() {
     color = mix(base, mix(vec3(1.0), sheen, 0.6), 0.1 + 0.35 * exp(-reach / 6.0));
     film = vec3(0.2, 0.23, 0.32);
   } else {
-    color = mix(vec3(0.92, 0.93, 0.95), sheen, 0.32 + 0.25 * rim);
+    // The film's own colours take most of it; more white made it look seen through a veil.
+    color = mix(vec3(0.92, 0.93, 0.95), sheen, 0.6 + 0.25 * rim);
     film = vec3(1.0);
   }
   if (cell.g < 0.5) color = AIR_COLOR;
@@ -191,7 +214,7 @@ export class Sheen {
     gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
   }
 
-  /** Mode: 0 soap, 1 pastel, 2 stress in polarised light, 3 the same with light edges. */
+  /** Mode: 0 soap, 1 pastel, 2 stress in polarised light, 3 the same with light edges, 4 and smoothed. */
   draw(label: Uint16Array, hue: (label: number) => number, mode: number, seconds: number): void {
     const { gl, canvas, w, h, cells, reaches } = this;
     const scale = window.devicePixelRatio || 1;
@@ -206,7 +229,7 @@ export class Sheen {
       cells[i * 2] = hue(label[i]);
       cells[i * 2 + 1] = label[i] === AIR ? 0 : 255;
     }
-    this.measure(label);
+    this.measure(label, mode === 4);
 
     gl.viewport(0, 0, width, height);
     gl.useProgram(this.program);
@@ -220,11 +243,28 @@ export class Sheen {
     gl.uniform1i(gl.getUniformLocation(this.program, 'uReach'), 1);
     gl.uniform1f(gl.getUniformLocation(this.program, 'uTime'), seconds);
     gl.uniform1i(gl.getUniformLocation(this.program, 'uMode'), mode);
+    gl.uniform2f(gl.getUniformLocation(this.program, 'uTexel'), 1 / w, 1 / h);
     gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
   }
 
   /** Distances from every cell to the nearest film and the nearest corner. */
-  private measure(label: Uint16Array): void {
+  private scratch: Scratch | null = null;
+
+  private euclid(field: Uint8Array): void {
+    const { w, h } = this;
+    const n = Math.max(w, h);
+    this.scratch ??= {
+      grid: new Float64Array(w * h),
+      f: new Float64Array(n),
+      d: new Float64Array(n),
+      v: new Int32Array(n),
+      z: new Float64Array(n + 1),
+    };
+    euclid(field, w, h, this.scratch);
+  }
+
+  /** With `exact`, true Euclidean distances, so the fringes round a small bubble are round, not octagons. */
+  private measure(label: Uint16Array, exact: boolean): void {
     const { w, h, reach, corner, reaches } = this;
     corner.fill(255);
     for (let y = 0; y < h; y++) {
@@ -247,12 +287,73 @@ export class Sheen {
         }
       }
     }
-    chamfer(reach, w, h);
-    chamfer(corner, w, h);
+    if (exact) {
+      this.euclid(reach);
+      this.euclid(corner);
+    } else {
+      chamfer(reach, w, h);
+      chamfer(corner, w, h);
+    }
     for (let i = 0; i < reach.length; i++) {
       reaches[i * 2] = reach[i];
       reaches[i * 2 + 1] = corner[i];
     }
+  }
+}
+
+/**
+ * Exact distances from the cells marked AT_FILM, in the same units: the
+ * squared distance transform of Felzenszwalb and Huttenlocher, a row pass and
+ * then a column pass, plus the half cell from a marked cell to its film.
+ */
+function euclid(reach: Uint8Array, w: number, h: number, scratch: Scratch): void {
+  const { grid, f, d, v, z } = scratch;
+  for (let i = 0; i < reach.length; i++) grid[i] = reach[i] === AT_FILM ? 0 : FAR;
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) f[x] = grid[y * w + x];
+    lowerEnvelope(f, w, d, v, z);
+    for (let x = 0; x < w; x++) grid[y * w + x] = d[x];
+  }
+  for (let x = 0; x < w; x++) {
+    for (let y = 0; y < h; y++) f[y] = grid[y * w + x];
+    lowerEnvelope(f, h, d, v, z);
+    for (let y = 0; y < h; y++) grid[y * w + x] = d[y];
+  }
+  for (let i = 0; i < reach.length; i++) reach[i] = Math.min(255, Math.round((Math.sqrt(grid[i]) + 0.5) * STEP));
+}
+
+/** Larger than any squared distance on a field. */
+const FAR = 1e20;
+
+interface Scratch {
+  grid: Float64Array;
+  f: Float64Array;
+  d: Float64Array;
+  v: Int32Array;
+  z: Float64Array;
+}
+
+/** The lower envelope of the parabolas (q - p)² + f[p], sampled at every q. */
+function lowerEnvelope(f: Float64Array, n: number, d: Float64Array, v: Int32Array, z: Float64Array): void {
+  let k = 0;
+  v[0] = 0;
+  z[0] = -Infinity;
+  z[1] = Infinity;
+  for (let q = 1; q < n; q++) {
+    let s = (f[q] + q * q - (f[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k]);
+    while (s <= z[k]) {
+      k--;
+      s = (f[q] + q * q - (f[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k]);
+    }
+    k++;
+    v[k] = q;
+    z[k] = s;
+    z[k + 1] = Infinity;
+  }
+  k = 0;
+  for (let q = 0; q < n; q++) {
+    while (z[k + 1] < q) k++;
+    d[q] = (q - v[k]) ** 2 + f[v[k]];
   }
 }
 

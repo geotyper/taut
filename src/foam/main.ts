@@ -42,7 +42,7 @@ const STRESS_EDGE = rgb(250, 240, 244);
  */
 const SHEEN_DRIFT = 0.6;
 
-type Palette = 'soap' | 'pastel' | 'stress' | 'stress-light' | 'films' | 'dark';
+type Palette = 'soap' | 'pastel' | 'stress' | 'stress-light' | 'stress-smooth' | 'films' | 'dark';
 /**
  * How the foam gets coarser. 'seep': bubbles do not keep their area, so the
  * films pull small bubbles in, as gas seeping through the films from a small
@@ -163,10 +163,10 @@ function shimmering(): boolean {
 }
 
 /** The shader's mode for each palette it draws. */
-const MODES: Record<Palette, number> = { soap: 0, pastel: 1, stress: 2, 'stress-light': 3, films: 0, dark: 0 };
+const MODES: Record<Palette, number> = { soap: 0, pastel: 1, stress: 2, 'stress-light': 3, 'stress-smooth': 4, films: 0, dark: 0 };
 
 function shaded(p: Palette): boolean {
-  return p === 'soap' || p === 'pastel' || p === 'stress' || p === 'stress-light';
+  return p === 'soap' || p === 'pastel' || p === 'stress' || p === 'stress-light' || p === 'stress-smooth';
 }
 
 function syncControls(): void {
@@ -267,7 +267,7 @@ function status(): string {
 function colour(label: number, y: number, film: boolean): number {
   if (palette === 'dark') return film ? COLOR_FILM : DIM[hue(label)];
   if (palette === 'pastel') return film ? COLOR_FILM_DARK : PASTEL[hue(label)];
-  if (palette === 'stress-light') return film ? STRESS_EDGE : label === AIR ? STRESS_AIR : STRESS[hue(label)];
+  if (palette === 'stress-light' || palette === 'stress-smooth') return film ? STRESS_EDGE : label === AIR ? STRESS_AIR : STRESS[hue(label)];
   if (palette === 'stress') return film ? STRESS_FILM : label === AIR ? STRESS_AIR : STRESS[hue(label)];
   // Every bubble starts the run of colours at a place of its own.
   const sheen = (hue(label) + y * SHEEN_DRIFT) & (HUES - 1);

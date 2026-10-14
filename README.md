@@ -321,7 +321,12 @@ photograph, and the films are thin dark lines. Without the shader every
 bubble gets one colour from the same run. *Stress, with light edges* is the same
 picture with the films drawn as the thin bright rim of a clear edge instead
 of a dark line, fainter where films meet, so the corners do not fill in
-with black.
+with black. *Stress, light edges, smoothed* is that again with round
+fringes: the distances there are exact Euclidean ones (the transform of
+Felzenszwalb and Huttenlocher) instead of the chamfer's octagons, the shader
+blurs them over about a cell, and the bubbles' own levels of strain meet at
+their films, so the colour runs on across a film and does not change in the
+steps of the cells. Small bubbles come out round.
 
 The rule runs on the GPU. The labels sit in a pair of 32-bit integer
 textures, and a fragment shader applies the rule to every cell at once,

@@ -356,6 +356,13 @@ orders, which wash out to grey, and it was halved.
 The dark film lines still met in black spots at the corners, so a second
 stress palette draws the films as a thin light rim, fainter at the corners;
 looked at in one screenshot of a filled foam.
+Small bubbles came out as broken polygons in it: the chamfer distance makes
+octagons, and the colours jumped at the films in the steps of the cells. A
+third stress palette uses exact distances, blurs them over a cell in the
+shader and lets the bubbles' levels meet at their films; in zoomed
+screenshots of a cluster of small bubbles they came out round. Soap was
+looked at as through a white veil, the film's colours making only a third of
+it; they now make about two thirds.
 
 The rule also runs on the GPU (`src/foam/foamgpu.ts`), reading the labels
 back every four steps. Compared with the CPU in the browser at 320: without
