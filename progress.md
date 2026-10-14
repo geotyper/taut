@@ -406,6 +406,14 @@ on a 2D canvas over the view, rebuilt from the labels read back at most every
 lines, 20 and 70 ms to build); the glass sphere was not looked at in this
 look, and no line was checked against the voxels it came from.
 
+Then *Lines shown*, hiding lines behind films by a ray per point of a line
+(branch `foam-3d-visible`). Looked at in screenshots at 128³: in sight only,
+both spheres show the network of their near side, and through one film a
+second layer joins in. With the open cluster's outer skin counted as a film,
+only the lines facing the camera straight on survived, so the skin is left
+out, as the glass is. How long the rays take as the view turns was not
+measured.
+
 Not done: the smooth view blurs the films, which are only a voxel or two
 thick, into a haze; the voxel view is the one to use. Pop mode in the open
 was run only at a high rate, where the foam spends most of its time growing

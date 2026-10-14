@@ -1,6 +1,6 @@
 import { cameraFrame, FOCAL, Renderer, type Camera, type View } from '../3d/renderer.ts';
 import { Foam3, type Enclosure, type Foam3Params } from './foam3.ts';
-import { extractSkeleton, type Skeleton } from './skeleton.ts';
+import { extractSkeleton, inSight, visibleParts, type Skeleton } from './skeleton.ts';
 
 /** A scattered centre starts as a ball this many kernel radii across. */
 const SEED_SIZE = 1.5;
@@ -18,6 +18,14 @@ let skeleton: Skeleton | null = null;
 let skeletonStep = -1;
 let skeletonAt = 0;
 let skeletonMs = 0;
+/** The labels the skeleton was built from, for the rays that hide lines. */
+let skeletonLabels: Uint32Array | null = null;
+/** How many films a line may be seen through; Infinity shows all. */
+let through = Infinity;
+/** The visible parts of the lines, and the view they were worked out for. */
+let parts: { points: number[][]; hue: number }[] = [];
+let corners: number[][] = [];
+let partsFor = '';
 const stat = byId('stat');
 const camera: Camera = { yaw: 0.7, pitch: 0.4, distance: 1.45 };
 const params: Foam3Params = { radius: 3, noise: 0.1, keepVolume: true };
@@ -72,6 +80,10 @@ onSelect('coarsening', (v) => {
 const surfaceSelect = onSelect('surface', (v) => {
   smooth = v === 'smooth';
   syncView();
+});
+onSelect('through', (v) => {
+  through = v === 'all' ? Infinity : Number(v);
+  partsFor = '';
 });
 const lookSelect = onSelect('look', (v) => {
   look = v;
@@ -167,8 +179,10 @@ function frame(): void {
       if (foam.steps !== skeletonStep && now - skeletonAt > SKELETON_EVERY) {
         skeletonStep = foam.steps;
         skeletonAt = now;
-        skeleton = extractSkeleton(foam.readLabels(), foam.n);
+        skeletonLabels = foam.readLabels();
+        skeleton = extractSkeleton(skeletonLabels, foam.n);
         skeletonMs = performance.now() - now;
+        partsFor = '';
       }
       drawSkeleton(foam.n);
     } else {
@@ -194,6 +208,7 @@ function syncView(): void {
   byId('pick-look').hidden = smooth && !vector;
   byId('pick-films').hidden = !lit;
   byId('pick-lines').hidden = !lit && !vector;
+  byId('pick-through').hidden = !vector;
   byId('pick-opacity').hidden = lit || vector;
   byId('pick-surface').hidden = vector;
   vectorCanvas.hidden = !vector;
@@ -218,6 +233,19 @@ function drawSkeleton(n: number): void {
   if (!skeleton) return;
   const { eye, right, up, forward } = cameraFrame(camera, n);
   const middle = camera.distance * n;
+  // Which parts of the lines are in sight, worked out again only when the
+  // view or the lines change.
+  const view = `${camera.yaw},${camera.pitch},${camera.distance},${through}`;
+  if (view !== partsFor) {
+    partsFor = view;
+    parts = [];
+    const labels = skeletonLabels;
+    corners = through === Infinity || !labels ? skeleton.points : skeleton.points.filter((p) => inSight(p, labels, n, eye, through));
+    for (const line of skeleton.lines) {
+      if (through === Infinity || !skeletonLabels) parts.push(line);
+      else for (const points of visibleParts(line.points, skeletonLabels, n, eye, through)) parts.push({ points, hue: line.hue });
+    }
+  }
   // Screen position and depth of a point, as the ray caster would show it.
   const project = (p: number[]): number[] => {
     const d = [p[0] - eye[0], p[1] - eye[1], p[2] - eye[2]];
@@ -237,7 +265,7 @@ function drawSkeleton(n: number): void {
     { width: 1.3 * scale, alpha: 0.75 },
   ]) {
     ctx.lineWidth = pass.width;
-    for (const line of skeleton.lines) {
+    for (const line of parts) {
       const screen = line.points.map(project);
       if (screen.some((s) => s[2] <= 1)) continue;
       const depth = screen.reduce((sum, s) => sum + s[2], 0) / screen.length;
@@ -256,7 +284,7 @@ function drawSkeleton(n: number): void {
       ctx.stroke();
     }
   }
-  for (const p of skeleton.points) {
+  for (const p of corners) {
     const [x, y, depth] = project(p);
     if (depth <= 1) continue;
     ctx.fillStyle = `rgba(255, 255, 255, ${Math.min(1, 0.6 * strength * nearness(depth))})`;

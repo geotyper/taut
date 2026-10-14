@@ -378,6 +378,16 @@ and 70 ms at 160³ for some 540 lines; turning the view redraws them at once.
 A line bent by more than half a turn would come out in the wrong order; the
 borders of a foam are gentler than that.
 
+*Lines shown* can hide what lies behind films. For every point of a line a
+ray from the eye walks the labels in half-cell steps and counts the films it
+crosses, a change from one bubble to another, stopping 2.5 cells short of the
+point, where the point's own films meet. A line is drawn only where at most
+none, one or two films lie in front of it. The glass and the outer skin of an
+open cluster do not count: they are what one looks at, and counted, the skin
+hid every line lying in a groove between two bulging bubbles from all but
+straight on. The parts in sight are worked out again whenever the view or
+the lines change.
+
 The page needs WebGL2 with float blending. On one machine it made about 30
 steps a second at 96³ with 60 bubbles and 10 at 160³, the finest
 resolution.

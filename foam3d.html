@@ -102,6 +102,15 @@
           <span>Films <output id="films-out"></output></span>
           <input id="films" type="range" min="0" max="0.3" step="0.005" value="0.05" />
         </label>
+        <label id="pick-through">
+          <span>Lines shown</span>
+          <select id="through">
+            <option value="all">All of them</option>
+            <option value="0">Only those in sight</option>
+            <option value="1">Seen through one film at most</option>
+            <option value="2">Seen through two films at most</option>
+          </select>
+        </label>
         <label id="pick-lines">
           <span>Edges where films meet <output id="lines-out"></output></span>
           <input id="lines" type="range" min="0" max="1" step="0.01" value="0.25" />

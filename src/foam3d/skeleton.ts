@@ -188,3 +188,79 @@ function principalAxis(cells: number[]): number[] {
 function distance(a: number[], b: number[]): number {
   return Math.hypot(a[0] - b[0], a[1] - b[1], a[2] - b[2]);
 }
+
+/**
+ * The glass, and the air around an open cluster: a ray crosses into a bubble
+ * from either without it counting as a film. The outer skin of an open
+ * cluster is what one looks at, as the glass is; counted, it hid every line
+ * in a groove between two bulging bubbles from all but straight on.
+ */
+const GLASS = 0xffffffff;
+const AIR = 0;
+/** A ray stops this many cells short of its point: the point's own films meet there. */
+const STOP_SHORT = 2.5;
+/** How far a ray goes between two looks at the labels, in cells. */
+const RAY_STEP = 0.5;
+
+/**
+ * The parts of a line seen from `eye` through at most `films` films: for each
+ * point, a ray from the eye counts the films it crosses on the way, where the
+ * label changes from one bubble to another. The glass and the outer skin of
+ * an open cluster are not counted.
+ * Points seen in a row make one part; a part of a single point is dropped.
+ */
+export function visibleParts(
+  points: number[][],
+  labels: Uint32Array,
+  n: number,
+  eye: number[],
+  films: number,
+): number[][][] {
+  const parts: number[][][] = [];
+  let part: number[][] = [];
+  for (const p of points) {
+    if (inSight(p, labels, n, eye, films)) part.push(p);
+    else {
+      if (part.length >= 2) parts.push(part);
+      part = [];
+    }
+  }
+  if (part.length >= 2) parts.push(part);
+  return parts;
+}
+
+/** Whether p is seen from the eye through at most `films` films. */
+export function inSight(p: number[], labels: Uint32Array, n: number, eye: number[], films: number): boolean {
+  return filmsBefore(p, labels, n, eye, films) <= films;
+}
+
+/** Films a ray from the eye crosses before it nears p; stops counting past `enough`. */
+function filmsBefore(p: number[], labels: Uint32Array, n: number, eye: number[], enough: number): number {
+  const d = [p[0] - eye[0], p[1] - eye[1], p[2] - eye[2]];
+  const length = Math.hypot(d[0], d[1], d[2]);
+  const dir = d.map((v) => v / length);
+  // Start where the ray enters the field.
+  let start = 0;
+  for (let a = 0; a < 3; a++) {
+    if (Math.abs(dir[a]) < 1e-9) continue;
+    const t0 = (0 - eye[a]) / dir[a];
+    const t1 = (n - eye[a]) / dir[a];
+    start = Math.max(start, Math.min(t0, t1));
+  }
+  const end = length - STOP_SHORT;
+  let crossed = 0;
+  let previous = -1;
+  for (let t = start; t < end; t += RAY_STEP) {
+    const x = Math.floor(eye[0] + dir[0] * t);
+    const y = Math.floor(eye[1] + dir[1] * t);
+    const z = Math.floor(eye[2] + dir[2] * t);
+    if (x < 0 || y < 0 || z < 0 || x >= n || y >= n || z >= n) continue;
+    const label = labels[(z * n + y) * n + x];
+    const outer = label === GLASS || label === AIR || previous === GLASS || previous === AIR;
+    if (previous !== -1 && !outer && label !== previous) {
+      if (++crossed > enough) return crossed;
+    }
+    previous = label;
+  }
+  return crossed;
+}
