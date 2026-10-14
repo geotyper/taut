@@ -49,6 +49,15 @@
         </label>
 
         <label>
+          <span>Field size</span>
+          <select id="field-size">
+            <option value="320">320 × 320</option>
+            <option value="512">512 × 512</option>
+            <option value="768">768 × 768</option>
+            <option value="1024">1024 × 1024</option>
+          </select>
+        </label>
+        <label>
           <span>Kernel radius <output id="radius-out"></output></span>
           <input id="radius" type="range" min="2" max="10" step="1" value="6" />
         </label>
@@ -58,13 +67,13 @@
         </label>
         <label>
           <span>Steps per frame <output id="speed-out"></output></span>
-          <input id="speed" type="range" min="1" max="16" step="1" value="1" />
+          <input id="speed" type="range" min="1" max="32" step="1" value="1" />
         </label>
 
         <h2>Centres</h2>
         <label>
           <span>Count <output id="count-out"></output></span>
-          <input id="count" type="range" min="2" max="200" step="1" value="40" />
+          <input id="count" type="range" min="2" max="800" step="1" value="40" />
         </label>
         <label>
           <span>Size of a new bubble <output id="brush-out"></output></span>

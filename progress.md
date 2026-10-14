@@ -342,6 +342,15 @@ The shimmer of the light palettes is a shader over the labels and a
 distance-to-film texture (`src/foam/sheen.ts`); it was looked at in two
 screenshots, soap and pastel, and its motion in time was not watched.
 
+The rule also runs on the GPU (`src/foam/foamgpu.ts`), reading the labels
+back every four steps. Compared with the CPU in the browser at 320: without
+area keeping 16 bubbles were left after about 1000 steps and 7 after about
+3200, against 16 and 8 on the CPU; with it all 40 stayed over 15000 steps,
+as did 100 at 512 over 11000 and 403 at 1024 over 3000. Reading back once a
+frame instead, at 32 steps a frame, lost 23 of 40 bubbles: the weights
+lagged and overshot. The noise differs from the CPU's, so the two never
+give the same foam cell for cell.
+
 The film length in the status line is counted in cell edges, so a diagonal
 film reads up to 1.4 times longer than it is.
 
@@ -383,6 +392,9 @@ film reads up to 1.4 times longer than it is.
 
 - **A proper angle measure**: fit the three film directions at a junction
   beyond the kernel radius, to put a number on the 120 degrees.
+- **Areas counted on the GPU**, by adding up a point per cell into a small
+  texture, so the labels need not come back every four steps; at 1024 the
+  read back is likely most of the time.
 - **Foam in 3D** on the GPU pass that the clusters use, drawing only the
   films. Plateau borders and four-film vertices would show up there.
 - **Frames instead of walls**: films spanning a fixed outline, the Plateau

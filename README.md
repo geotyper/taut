@@ -286,7 +286,19 @@ thickness that grows with the distance from the nearest film, drifts with
 time and is stirred by a slow swirl, so they run in from the borders and
 never stand still. The distance is a chamfer transform of the labels made on
 every frame and filtered by the GPU, which also draws the films smooth. It is
-only a picture: the automaton knows nothing of it. The kernel radius sets how fine a detail
+only a picture: the automaton knows nothing of it.
+
+The rule runs on the GPU. The labels sit in a pair of 32-bit integer
+textures, and a fragment shader applies the rule to every cell at once,
+writing into the other texture of the pair; the noise comes from a hash of
+the cell, the step and the candidate. Everything else stays on the CPU:
+edits are made there and uploaded, and every four steps the labels are read
+back so that the areas, the weights that keep them and the picture can be
+worked out. The weights are therefore up to four steps old; at 32 they
+overshot and bubbles vanished. *Field size* goes up to 1024 × 1024. On one
+machine that gave about 1600 steps a second at 320, 760 at 512 and 210 at
+1024, against 120 at 320 on the CPU. `?cpu` in the address keeps the rule on
+the CPU, as does a browser where the GPU version fails to start. The kernel radius sets how fine a detail
 survives; at a small radius films stick to the lattice, flat along the axes,
 and need more noise to move, which makes them ragged.
 

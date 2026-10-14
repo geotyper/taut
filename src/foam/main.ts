@@ -1,7 +1,7 @@
 import { AIR, Foam, type FoamParams } from './foam.ts';
+import { FoamGpu } from './foamgpu.ts';
 import { Sheen } from './sheen.ts';
 
-const SIZE = 320;
 /** Per-frame time limit for stepping, in ms. */
 const BUDGET = 12;
 /** A scattered centre starts as a disc this many kernel radii across. */
@@ -35,26 +35,36 @@ const SHEEN_DRIFT = 0.6;
 
 type Palette = 'soap' | 'pastel' | 'films' | 'dark';
 
-const foam = new Foam(SIZE, SIZE);
+/** "?cpu" keeps the rule off the GPU. */
+const onGpu = !new URLSearchParams(location.search).has('cpu');
 
 const canvas = byId<HTMLCanvasElement>('field');
-canvas.width = SIZE;
-canvas.height = SIZE;
 const ctx = canvas.getContext('2d')!;
-const image = ctx.createImageData(SIZE, SIZE);
-const pixels = new Uint32Array(image.data.buffer);
 const stat = byId('stat');
-/** The shader picture, drawn on a canvas of its own; null where it cannot run. */
+/** The shader picture, drawn on a canvas of its own. */
 const sheenCanvas = byId<HTMLCanvasElement>('field-sheen');
-const sheen = Sheen.create(sheenCanvas, SIZE, SIZE);
+
+let size = 0;
+let foam!: Foam;
+/** Null when the rule runs on the CPU. */
+let gpu: FoamGpu | null = null;
+let image!: ImageData;
+let pixels!: Uint32Array;
+/** Null where the shader cannot run. */
+let sheen: Sheen | null = null;
+/** Steps a second, measured over the last second or so. */
+let rate = 0;
+let rateSteps = 0;
+let rateSince = performance.now();
 
 const params: FoamParams = { radius: 6, noise: 0.1, keepArea: true };
 let stepsPerFrame = 1;
 let centreCount = 40;
 let brush = 10;
 let palette: Palette = 'soap';
-let shimmer = sheen !== null;
 let paused = false;
+build(Number(byId<HTMLSelectElement>('field-size').value));
+let shimmer = sheen !== null;
 
 const paletteSelect = byId<HTMLSelectElement>('palette');
 paletteSelect.addEventListener('change', () => {
@@ -78,6 +88,12 @@ bindRange('brush', 0, (v) => (brush = v));
 // Scatter a new set once the slider is released, not on every tick of a drag.
 byId('count').addEventListener('change', scatter);
 
+const sizeSelect = byId<HTMLSelectElement>('field-size');
+sizeSelect.addEventListener('change', () => {
+  build(Number(sizeSelect.value));
+  scatter();
+});
+
 const keepToggle = byId<HTMLInputElement>('keep-area');
 keepToggle.addEventListener('change', () => (params.keepArea = keepToggle.checked));
 
@@ -99,9 +115,9 @@ for (const target of [canvas, sheenCanvas]) {
   target.addEventListener('contextmenu', (e) => e.preventDefault());
   target.addEventListener('pointerdown', (e) => {
     const rect = target.getBoundingClientRect();
-    const x = Math.floor(((e.clientX - rect.left) / rect.width) * SIZE);
-    const y = Math.floor(((e.clientY - rect.top) / rect.height) * SIZE);
-    if (x < 0 || x >= SIZE || y < 0 || y >= SIZE) return;
+    const x = Math.floor(((e.clientX - rect.left) / rect.width) * size);
+    const y = Math.floor(((e.clientY - rect.top) / rect.height) * size);
+    if (x < 0 || x >= size || y < 0 || y >= size) return;
     if (e.button === 2 || e.shiftKey) foam.pop(x, y);
     else foam.seed(x, y, brush);
   });
@@ -121,13 +137,26 @@ function syncControls(): void {
   sheenCanvas.hidden = !shimmering();
 }
 
+/** A new field of this many cells a side, on the GPU where it can run. */
+function build(n: number): void {
+  gpu?.dispose();
+  size = n;
+  foam = new Foam(n, n);
+  gpu = onGpu ? FoamGpu.create(foam) : null;
+  canvas.width = n;
+  canvas.height = n;
+  image = ctx.createImageData(n, n);
+  pixels = new Uint32Array(image.data.buffer);
+  sheen = Sheen.create(sheenCanvas, n, n);
+}
+
 function scatter(): void {
   foam.clear();
   foam.scatter(centreCount, params.radius * SEED_SIZE);
 }
 
 function addCentre(): void {
-  foam.seed(Math.floor(Math.random() * SIZE), Math.floor(Math.random() * SIZE), brush);
+  foam.seed(Math.floor(Math.random() * size), Math.floor(Math.random() * size), brush);
 }
 
 function togglePause(): void {
@@ -137,11 +166,22 @@ function togglePause(): void {
 
 function frame(): void {
   if (!paused) {
-    const started = performance.now();
-    for (let s = 0; s < stepsPerFrame; s++) {
-      foam.step(params);
-      if (performance.now() - started > BUDGET) break;
+    const before = foam.steps;
+    if (gpu) gpu.step(params, stepsPerFrame);
+    else {
+      const started = performance.now();
+      for (let s = 0; s < stepsPerFrame; s++) {
+        foam.step(params);
+        if (performance.now() - started > BUDGET) break;
+      }
     }
+    rateSteps += foam.steps - before;
+  }
+  const now = performance.now();
+  if (now - rateSince > 1000) {
+    rate = (rateSteps * 1000) / (now - rateSince);
+    rateSteps = 0;
+    rateSince = now;
   }
   render();
   requestAnimationFrame(frame);
@@ -154,13 +194,13 @@ function render(): void {
     sheen!.draw(label, hue, palette === 'pastel', performance.now() / 1000);
     return;
   }
-  for (let y = 0; y < SIZE; y++) {
-    for (let x = 0; x < SIZE; x++) {
-      const i = y * SIZE + x;
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const i = y * size + x;
       const here = label[i];
       // A film is drawn on the cell to the left of or above a border.
       const film =
-        (x + 1 < SIZE && label[i + 1] !== here) || (y + 1 < SIZE && label[i + SIZE] !== here);
+        (x + 1 < size && label[i + 1] !== here) || (y + 1 < size && label[i + size] !== here);
       pixels[i] = here === AIR && !film ? COLOR_AIR : colour(here, y, film);
     }
   }
@@ -168,8 +208,9 @@ function render(): void {
 }
 
 function status(): string {
-  const air = foam.air > 0 ? ` · ${Math.round((foam.air / (SIZE * SIZE)) * 100)}% air` : '';
-  return `${foam.bubbles} bubbles · step ${foam.steps}${air} · film length ${foam.filmLength()}`;
+  const air = foam.air > 0 ? ` · ${Math.round((foam.air / (size * size)) * 100)}% air` : '';
+  const where = gpu ? 'on the GPU' : 'on the CPU';
+  return `${foam.bubbles} bubbles · step ${foam.steps}${air} · ${Math.round(rate)} steps/s ${where} · film length ${foam.filmLength()}`;
 }
 
 function colour(label: number, y: number, film: boolean): number {

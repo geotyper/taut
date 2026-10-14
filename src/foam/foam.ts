@@ -1,12 +1,15 @@
 /** A cell that belongs to no bubble yet. */
 export const AIR = 0;
 
+/** The most bubbles a field hands out labels for. */
+export const MAX_LABELS = 65535;
+
 /**
  * How much a cell of air counts for against a cell of a bubble. Below one, so
  * a bubble takes a cell where it holds less than half of the neighbourhood:
  * that is the growth.
  */
-const AIR_WEIGHT = 0.6;
+export const AIR_WEIGHT = 0.6;
 
 /** How hard a bubble away from its area pushes or gives way, with `keepArea`. */
 const PRESSURE_GAIN = 4;
@@ -44,6 +47,8 @@ export class Foam {
   air = 0;
   /** Bubbles with at least one cell. */
   bubbles = 0;
+  /** Goes up whenever cells are changed from outside the rule. */
+  edits = 0;
 
   private next: Uint16Array;
   /** Labels handed out so far; label 0 is air. */
@@ -68,6 +73,7 @@ export class Foam {
     this.label.fill(AIR);
     this.labels = 0;
     this.steps = 0;
+    this.edits++;
     this.least.fill(0);
     this.measure();
   }
@@ -93,7 +99,7 @@ export class Foam {
   /** A new bubble: a disc with a label of its own, over whatever was there. */
   seed(cx: number, cy: number, size: number): void {
     const { w, h, label } = this;
-    if (this.labels >= 65535) return;
+    if (this.labels >= MAX_LABELS) return;
     const mine = ++this.labels;
     const r = Math.ceil(size);
     for (let y = Math.max(0, cy - r); y <= Math.min(h - 1, cy + r); y++) {
@@ -104,6 +110,7 @@ export class Foam {
     this.measure();
     this.least[mine] = this.area[mine];
     this.retarget();
+    this.edits++;
   }
 
   /** Burst the bubble at a cell: its cells turn to air and the neighbours grow in. */
@@ -113,15 +120,14 @@ export class Foam {
     for (let i = 0; i < this.label.length; i++) if (this.label[i] === gone) this.label[i] = AIR;
     this.measure();
     this.retarget();
+    this.edits++;
   }
 
   step(p: FoamParams): void {
-    const { w, h, label, next, area, target, least } = this;
+    const { w, h, label, next } = this;
     if (this.discRadius !== p.radius) this.buildDisc(p.radius);
     const disc = this.disc;
     const jitter = p.noise * (disc.length / 2);
-    // While there is air a bubble only defends the area it started with.
-    const hold = this.air === 0 ? target : this.least;
     // The labels a cell may take are those in its 3x3 block, nine at most.
     const seen = new Uint16Array(9);
     const count = new Float64Array(9);
@@ -169,14 +175,7 @@ export class Foam {
         let bestScore = -Infinity;
         for (let k = 0; k < kinds; k++) {
           const kind = seen[k];
-          let weight = 1;
-          if (kind === AIR) weight = AIR_WEIGHT;
-          else if (p.keepArea && hold[kind] > 0) {
-            let lack = (PRESSURE_GAIN * (hold[kind] - area[kind])) / hold[kind];
-            if (hold === least) lack = Math.max(0, lack);
-            weight = 1 + Math.max(-PRESSURE_LIMIT, Math.min(PRESSURE_LIMIT, lack));
-          }
-          const score = count[k] * weight + jitter * (Math.random() - 0.5);
+          const score = count[k] * this.weightOf(kind, p.keepArea) + jitter * (Math.random() - 0.5);
           if (score > bestScore) {
             bestScore = score;
             best = kind;
@@ -188,7 +187,33 @@ export class Foam {
 
     this.label = next;
     this.next = label;
-    this.steps++;
+    this.stepped(1);
+  }
+
+  /** Take up the labels after steps made elsewhere, on the GPU. */
+  adopt(label: Uint32Array, steps: number): void {
+    this.label.set(label);
+    this.stepped(steps);
+  }
+
+  /** How much a cell of this label counts for: air less, a bubble off its area more or less. */
+  weightOf(kind: number, keepArea: boolean): number {
+    if (kind === AIR) return AIR_WEIGHT;
+    // While there is air a bubble only defends the area it started with.
+    const hold = this.air === 0 ? this.target[kind] : this.least[kind];
+    if (!keepArea || !(hold > 0)) return 1;
+    let lack = (PRESSURE_GAIN * (hold - this.area[kind])) / hold;
+    if (this.air > 0) lack = Math.max(0, lack);
+    return 1 + Math.max(-PRESSURE_LIMIT, Math.min(PRESSURE_LIMIT, lack));
+  }
+
+  /** Labels handed out so far, so the largest label in use. */
+  get labelCount(): number {
+    return this.labels;
+  }
+
+  private stepped(steps: number): void {
+    this.steps += steps;
     const hadAir = this.air > 0;
     this.measure();
     // The moment the field fills up, every bubble takes its area as its own.
