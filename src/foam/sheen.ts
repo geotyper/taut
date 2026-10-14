@@ -34,7 +34,7 @@ vec3 hsl(float h, float s, float l) {
 // The colours of a thin film: each of red, green and blue comes and goes as
 // the film thickens, at its own pace.
 vec3 thinFilm(float thickness) {
-  return 0.5 + 0.5 * cos(6.2832 * (thickness * vec3(1.0, 1.1, 1.2) + vec3(0.0, 0.33, 0.67)));
+  return 0.55 + 0.4 * cos(6.2832 * (thickness * vec3(1.0, 1.1, 1.2) + vec3(0.0, 0.33, 0.67)));
 }
 
 void main() {
@@ -47,20 +47,20 @@ void main() {
   vec2 p = vAt * 5.0;
   float swirl = sin(p.x * 1.3 + uTime * 0.21 + 1.7 * sin(p.y * 1.1 - uTime * 0.13))
               + sin(p.y * 1.9 - uTime * 0.17 + 1.3 * sin(p.x * 0.8 + uTime * 0.11));
-  // The film is thinnest in the middle of a bubble and its colours run in
-  // from the borders; it also drains downwards.
-  float thickness = own * 4.0 + reach * 0.03 - uTime * 0.06 + 0.22 * swirl + vAt.y * 0.8;
-  vec3 sheen = thinFilm(thickness);
   float rim = exp(-reach / 3.0);
+  // Every bubble has a colour of its own that drifts slowly, drains a little
+  // downwards and turns over once more in a fringe along its films.
+  float thickness = own * 3.0 + 0.18 * swirl + vAt.y * 0.5 - uTime * 0.025 + 0.35 * rim;
+  vec3 sheen = thinFilm(thickness);
 
   vec3 color;
   vec3 film;
   if (uPastel) {
     vec3 base = hsl(own, 0.5, 0.8);
-    color = mix(base, mix(vec3(1.0), sheen, 0.6), 0.12 + 0.4 * exp(-reach / 9.0));
+    color = mix(base, mix(vec3(1.0), sheen, 0.6), 0.1 + 0.35 * exp(-reach / 6.0));
     film = vec3(0.2, 0.23, 0.32);
   } else {
-    color = mix(vec3(1.0), sheen, 0.42) * (0.88 + 0.12 * rim) + 0.1 * rim;
+    color = mix(vec3(0.92, 0.93, 0.95), sheen, 0.32 + 0.25 * rim);
     film = vec3(1.0);
   }
   if (cell.g < 0.5) color = AIR_COLOR;

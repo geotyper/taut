@@ -34,6 +34,14 @@ for (let i = 0; i < HUES; i++) {
 const SHEEN_DRIFT = 0.6;
 
 type Palette = 'soap' | 'pastel' | 'films' | 'dark';
+/**
+ * How the foam gets coarser. 'seep': bubbles do not keep their area, so the
+ * films pull small bubbles in, as gas seeping through the films from a small
+ * bubble into its neighbours would. 'burst' and 'pop': areas are kept, and
+ * now and then a film ruptures and joins two bubbles, or a bubble bursts and
+ * its neighbours grow into the hole.
+ */
+type Coarsening = 'none' | 'seep' | 'burst' | 'pop';
 
 /** "?cpu" keeps the rule off the GPU. */
 const onGpu = !new URLSearchParams(location.search).has('cpu');
@@ -63,6 +71,11 @@ let centreCount = 40;
 let brush = 10;
 let palette: Palette = 'soap';
 let paused = false;
+let coarsening: Coarsening = 'none';
+/** Bursts or pops a step, on average. */
+let burstRate = 0.01;
+/** Bursts owed but not yet made, so that a fraction is carried over. */
+let burstsOwed = 0;
 build(Number(byId<HTMLSelectElement>('field-size').value));
 let shimmer = sheen !== null;
 
@@ -71,6 +84,7 @@ paletteSelect.addEventListener('change', () => {
   palette = paletteSelect.value as Palette;
   syncControls();
 });
+palette = paletteSelect.value as Palette;
 
 const sheenToggle = byId<HTMLInputElement>('sheen');
 sheenToggle.checked = shimmer;
@@ -94,8 +108,16 @@ sizeSelect.addEventListener('change', () => {
   scatter();
 });
 
-const keepToggle = byId<HTMLInputElement>('keep-area');
-keepToggle.addEventListener('change', () => (params.keepArea = keepToggle.checked));
+// The selects are read once at the start too: a reload may keep their choice.
+const coarseningSelect = byId<HTMLSelectElement>('coarsening');
+const chooseCoarsening = () => {
+  coarsening = coarseningSelect.value as Coarsening;
+  params.keepArea = coarsening !== 'seep';
+  syncControls();
+};
+coarseningSelect.addEventListener('change', chooseCoarsening);
+chooseCoarsening();
+bindRange('rate', 0, (v) => (burstRate = v / 1000));
 
 const pauseButton = byId<HTMLButtonElement>('pause');
 pauseButton.addEventListener('click', togglePause);
@@ -132,6 +154,7 @@ function shimmering(): boolean {
 }
 
 function syncControls(): void {
+  byId('pick-rate').hidden = coarsening !== 'burst' && coarsening !== 'pop';
   byId('pick-sheen').hidden = palette !== 'soap' && palette !== 'pastel';
   canvas.hidden = shimmering();
   sheenCanvas.hidden = !shimmering();
@@ -176,6 +199,7 @@ function frame(): void {
       }
     }
     rateSteps += foam.steps - before;
+    coarsen(foam.steps - before);
   }
   const now = performance.now();
   if (now - rateSince > 1000) {
@@ -185,6 +209,17 @@ function frame(): void {
   }
   render();
   requestAnimationFrame(frame);
+}
+
+/** The bursts or pops due over this many steps; none while there is air. */
+function coarsen(steps: number): void {
+  if ((coarsening !== 'burst' && coarsening !== 'pop') || foam.air > 0) return;
+  burstsOwed += steps * burstRate;
+  while (burstsOwed >= 1) {
+    burstsOwed--;
+    const done = coarsening === 'burst' ? foam.burstFilm() : foam.popAny();
+    if (!done) break;
+  }
 }
 
 function render(): void {

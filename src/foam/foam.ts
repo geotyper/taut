@@ -234,6 +234,40 @@ export class Foam {
     return length;
   }
 
+  /**
+   * A film ruptures and its two bubbles become one. The film is found by
+   * picking cells at random until one lies on a film between two bubbles, so
+   * a longer film is the likelier to go. The larger bubble takes in the other
+   * and keeps the area of both. Returns false when no film was found.
+   */
+  burstFilm(): boolean {
+    const { w, h, label } = this;
+    for (let attempt = 0; attempt < 1000; attempt++) {
+      const x = Math.floor(Math.random() * (w - 1));
+      const y = Math.floor(Math.random() * (h - 1));
+      const i = y * w + x;
+      const a = label[i];
+      const b = Math.random() < 0.5 ? label[i + 1] : label[i + w];
+      if (a === b || a === AIR || b === AIR) continue;
+      const [keep, gone] = this.area[a] >= this.area[b] ? [a, b] : [b, a];
+      for (let j = 0; j < label.length; j++) if (label[j] === gone) label[j] = keep;
+      this.least[keep] += this.least[gone];
+      this.measure();
+      this.retarget();
+      this.edits++;
+      return true;
+    }
+    return false;
+  }
+
+  /** A bubble chosen at random bursts, as one clicked on does. */
+  popAny(): boolean {
+    if (this.air > 0 || this.bubbles === 0) return false;
+    const i = Math.floor(Math.random() * this.label.length);
+    this.pop(i % this.w, Math.floor(i / this.w));
+    return true;
+  }
+
   /** Cells of a bubble, by its label. */
   areaOf(label: number): number {
     return this.area[label] ?? 0;

@@ -351,6 +351,14 @@ frame instead, at 32 steps a frame, lost 23 of 40 bubbles: the weights
 lagged and overshot. The noise differs from the CPU's, so the two never
 give the same foam cell for cell.
 
+*Coarsening* (none, gas seeping, films bursting, bubbles popping) replaced
+the area checkbox. Checked in the browser at 768 with 600 centres and 60
+bursts per 1000 steps: bursting films went from 600 bubbles to 113 after
+about 4000 steps and to one by 18000; popping bubbles to 115 after about
+9600; gas seeping to 65 after about 1300 and 8 after 13000. The soap palette
+was made calmer: one colour per bubble with a fringe along the films instead
+of bands running in from the films.
+
 The film length in the status line is counted in cell edges, so a diagonal
 film reads up to 1.4 times longer than it is.
 

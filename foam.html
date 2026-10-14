@@ -43,9 +43,18 @@
           <span>Shimmer of a thin film</span>
         </label>
 
-        <label class="check">
-          <input id="keep-area" type="checkbox" checked />
-          <span>Bubbles keep their area</span>
+        <label>
+          <span>Coarsening</span>
+          <select id="coarsening">
+            <option value="none">None: bubbles keep their area</option>
+            <option value="seep">Gas seeps through the films</option>
+            <option value="burst">Films burst</option>
+            <option value="pop">Bubbles pop</option>
+          </select>
+        </label>
+        <label id="pick-rate">
+          <span>Bursts per 1000 steps <output id="rate-out"></output></span>
+          <input id="rate" type="range" min="1" max="100" step="1" value="10" />
         </label>
 
         <label>
@@ -73,7 +82,7 @@
         <h2>Centres</h2>
         <label>
           <span>Count <output id="count-out"></output></span>
-          <input id="count" type="range" min="2" max="800" step="1" value="40" />
+          <input id="count" type="range" min="2" max="2000" step="1" value="40" />
         </label>
         <label>
           <span>Size of a new bubble <output id="brush-out"></output></span>

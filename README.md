@@ -269,11 +269,27 @@ films meet they turn to equal angles. Beyond the walls nothing is counted, so
 a film meets a wall squarely.
 
 Left alone, this is grain growth rather than foam: small bubbles shrink and
-vanish, and the rest get larger. With *Bubbles keep their area* every bubble
-holds on to the area it had when the field filled up, as if the gas could not
-leave it: a bubble below its area counts for more, one above it for less.
-The films then settle into arcs. This part is not local, since a cell has to
-know the area of the whole bubble.
+vanish, and the rest get larger. By default every bubble holds on to the
+area it had when the field filled up, as if the gas could not leave it: a
+bubble below its area counts for more, one above it for less. The films then
+settle into arcs. This part is not local, since a cell has to know the area
+of the whole bubble.
+
+*Coarsening* chooses how a fine foam gets coarser:
+
+- **None** — areas are kept and the foam only settles.
+- **Gas seeps through the films** — areas are not kept, so the films pull
+  the small bubbles in, as gas seeping from a small bubble into its
+  neighbours would. A bubble with few neighbours shrinks and vanishes.
+- **Films burst** — areas are kept, and now and then a film ruptures and its
+  two bubbles become one, with the area of both. The film is found by
+  picking cells at random until one lies on a film, so a longer film is the
+  likelier to go.
+- **Bubbles pop** — areas are kept, and now and then a bubble chosen at
+  random bursts: its cells turn to air and the neighbours grow in.
+
+*Bursts per 1000 steps* sets how often for the last two. They are events
+from outside the rule, as a click is, and wait while there is air.
 
 Left button starts a bubble, right button or Shift bursts one: its cells turn
 to air and the neighbours grow in. *Palette* only changes the picture: *Soap
@@ -281,10 +297,10 @@ film* runs the colours of a thin film down every bubble, *Films only* leaves
 the bubbles dark and colours the films.
 
 With *Shimmer of a thin film*, on by default for the two light palettes, the
-picture is drawn by a WebGL2 shader instead. The colours come and go with a
-thickness that grows with the distance from the nearest film, drifts with
-time and is stirred by a slow swirl, so they run in from the borders and
-never stand still. The distance is a chamfer transform of the labels made on
+picture is drawn by a WebGL2 shader instead. Every bubble has a thin-film
+colour of its own that drifts with time, is stirred by a slow swirl and
+drains a little downwards, and turns over once more in a fringe along its
+films, so the colours never stand still. The distance is a chamfer transform of the labels made on
 every frame and filtered by the GPU, which also draws the films smooth. It is
 only a picture: the automaton knows nothing of it.
 
