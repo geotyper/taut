@@ -1,0 +1,118 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>taut foam 3D</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <main>
+      <div class="fields single">
+        <figure>
+          <div class="stack">
+            <canvas id="field-3d" class="orbit"></canvas>
+            <canvas id="vector" class="overlay" hidden></canvas>
+          </div>
+          <p class="stat" id="stat"></p>
+        </figure>
+      </div>
+
+      <aside>
+        <h1>taut foam 3D</h1>
+        <p class="hint">
+          Bubbles grow from centres scattered in a sphere until they fill it, and
+          the films between them pull taut. Drag to orbit, scroll to zoom.
+          <a href="/foam.html">2D foam</a>
+        </p>
+        <p class="hint">
+          Keys: <kbd>N</kbd> new foam, <kbd>S</kbd> smooth or voxels, <kbd>G</kbd> light or glass,
+          <kbd>Space</kbd> pause.
+        </p>
+
+        <label>
+          <span>Sphere</span>
+          <select id="enclosure">
+            <option value="glass">Glass: the foam fills it</option>
+            <option value="free">Open: the outer bubbles bulge</option>
+          </select>
+        </label>
+        <label>
+          <span>Coarsening</span>
+          <select id="coarsening">
+            <option value="none">None: bubbles keep their volume</option>
+            <option value="seep">Gas seeps through the films</option>
+            <option value="burst">Films burst</option>
+            <option value="pop">Bubbles pop</option>
+          </select>
+        </label>
+        <label id="pick-rate">
+          <span>Bursts per 1000 steps <output id="rate-out"></output></span>
+          <input id="rate" type="range" min="1" max="100" step="1" value="10" />
+        </label>
+
+        <label>
+          <span>Bubbles <output id="count-out"></output></span>
+          <input id="count" type="range" min="2" max="600" step="1" value="60" />
+        </label>
+        <label>
+          <span>Resolution</span>
+          <select id="size">
+            <option value="64">Low (64³)</option>
+            <option value="96" selected>Medium (96³)</option>
+            <option value="128">High (128³, slower)</option>
+            <option value="160">Fine (160³, slow)</option>
+          </select>
+        </label>
+        <label>
+          <span>Kernel radius <output id="radius-out"></output></span>
+          <input id="radius" type="range" min="2" max="5" step="1" value="3" />
+        </label>
+        <label>
+          <span>Noise <output id="noise-out"></output></span>
+          <input id="noise" type="range" min="0" max="0.5" step="0.01" value="0.1" />
+        </label>
+        <label>
+          <span>Steps per frame <output id="speed-out"></output></span>
+          <input id="speed" type="range" min="1" max="16" step="1" value="2" />
+        </label>
+
+        <h2>View</h2>
+        <label id="pick-surface">
+          <span>Surface</span>
+          <select id="surface">
+            <option value="voxels">Voxels</option>
+            <option value="smooth">Smooth</option>
+          </select>
+        </label>
+        <label id="pick-opacity">
+          <span>Film opacity <output id="opacity-out"></output></span>
+          <input id="opacity" type="range" min="0.03" max="1" step="0.01" value="0.2" />
+        </label>
+
+        <label id="pick-look">
+          <span>Look</span>
+          <select id="look">
+            <option value="glass">Tinted glass</option>
+            <option value="light">Light: films and their edges glow</option>
+            <option value="vector">Lines: only the edges, drawn as lines</option>
+          </select>
+        </label>
+        <label id="pick-films">
+          <span>Films <output id="films-out"></output></span>
+          <input id="films" type="range" min="0" max="0.3" step="0.005" value="0.05" />
+        </label>
+        <label id="pick-lines">
+          <span>Edges where films meet <output id="lines-out"></output></span>
+          <input id="lines" type="range" min="0" max="1" step="0.01" value="0.25" />
+        </label>
+
+        <div class="buttons">
+          <button id="random">New foam</button>
+          <button id="pause">Pause</button>
+        </div>
+      </aside>
+    </main>
+    <script type="module" src="/src/foam3d/main.ts"></script>
+  </body>
+</html>

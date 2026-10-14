@@ -14,9 +14,19 @@ export interface View {
   oneColor: boolean;
   /** Smooth surface only: how strongly the voxel staircase is blurred away. */
   smoothness: number;
+  /**
+   * Voxels only: draw with light instead of tinted glass. Every membrane
+   * voxel a ray crosses adds light rather than hiding what lies behind, so
+   * crossing films brighten each other and a film seen edge on shines most.
+   * `films` and `lines` are how much a film voxel and an edge add; the edges
+   * come from whoever computes the field (see Renderer.setEdges).
+   */
+  light?: { films: number; lines: number };
 }
 
 const MEMBRANE_COLOR = [1.0, 0.82, 0.4];
+/** Distance from the eye to the image plane, in half-heights of the view. */
+export const FOCAL = 1.8;
 const STONE_COLOR = [0.55, 0.58, 0.64];
 
 export const VERTEX = `#version 300 es
@@ -44,7 +54,7 @@ out vec4 outColor;
 
 const vec3 BACKGROUND = vec3(0.043, 0.051, 0.067);
 const vec3 MEMBRANE = vec3(${MEMBRANE_COLOR.join(', ')});
-const float FOCAL = 1.8;
+const float FOCAL = ${FOCAL};
 
 vec3 rayDirection() {
   vec2 uv = (gl_FragCoord.xy * 2.0 - uResolution) / uResolution.y;
@@ -75,6 +85,10 @@ bool clipToField(vec3 rd, out float tEnter, out float tExit, out vec3 entryNorma
 
 const VOXEL_FRAGMENT = `${COMMON}
 uniform usampler3D uVoxels;
+uniform sampler3D uEdges;
+uniform bool uGlow;
+uniform float uFilms;
+uniform float uLines;
 
 const int MAX_STEPS = 640;
 
@@ -118,7 +132,18 @@ void main() {
       through = 0.0;
       break;
     }
-    if (voxel == 1u || voxel >= 3u) {
+    if (uGlow) {
+      // Light goes with the length of the path through the voxel, so a line
+      // a voxel thin does not break up into beads.
+      float path = min(tNext.x, min(tNext.y, tNext.z)) - t;
+      vec3 tint = voxel == 1u ? MEMBRANE : hueColor(voxel);
+      if (voxel == 1u || voxel >= 3u) color += uFilms * tint * path;
+      // Read filtered, halfway along the path: 0.5 on a line where three
+      // films meet, 1 at a point where four do, and smooth in between.
+      float edge = texture(uEdges, (uEye + rd * (t + 0.5 * path)) / uSize).r;
+      vec3 edgeTint = voxel >= 3u ? mix(tint, vec3(1.0), 0.45) : vec3(0.85, 0.88, 0.95);
+      color += uLines * 2.0 * edge * edgeTint * path;
+    } else if (voxel == 1u || voxel >= 3u) {
       vec3 tint = voxel == 1u ? MEMBRANE : hueColor(voxel);
       color += through * uOpacity * tint * shade(normal, uEye + rd * t, -rd);
       through *= 1.0 - uOpacity;
@@ -142,6 +167,8 @@ void main() {
     }
     if (any(lessThan(cell, ivec3(0))) || any(greaterThanEqual(cell, ivec3(size)))) break;
   }
+  // Added-up light can run past white; this rolls it off instead.
+  if (uGlow) color = 1.0 - exp(-1.4 * color);
   outColor = vec4(color + through * BACKGROUND, 1.0);
 }`;
 
@@ -308,6 +335,9 @@ export class Renderer {
   private voxelSize = 0;
   private phaseSize = 0;
   private tintSize = 0;
+  /** Edges to draw in light, set from outside; a blank texel stands in. */
+  private readonly blankEdges: WebGLTexture;
+  private edges: WebGLTexture | null = null;
 
   constructor(canvas: HTMLCanvasElement) {
     const gl = canvas.getContext('webgl2', { antialias: false });
@@ -319,6 +349,8 @@ export class Renderer {
     this.phaseTexture = this.createTexture(gl.LINEAR_MIPMAP_LINEAR, gl.LINEAR);
     this.stoneTexture = this.createTexture(gl.LINEAR_MIPMAP_LINEAR, gl.LINEAR);
     this.tintTexture = this.createTexture(gl.NEAREST, gl.NEAREST);
+    this.blankEdges = this.createTexture(gl.NEAREST, gl.NEAREST);
+    gl.texImage3D(gl.TEXTURE_3D, 0, gl.R8, 1, 1, 1, 0, gl.RED, gl.UNSIGNED_BYTE, new Uint8Array(1));
     gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
     // The fullscreen triangle needs no attributes, only a bound vertex array.
     gl.bindVertexArray(gl.createVertexArray());
@@ -355,6 +387,14 @@ export class Renderer {
   }
 
   /**
+   * The edges the light look draws: a 3D texture of one normalised channel
+   * over the field, read with filtering. Null draws none.
+   */
+  setEdges(edges: WebGLTexture | null): void {
+    this.edges = edges;
+  }
+
+  /**
    * Draw n*n*n voxel classes (x fastest, then y, then z) as cubes. With null
    * the texture is drawn as it was filled on the GPU.
    */
@@ -370,9 +410,13 @@ export class Renderer {
     } else {
       gl.texSubImage3D(gl.TEXTURE_3D, 0, 0, 0, 0, n, n, n, gl.RED_INTEGER, gl.UNSIGNED_BYTE, voxels);
     }
+    gl.activeTexture(gl.TEXTURE3);
+    gl.bindTexture(gl.TEXTURE_3D, this.edges ?? this.blankEdges);
+    gl.activeTexture(gl.TEXTURE0);
     const program = this.voxelProgram;
     gl.useProgram(program);
     gl.uniform1i(gl.getUniformLocation(program, 'uVoxels'), 0);
+    gl.uniform1i(gl.getUniformLocation(program, 'uEdges'), 3);
     this.finish(program, n, camera, view);
   }
 
@@ -427,6 +471,15 @@ export class Renderer {
     this.finish(program, n, camera, view);
   }
 
+  /** Fill the view with the background and draw nothing, for a picture drawn elsewhere. */
+  clear(): void {
+    const { gl } = this;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    gl.viewport(0, 0, gl.drawingBufferWidth, gl.drawingBufferHeight);
+    gl.clearColor(0.043, 0.051, 0.067, 1);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+  }
+
   /** Set the uniforms both programs share and draw. */
   private finish(program: WebGLProgram, n: number, camera: Camera, view: View): void {
     const { gl } = this;
@@ -440,24 +493,16 @@ export class Renderer {
     }
     gl.viewport(0, 0, width, height);
 
-    // Camera basis: columns are right, up and forward, looking at the centre.
-    const cp = Math.cos(camera.pitch);
-    const off = [cp * Math.sin(camera.yaw), Math.sin(camera.pitch), cp * Math.cos(camera.yaw)];
-    const forward = [-off[0], -off[1], -off[2]];
-    const right = normalize([-forward[2], 0, forward[0]]);
-    const up = [
-      right[1] * forward[2] - right[2] * forward[1],
-      right[2] * forward[0] - right[0] * forward[2],
-      right[0] * forward[1] - right[1] * forward[0],
-    ];
-    const reach = camera.distance * n;
-    const eye = off.map((c) => n / 2 + c * reach);
+    const { eye, right, up, forward } = cameraFrame(camera, n);
 
     gl.uniform1f(gl.getUniformLocation(program, 'uSize'), n);
     gl.uniform2f(gl.getUniformLocation(program, 'uResolution'), width, height);
     gl.uniform3fv(gl.getUniformLocation(program, 'uEye'), eye);
     gl.uniformMatrix3fv(gl.getUniformLocation(program, 'uCamera'), false, [...right, ...up, ...forward]);
     gl.uniform1f(gl.getUniformLocation(program, 'uOpacity'), view.opacity);
+    gl.uniform1i(gl.getUniformLocation(program, 'uGlow'), view.light ? 1 : 0);
+    gl.uniform1f(gl.getUniformLocation(program, 'uFilms'), view.light?.films ?? 0);
+    gl.uniform1f(gl.getUniformLocation(program, 'uLines'), view.light?.lines ?? 0);
     gl.uniform3fv(
       gl.getUniformLocation(program, 'uStoneColor'),
       view.oneColor ? MEMBRANE_COLOR : STONE_COLOR,
@@ -506,6 +551,31 @@ export function createTexture(
   gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
   gl.texParameteri(gl.TEXTURE_3D, gl.TEXTURE_WRAP_R, gl.CLAMP_TO_EDGE);
   return texture;
+}
+
+/**
+ * Where the eye is in field cells and which way it looks: the columns of the
+ * camera matrix, right, up and forward, looking at the centre of the field.
+ * A point p shows at (dot(p - eye, right), dot(p - eye, up)) * FOCAL /
+ * dot(p - eye, forward), in half-heights of the view from its centre, up
+ * being up.
+ */
+export function cameraFrame(
+  camera: Camera,
+  n: number,
+): { eye: number[]; right: number[]; up: number[]; forward: number[] } {
+  const cp = Math.cos(camera.pitch);
+  const off = [cp * Math.sin(camera.yaw), Math.sin(camera.pitch), cp * Math.cos(camera.yaw)];
+  const forward = [-off[0], -off[1], -off[2]];
+  const right = normalize([-forward[2], 0, forward[0]]);
+  const up = [
+    right[1] * forward[2] - right[2] * forward[1],
+    right[2] * forward[0] - right[0] * forward[2],
+    right[0] * forward[1] - right[1] * forward[0],
+  ];
+  const reach = camera.distance * n;
+  const eye = off.map((c) => n / 2 + c * reach);
+  return { eye, right, up, forward };
 }
 
 function normalize(v: number[]): number[] {

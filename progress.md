@@ -362,6 +362,55 @@ of bands running in from the films.
 The film length in the status line is counted in cell edges, so a diagonal
 film reads up to 1.4 times longer than it is.
 
+## Added since: foam in 3D
+
+`foam3d.html`, on the GPU only; see the README for the rule and the two
+spheres. Checked in headless Chrome at 96³ with 60 bubbles:
+
+- Glass sphere: filled in about 30 steps, all 60 bubbles kept over about 500
+  steps. Before the air weight was lowered, three runs from different
+  scatterings also kept all 60; after it, one run was made.
+- Open sphere: the bubbles grow to the sphere, the growth ends by stalling,
+  and the outer bubbles bulge; all 60 kept over about 460 steps.
+- Films bursting at 100 per 1000 steps: 60 bubbles down to 18 after about 430
+  steps. Gas seeping: 60 down to 18 in the open and 11 in glass after about
+  600 steps, the open cluster keeping its outline.
+- About 30 steps a second.
+
+Found on the way, each fixed: with air at 0.6 of a bubble, as in 2D, the
+bubbles did not grow in the open and grew in glass only along its wall;
+with the 2D limit on how hard a bubble pushes, 9 of 60 bubbles were pulled
+in right after the glass filled; with the volumes counted every four steps,
+2 or 3 of 60 still were; the air outside the sphere, counted as one bin,
+halved the speed; and gas seeping in the open let the whole cluster
+evaporate, until the air was made to keep the cluster's volume.
+
+Added after: a light look, an additive way of drawing the voxels (an option
+of the shared renderer, off on the other 3D page), with the films' edges
+marked in the picture pass and a strength each for films and edges; and
+160³. Looked at in screenshots at 96³, 128³ and 160³; the 3D stones page was
+checked to draw as before. The first try marked edges in the 3x3x3 block and
+drew them as thick white tubes that hid everything; the 2x2x2 block draws
+them a voxel thin. Those came out dotted and flickering, for three reasons:
+only a cell on a bubble's film could hold an edge, so outer lines, whose
+cells are air, had gaps; every voxel crossed added the same light however
+short the ray's path in it, so a thin line broke into beads; and the films
+tremble by a voxel with the rule's noise, so the edges jumped. Now any cell
+may hold an edge, light goes with the path length and the edges are read
+filtered, and the edges are blended over frames. At 160³ the lines are now
+whole in a screenshot; that they hold still was not watched, only reasoned.
+
+Then a *Lines* look (`src/foam3d/skeleton.ts`): the skeleton as vector lines
+on a 2D canvas over the view, rebuilt from the labels read back at most every
+0.4 s. Looked at in screenshots of the open sphere at 96³ and 160³ (about 530
+lines, 20 and 70 ms to build); the glass sphere was not looked at in this
+look, and no line was checked against the voxels it came from.
+
+Not done: the smooth view blurs the films, which are only a voxel or two
+thick, into a haze; the voxel view is the one to use. Pop mode in the open
+was run only at a high rate, where the foam spends most of its time growing
+back into the holes. The angles where films meet were not measured.
+
 ## What could be improved
 
 ### Both

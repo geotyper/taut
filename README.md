@@ -318,6 +318,70 @@ the CPU, as does a browser where the GPU version fails to start. The kernel radi
 survives; at a small radius films stick to the lattice, flat along the axes,
 and need more noise to move, which makes them ragged.
 
+### Foam in 3D
+
+`foam3d.html` runs the same rule in a voxel field, with a ball in place of
+the disc, inside a sphere. Bubbles grow from centres scattered in it, and the
+films between them are drawn as translucent voxels, each in the colour of its
+bubble. *Sphere* chooses between two settings:
+
+- **Glass** — the sphere is a wall: the foam fills it, and the films meet the
+  glass squarely, as in the 2D field.
+- **Open** — the bubbles grow to the sphere and are then let go. Outside it
+  there is only air, which from then on counts as much as a bubble, so the
+  outer bubbles round off into caps that bulge out of the cluster.
+
+*Coarsening* is the same as in 2D. When the gas seeps in the open, it seeps
+from bubble to bubble and not out of the cluster: the air gives way or
+pushes as the whole cluster is short of its volume or over it, so the
+cluster keeps its volume while its bubbles merge into fewer and larger ones.
+
+Three things are not as in 2D. A cell just outside a flat front sees only
+about 0.3 of its ball inside the bubble, and next to a small bubble 0.2, so
+air counts for 0.2 of a bubble while the bubbles grow instead of 0.6; with
+0.6 they did not grow at all in the open. A bubble short of its volume may
+push up to three times as hard, since curvature weighs more on a small ball.
+And the volumes are counted on every step, on the GPU, a point per cell
+blended into a small float texture, so only that texture is read back; with
+a count every four steps, small bubbles still collapsed in between. The
+growth is over when the sphere is full, or in the open when the bubbles have
+gained no cell for 12 steps, since the outer ones round off before they
+reach the sphere.
+
+*Look* (key `G`) switches between tinted glass and light. In light every
+voxel a ray crosses adds its colour, nothing behind it is hidden, and the
+sum is rolled off before it runs past white: where films cross they brighten
+each other, and a film seen edge on shines most, as soap films do. Light
+alone is shapeless, though, so the films' edges are drawn too. The pass that
+fills the picture marks a cell where three labels meet in the 2×2×2 block
+from it, which is a line where three films meet (a Plateau border), and
+where four meet, a point where four lines do; the glass and the air count as
+labels, so the lines also trace where films touch them. Three things keep
+the lines whole and still: every voxel adds light in proportion to the
+length of the ray inside it, so a line a voxel thin does not fall apart into
+beads; the edges are read from a filtered texture halfway along that path;
+and they are kept from frame to frame, 0.6 of the old with 0.4 of the new,
+since the films tremble by a voxel with the noise of the rule. *Films* and
+*Edges where films meet* set how much light each adds, and with the films at
+zero only the skeleton of the foam is left.
+
+*Lines* draws only that skeleton, and not as voxels. Every 2×2×2 block that
+holds three labels lies on the line of those three bubbles, so the labels are
+read back from the GPU and the blocks grouped by their three labels, one
+group a line. A group is put in order along its longest extent, averaged
+into a point every two cells, split where it jumps, and joined at its ends
+to the points where four labels meet. The lines are then drawn on a 2D
+canvas over the 3D view, by the same camera: wide and faint for a glow, thin
+and bright for the core, the light adding up where they cross, nearer lines
+brighter. They are rebuilt at most every 0.4 s, which took about 20 ms at 96³
+and 70 ms at 160³ for some 540 lines; turning the view redraws them at once.
+A line bent by more than half a turn would come out in the wrong order; the
+borders of a foam are gentler than that.
+
+The page needs WebGL2 with float blending. On one machine it made about 30
+steps a second at 96³ with 60 bubbles and 10 at 160³, the finest
+resolution.
+
 ## Running
 
 ```sh
