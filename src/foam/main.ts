@@ -28,12 +28,21 @@ for (let i = 0; i < HUES; i++) {
   SHEEN_BRIGHT[i] = hsl(angle, 0.9, 0.7);
 }
 /**
+ * Without the shader the stress palette gives every bubble one colour from the
+ * run a stressed sheet shows between crossed polarisers, past a tint plate.
+ */
+const STRESS = new Uint32Array(HUES);
+for (let i = 0; i < HUES; i++) STRESS[i] = interference(1010 + 900 * (i / HUES));
+const STRESS_AIR = rgb(222, 108, 160);
+const STRESS_FILM = rgb(20, 12, 26);
+const STRESS_EDGE = rgb(250, 240, 244);
+/**
  * How fast the colour of a film runs down the field, in hues per cell: a
  * film drains downwards, so its thickness and its colour change with height.
  */
 const SHEEN_DRIFT = 0.6;
 
-type Palette = 'soap' | 'pastel' | 'films' | 'dark';
+type Palette = 'soap' | 'pastel' | 'stress' | 'stress-light' | 'films' | 'dark';
 /**
  * How the foam gets coarser. 'seep': bubbles do not keep their area, so the
  * films pull small bubbles in, as gas seeping through the films from a small
@@ -148,14 +157,21 @@ for (const target of [canvas, sheenCanvas]) {
 syncControls();
 scatter();
 
-/** The shimmer belongs to the two light palettes. */
+/** The shimmer belongs to the palettes drawn by the shader. */
 function shimmering(): boolean {
-  return shimmer && sheen !== null && (palette === 'soap' || palette === 'pastel');
+  return shimmer && sheen !== null && shaded(palette);
+}
+
+/** The shader's mode for each palette it draws. */
+const MODES: Record<Palette, number> = { soap: 0, pastel: 1, stress: 2, 'stress-light': 3, films: 0, dark: 0 };
+
+function shaded(p: Palette): boolean {
+  return p === 'soap' || p === 'pastel' || p === 'stress' || p === 'stress-light';
 }
 
 function syncControls(): void {
   byId('pick-rate').hidden = coarsening !== 'burst' && coarsening !== 'pop';
-  byId('pick-sheen').hidden = palette !== 'soap' && palette !== 'pastel';
+  byId('pick-sheen').hidden = !shaded(palette);
   canvas.hidden = shimmering();
   sheenCanvas.hidden = !shimmering();
 }
@@ -226,7 +242,7 @@ function render(): void {
   const label = foam.label;
   stat.textContent = status();
   if (shimmering()) {
-    sheen!.draw(label, hue, palette === 'pastel', performance.now() / 1000);
+    sheen!.draw(label, hue, MODES[palette], performance.now() / 1000);
     return;
   }
   for (let y = 0; y < size; y++) {
@@ -251,6 +267,8 @@ function status(): string {
 function colour(label: number, y: number, film: boolean): number {
   if (palette === 'dark') return film ? COLOR_FILM : DIM[hue(label)];
   if (palette === 'pastel') return film ? COLOR_FILM_DARK : PASTEL[hue(label)];
+  if (palette === 'stress-light') return film ? STRESS_EDGE : label === AIR ? STRESS_AIR : STRESS[hue(label)];
+  if (palette === 'stress') return film ? STRESS_FILM : label === AIR ? STRESS_AIR : STRESS[hue(label)];
   // Every bubble starts the run of colours at a place of its own.
   const sheen = (hue(label) + y * SHEEN_DRIFT) & (HUES - 1);
   if (palette === 'films') return film ? SHEEN_BRIGHT[sheen] : COLOR_AIR;
@@ -277,6 +295,27 @@ function byId<T extends HTMLElement = HTMLElement>(id: string): T {
   const el = document.getElementById(id);
   if (!el) throw new Error(`Missing element #${id}`);
   return el as T;
+}
+
+/** The colour of this retardation in nm between crossed polarisers; as in the shader of sheen.ts. */
+function interference(retardation: number): number {
+  const lobe = (l: number, mu: number, below: number, above: number) =>
+    Math.exp(-0.5 * ((l - mu) / (l < mu ? below : above)) ** 2);
+  const sum = [0, 0, 0];
+  const white = [0, 0, 0];
+  for (let l = 400; l < 712; l += 13) {
+    const x = 1.056 * lobe(l, 599.8, 37.9, 31.0) + 0.362 * lobe(l, 442.0, 16.0, 26.7) - 0.065 * lobe(l, 501.1, 20.4, 26.2);
+    const y = 0.821 * lobe(l, 568.8, 46.9, 40.5) + 0.286 * lobe(l, 530.9, 16.3, 31.1);
+    const z = 1.217 * lobe(l, 437.0, 11.8, 36.0) + 0.681 * lobe(l, 459.0, 26.0, 13.8);
+    const c = [3.2406 * x - 1.5372 * y - 0.4986 * z, -0.9689 * x + 1.8758 * y + 0.0415 * z, 0.0557 * x - 0.204 * y + 1.057 * z];
+    const s = Math.sin((Math.PI * retardation) / l) ** 2;
+    for (let k = 0; k < 3; k++) {
+      sum[k] += c[k] * s;
+      white[k] += c[k];
+    }
+  }
+  const channel = (k: number) => Math.round(255 * Math.min(1, Math.max(0, sum[k] / white[k])) ** (1 / 2.2));
+  return rgb(channel(0), channel(1), channel(2));
 }
 
 function rgb(r: number, g: number, b: number): number {

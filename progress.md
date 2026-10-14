@@ -342,6 +342,21 @@ The shimmer of the light palettes is a shader over the labels and a
 distance-to-film texture (`src/foam/sheen.ts`); it was looked at in two
 screenshots, soap and pastel, and its motion in time was not watched.
 
+Later a stress palette after a photograph of a photoelastic ruler: real
+interference colours between crossed polarisers over a made-up strain that
+gathers at the films. The first try was mostly first-order white, yellow and
+brown; moving the strain up to the second and third orders and boosting the
+saturation a little gave the magenta, green, cyan and blue of the photograph.
+Air came out violet, then a dark magenta, and is now lifted to pink. Looked
+at in screenshots while growing and once filled, with and without the
+shader; not watched in motion. The same band ran round every bubble, so
+the strain was made to gather at the corners where three films meet, by the
+distance to the nearest one; too much there pushed the corners into the high
+orders, which wash out to grey, and it was halved.
+The dark film lines still met in black spots at the corners, so a second
+stress palette draws the films as a thin light rim, fainter at the corners;
+looked at in one screenshot of a filled foam.
+
 The rule also runs on the GPU (`src/foam/foamgpu.ts`), reading the labels
 back every four steps. Compared with the CPU in the browser at 320: without
 area keeping 16 bubbles were left after about 1000 steps and 7 after about

@@ -304,6 +304,25 @@ films, so the colours never stand still. The distance is a chamfer transform of 
 every frame and filtered by the GPU, which also draws the films smooth. It is
 only a picture: the automaton knows nothing of it.
 
+*Stress, in polarised light* colours the foam as a clear plastic sheet under
+strain looks between crossed polarisers with a tint plate, as in photographs
+of photoelasticity. The colours are worked out, not picked: for a
+retardation in nm every wavelength from 400 to 700 nm comes through as sin²
+of its phase, and the sum is turned into RGB by a fit to the CIE colour
+matching functions (Wyman, Sloan and Shirley). The strain is made up, a
+picture of where stress would gather: it rises towards the films, and far
+more near the corners where three bubbles meet, as at the corners of a
+strained part, so the fringes crowd and spread there and fade along a long
+straight film instead of running as the same band round every bubble. A
+second chamfer transform gives the distance to the nearest corner. Every bubble has a level of its own that the
+swirl stirs, kept mostly in the second and third orders where the colours
+are richest. Air shows the tint plate alone, lifted to the pink of such a
+photograph, and the films are thin dark lines. Without the shader every
+bubble gets one colour from the same run. *Stress, with light edges* is the same
+picture with the films drawn as the thin bright rim of a clear edge instead
+of a dark line, fainter where films meet, so the corners do not fill in
+with black.
+
 The rule runs on the GPU. The labels sit in a pair of 32-bit integer
 textures, and a fragment shader applies the rule to every cell at once,
 writing into the other texture of the pair; the noise comes from a hash of
