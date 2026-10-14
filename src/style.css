@@ -85,6 +85,10 @@ canvas {
   touch-action: none;
 }
 
+canvas.smooth {
+  image-rendering: auto;
+}
+
 canvas.orbit {
   image-rendering: auto;
   cursor: grab;

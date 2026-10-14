@@ -1,4 +1,5 @@
 import { AIR, Foam, type FoamParams } from './foam.ts';
+import { Sheen } from './sheen.ts';
 
 const SIZE = 320;
 /** Per-frame time limit for stepping, in ms. */
@@ -43,16 +44,31 @@ const ctx = canvas.getContext('2d')!;
 const image = ctx.createImageData(SIZE, SIZE);
 const pixels = new Uint32Array(image.data.buffer);
 const stat = byId('stat');
+/** The shader picture, drawn on a canvas of its own; null where it cannot run. */
+const sheenCanvas = byId<HTMLCanvasElement>('field-sheen');
+const sheen = Sheen.create(sheenCanvas, SIZE, SIZE);
 
 const params: FoamParams = { radius: 6, noise: 0.1, keepArea: true };
 let stepsPerFrame = 1;
 let centreCount = 40;
 let brush = 10;
 let palette: Palette = 'soap';
+let shimmer = sheen !== null;
 let paused = false;
 
 const paletteSelect = byId<HTMLSelectElement>('palette');
-paletteSelect.addEventListener('change', () => (palette = paletteSelect.value as Palette));
+paletteSelect.addEventListener('change', () => {
+  palette = paletteSelect.value as Palette;
+  syncControls();
+});
+
+const sheenToggle = byId<HTMLInputElement>('sheen');
+sheenToggle.checked = shimmer;
+sheenToggle.disabled = sheen === null;
+sheenToggle.addEventListener('change', () => {
+  shimmer = sheenToggle.checked;
+  syncControls();
+});
 
 bindRange('radius', 0, (v) => (params.radius = v));
 bindRange('noise', 2, (v) => (params.noise = v));
@@ -79,17 +95,31 @@ window.addEventListener('keydown', (e) => {
   e.preventDefault();
 });
 
-canvas.addEventListener('contextmenu', (e) => e.preventDefault());
-canvas.addEventListener('pointerdown', (e) => {
-  const rect = canvas.getBoundingClientRect();
-  const x = Math.floor(((e.clientX - rect.left) / rect.width) * SIZE);
-  const y = Math.floor(((e.clientY - rect.top) / rect.height) * SIZE);
-  if (x < 0 || x >= SIZE || y < 0 || y >= SIZE) return;
-  if (e.button === 2 || e.shiftKey) foam.pop(x, y);
-  else foam.seed(x, y, brush);
-});
+for (const target of [canvas, sheenCanvas]) {
+  target.addEventListener('contextmenu', (e) => e.preventDefault());
+  target.addEventListener('pointerdown', (e) => {
+    const rect = target.getBoundingClientRect();
+    const x = Math.floor(((e.clientX - rect.left) / rect.width) * SIZE);
+    const y = Math.floor(((e.clientY - rect.top) / rect.height) * SIZE);
+    if (x < 0 || x >= SIZE || y < 0 || y >= SIZE) return;
+    if (e.button === 2 || e.shiftKey) foam.pop(x, y);
+    else foam.seed(x, y, brush);
+  });
+}
 
+syncControls();
 scatter();
+
+/** The shimmer belongs to the two light palettes. */
+function shimmering(): boolean {
+  return shimmer && sheen !== null && (palette === 'soap' || palette === 'pastel');
+}
+
+function syncControls(): void {
+  byId('pick-sheen').hidden = palette !== 'soap' && palette !== 'pastel';
+  canvas.hidden = shimmering();
+  sheenCanvas.hidden = !shimmering();
+}
 
 function scatter(): void {
   foam.clear();
@@ -119,6 +149,11 @@ function frame(): void {
 
 function render(): void {
   const label = foam.label;
+  stat.textContent = status();
+  if (shimmering()) {
+    sheen!.draw(label, hue, palette === 'pastel', performance.now() / 1000);
+    return;
+  }
   for (let y = 0; y < SIZE; y++) {
     for (let x = 0; x < SIZE; x++) {
       const i = y * SIZE + x;
@@ -130,9 +165,11 @@ function render(): void {
     }
   }
   ctx.putImageData(image, 0, 0);
+}
 
+function status(): string {
   const air = foam.air > 0 ? ` · ${Math.round((foam.air / (SIZE * SIZE)) * 100)}% air` : '';
-  stat.textContent = `${foam.bubbles} bubbles · step ${foam.steps}${air} · film length ${foam.filmLength()}`;
+  return `${foam.bubbles} bubbles · step ${foam.steps}${air} · film length ${foam.filmLength()}`;
 }
 
 function colour(label: number, y: number, film: boolean): number {

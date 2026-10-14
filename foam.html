@@ -11,6 +11,7 @@
       <div class="fields single">
         <figure>
           <canvas id="field"></canvas>
+          <canvas id="field-sheen" class="smooth" hidden></canvas>
           <p class="stat" id="stat"></p>
         </figure>
       </div>
@@ -35,6 +36,11 @@
             <option value="films">Films only</option>
             <option value="dark">Dark</option>
           </select>
+        </label>
+
+        <label class="check" id="pick-sheen">
+          <input id="sheen" type="checkbox" checked />
+          <span>Shimmer of a thin film</span>
         </label>
 
         <label class="check">

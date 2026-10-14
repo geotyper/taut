@@ -278,7 +278,15 @@ know the area of the whole bubble.
 Left button starts a bubble, right button or Shift bursts one: its cells turn
 to air and the neighbours grow in. *Palette* only changes the picture: *Soap
 film* runs the colours of a thin film down every bubble, *Films only* leaves
-the bubbles dark and colours the films. The kernel radius sets how fine a detail
+the bubbles dark and colours the films.
+
+With *Shimmer of a thin film*, on by default for the two light palettes, the
+picture is drawn by a WebGL2 shader instead. The colours come and go with a
+thickness that grows with the distance from the nearest film, drifts with
+time and is stirred by a slow swirl, so they run in from the borders and
+never stand still. The distance is a chamfer transform of the labels made on
+every frame and filtered by the GPU, which also draws the films smooth. It is
+only a picture: the automaton knows nothing of it. The kernel radius sets how fine a detail
 survives; at a small radius films stick to the lattice, flat along the axes,
 and need more noise to move, which makes them ragged.
 

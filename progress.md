@@ -338,6 +338,10 @@ axes left in. A flat film along an axis needs a noise above about a third at
 that radius to move at all. Radius 6 with noise 0.1 relaxes and stays clean,
 and is the default.
 
+The shimmer of the light palettes is a shader over the labels and a
+distance-to-film texture (`src/foam/sheen.ts`); it was looked at in two
+screenshots, soap and pastel, and its motion in time was not watched.
+
 The film length in the status line is counted in cell edges, so a diagonal
 film reads up to 1.4 times longer than it is.
 
