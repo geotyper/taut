@@ -1,9 +1,28 @@
 import { traceShell, svgPath, type Shell } from './shells.ts';
 
 /** Fills for the spline shells made for pictures, the more so in a mirror. */
-export type ArtFill = 'glow' | 'neon' | 'rings' | 'glass' | 'hatch' | 'engrave';
+export type ArtFill = 'glow' | 'neon' | 'rings' | 'glass' | 'hatch' | 'engrave' | 'shaped';
 
-export const ART_FILLS: readonly string[] = ['glow', 'neon', 'rings', 'glass', 'hatch', 'engrave'];
+export const ART_FILLS: readonly string[] = ['glow', 'neon', 'rings', 'glass', 'hatch', 'engrave', 'shaped'];
+
+/** The fills drawn in ink on paper, which may leave large bubbles out or draw them otherwise. */
+export const INK_FILLS: readonly string[] = ['hatch', 'engrave', 'shaped'];
+
+/** What becomes of a large bubble in an ink fill: drawn as the others, left blank, or in contour lines. */
+export type Large = 'same' | 'blank' | 'contours';
+
+/**
+ * How far every cell of the field is from the edge of its bubble, in cells,
+ * and the farthest any cell of each bubble is: its half width, the height
+ * its dome is given.
+ */
+export interface Relief {
+  w: number;
+  h: number;
+  label: Uint16Array;
+  depth: Float32Array;
+  top: Float32Array;
+}
 
 /** What a fill needs of a bubble besides its shell. */
 export interface ArtBubble {
@@ -14,6 +33,10 @@ export interface ArtBubble {
   turn: number;
   /** Bubbles it shares a film with. */
   sides: number;
+  /** The field's relief, for the fills that follow a bubble's shape. */
+  relief?: Relief;
+  /** Drawn otherwise for being large, in the ink fills. */
+  large?: Large;
 }
 
 /** The leading between the panes of the stained glass. */
@@ -29,7 +52,7 @@ const NIGHT = '#040406';
  */
 export function lookOf(fill: ArtFill, liquid: string, inside: string): { liquid: string; inside: string; outline: string | null; width: number } {
   if (fill === 'glass') return { liquid: LEAD, inside, outline: LEAD, width: 1.5 };
-  if (fill === 'hatch' || fill === 'engrave') return { liquid: PAPER, inside: PAPER, outline: INK, width: 1.2 };
+  if (INK_FILLS.includes(fill)) return { liquid: PAPER, inside: PAPER, outline: INK, width: 1.2 };
   if (fill === 'neon') return { liquid: NIGHT, inside: NIGHT, outline: null, width: 1 };
   return { liquid, inside, outline: 'own', width: 1 };
 }
@@ -132,6 +155,243 @@ function engraving(x: number, y: number, r: number, turn: number, gap: number): 
 }
 
 /**
+ * The relief of a field of labels: the distance from every cell to the
+ * nearest cell of another bubble or the wall, by the exact transform of
+ * Felzenszwalb and Huttenlocher, a column and then a row pass.
+ */
+export function reliefOf(label: Uint16Array, w: number, h: number, labels: number): Relief {
+  const INF = 1e20;
+  const sq = new Float64Array(w * h);
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) {
+      const i = y * w + x;
+      const l = label[i];
+      const edge =
+        x === 0 || y === 0 || x === w - 1 || y === h - 1 ||
+        label[i - 1] !== l || label[i + 1] !== l || label[i - w] !== l || label[i + w] !== l;
+      sq[i] = edge ? 0 : INF;
+    }
+  }
+  const n = Math.max(w, h);
+  const f = new Float64Array(n);
+  const d = new Float64Array(n);
+  const v = new Int32Array(n);
+  const z = new Float64Array(n + 1);
+  const pass = (count: number) => {
+    let k = 0;
+    v[0] = 0;
+    z[0] = -INF;
+    z[1] = INF;
+    for (let q = 1; q < count; q++) {
+      let s = (f[q] + q * q - (f[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k]);
+      while (s <= z[k]) {
+        k--;
+        s = (f[q] + q * q - (f[v[k]] + v[k] * v[k])) / (2 * q - 2 * v[k]);
+      }
+      k++;
+      v[k] = q;
+      z[k] = s;
+      z[k + 1] = INF;
+    }
+    k = 0;
+    for (let q = 0; q < count; q++) {
+      while (z[k + 1] < q) k++;
+      d[q] = (q - v[k]) ** 2 + f[v[k]];
+    }
+  };
+  for (let x = 0; x < w; x++) {
+    for (let y = 0; y < h; y++) f[y] = sq[y * w + x];
+    pass(h);
+    for (let y = 0; y < h; y++) sq[y * w + x] = d[y];
+  }
+  for (let y = 0; y < h; y++) {
+    for (let x = 0; x < w; x++) f[x] = sq[y * w + x];
+    pass(w);
+    for (let x = 0; x < w; x++) sq[y * w + x] = d[x];
+  }
+  const depth = new Float32Array(w * h);
+  const top = new Float32Array(labels + 1);
+  for (let i = 0; i < depth.length; i++) {
+    // An edge cell is half a cell from the edge itself.
+    depth[i] = Math.sqrt(sq[i]) + 0.5;
+    if (depth[i] > top[label[i]]) top[label[i]] = depth[i];
+  }
+  return { w, h, label, depth, top };
+}
+
+/** The height of a bubble's dome at a point, in cells: a quarter circle up from its edge to its half width. */
+function heightAt(relief: Relief, own: number, x: number, y: number): number {
+  const { w, h, label, depth, top } = relief;
+  const cx = Math.floor(x);
+  const cy = Math.floor(y);
+  if (cx < 0 || cy < 0 || cx >= w || cy >= h || label[cy * w + cx] !== own) return 0;
+  // Between the centres of the cells, of those that are the bubble's own.
+  const fx = x - 0.5;
+  const fy = y - 0.5;
+  const x0 = Math.max(0, Math.min(w - 2, Math.floor(fx)));
+  const y0 = Math.max(0, Math.min(h - 2, Math.floor(fy)));
+  const tx = Math.max(0, Math.min(1, fx - x0));
+  const ty = Math.max(0, Math.min(1, fy - y0));
+  let sum = 0;
+  let weight = 0;
+  for (const [dx, dy, k] of [
+    [0, 0, (1 - tx) * (1 - ty)],
+    [1, 0, tx * (1 - ty)],
+    [0, 1, (1 - tx) * ty],
+    [1, 1, tx * ty],
+  ]) {
+    const i = (y0 + dy) * w + x0 + dx;
+    if (label[i] !== own) continue;
+    sum += depth[i] * k;
+    weight += k;
+  }
+  const dist = weight > 0 ? sum / weight : 0.5;
+  const peak = top[own] || 1;
+  const t = Math.min(1, dist / peak);
+  return peak * Math.sqrt(1 - (1 - t) * (1 - t));
+}
+
+/** The box round a shell's outline, in cells. */
+function boxOf(shell: Shell): [number, number, number, number] {
+  let x0 = Infinity;
+  let y0 = Infinity;
+  let x1 = -Infinity;
+  let y1 = -Infinity;
+  for (const b of shell.loops) {
+    for (let i = 0; i < b.length; i += 2) {
+      x0 = Math.min(x0, b[i]);
+      x1 = Math.max(x1, b[i]);
+      y0 = Math.min(y0, b[i + 1]);
+      y1 = Math.max(y1, b[i + 1]);
+    }
+  }
+  return [x0, y0, x1, y1];
+}
+
+/**
+ * The engraving again, but over a dome of the bubble's own shape: its height
+ * at a point goes by how far the point is from the bubble's edge, so a long
+ * bubble is a cylinder and a crooked one a cushion, and the strokes run
+ * over all of it. In cells.
+ */
+function shapedEngraving(bubble: ArtBubble, gap: number): number[][] {
+  const relief = bubble.relief!;
+  const own = bubble.shell.label;
+  const out = ENGRAVE_WIDTHS.map(() => [] as number[]);
+  const [x0, y0, x1, y1] = boxOf(bubble.shell);
+  const cx = (x0 + x1) / 2;
+  const cy = (y0 + y1) / 2;
+  const reach = Math.hypot(x1 - x0, y1 - y0) / 2 + gap;
+  const angle = bubble.turn * Math.PI;
+  const ux = Math.cos(angle);
+  const uy = Math.sin(angle);
+  const lx = -0.5;
+  const ly = -0.65;
+  const lz = 0.57;
+  const step = Math.max(gap / 2, (2 * reach) / 96);
+  const e = 0.75;
+  const point = (s: number, t: number): number[] | null => {
+    const px = cx + ux * s - uy * t;
+    const py = cy + uy * s + ux * t;
+    const height = heightAt(relief, own, px, py);
+    if (height <= 0) return null;
+    const gx = (heightAt(relief, own, px + e, py) - heightAt(relief, own, px - e, py)) / (2 * e);
+    const gy = (heightAt(relief, own, px, py + e) - heightAt(relief, own, px, py - e)) / (2 * e);
+    const norm = Math.hypot(gx, gy, 1);
+    const shade = 1 - Math.max(0, (-gx * lx - gy * ly + lz) / norm);
+    const lift = 0.45 * height;
+    return [px - uy * lift, py + ux * lift, shade];
+  };
+  for (let t = -reach; t <= reach; t += gap) {
+    let last: number[] | null = null;
+    for (let s = -reach; s <= reach + 1e-9; s += step) {
+      const next = point(s, t);
+      if (last && next) {
+        const shade = (last[2] + next[2]) / 2;
+        const k = Math.min(ENGRAVE_WIDTHS.length - 1, Math.floor(shade * ENGRAVE_WIDTHS.length));
+        out[k].push(last[0], last[1], next[0], next[1]);
+      }
+      last = next;
+    }
+  }
+  return out;
+}
+
+/**
+ * Lines of equal distance from the edge of a bubble, `gap` apart, as x1, y1,
+ * x2, y2 runs in cells: the bubble drawn in its own contours, by marching
+ * squares over the centres of its cells.
+ */
+function contourLines(bubble: ArtBubble, gap: number): number[] {
+  const { w, h, label, depth, top } = bubble.relief!;
+  const own = bubble.shell.label;
+  const [bx0, by0, bx1, by1] = boxOf(bubble.shell);
+  const x0 = Math.max(0, Math.floor(bx0) - 1);
+  const y0 = Math.max(0, Math.floor(by0) - 1);
+  const x1 = Math.min(w - 2, Math.ceil(bx1) + 1);
+  const y1 = Math.min(h - 2, Math.ceil(by1) + 1);
+  const value = (x: number, y: number) => {
+    const i = y * w + x;
+    return label[i] === own ? depth[i] : -depth[i];
+  };
+  const out: number[] = [];
+  for (let level = gap; level < top[own]; level += gap) {
+    for (let y = y0; y < y1; y++) {
+      for (let x = x0; x < x1; x++) {
+        const corners = [value(x, y), value(x + 1, y), value(x + 1, y + 1), value(x, y + 1)];
+        const at = [
+          [x, y],
+          [x + 1, y],
+          [x + 1, y + 1],
+          [x, y + 1],
+        ];
+        const cuts: number[] = [];
+        for (let k = 0; k < 4; k++) {
+          const a = corners[k] - level;
+          const b = corners[(k + 1) % 4] - level;
+          if (a < 0 === b < 0) continue;
+          const t = a / (a - b);
+          const [ax, ay] = at[k];
+          const [bx, by] = at[(k + 1) % 4];
+          cuts.push(ax + (bx - ax) * t + 0.5, ay + (by - ay) * t + 0.5);
+        }
+        for (let k = 0; k + 3 < cuts.length; k += 4) out.push(cuts[k], cuts[k + 1], cuts[k + 2], cuts[k + 3]);
+      }
+    }
+  }
+  return out;
+}
+
+/** Draw runs of strokes in ink, the k-th list `widths[k]` lines wide, scaled by `scale`. */
+function strokeRuns(ctx: CanvasRenderingContext2D, runs: number[][], widths: readonly number[], line: number, scale: number): void {
+  ctx.strokeStyle = INK;
+  ctx.lineCap = 'round';
+  runs.forEach((run, k) => {
+    if (!run.length) return;
+    ctx.beginPath();
+    for (let i = 0; i < run.length; i += 4) {
+      ctx.moveTo(run[i] * scale, run[i + 1] * scale);
+      ctx.lineTo(run[i + 2] * scale, run[i + 3] * scale);
+    }
+    ctx.lineWidth = Math.max(0.5, widths[k] * line);
+    ctx.stroke();
+  });
+  ctx.lineCap = 'butt';
+}
+
+/** The same runs as SVG paths, in cells. */
+function svgRuns(runs: number[][], widths: readonly number[], line: number): string[] {
+  const f = (v: number) => v.toFixed(2);
+  const out: string[] = [];
+  runs.forEach((run, k) => {
+    let path = '';
+    for (let i = 0; i < run.length; i += 4) path += `M${f(run[i])} ${f(run[i + 1])}L${f(run[i + 2])} ${f(run[i + 3])}`;
+    if (path) out.push(`<path fill="none" stroke="${INK}" stroke-linecap="round" stroke-width="${f(widths[k] * line)}" d="${path}"/>`);
+  });
+  return out;
+}
+
+/**
  * Fill a shell on a canvas, `cell` pixels a cell, `line` the width of a
  * line in pixels. The path of the shell is the current one when it is
  * called, and is the current one after.
@@ -164,9 +424,15 @@ export function drawArt(ctx: CanvasRenderingContext2D, fill: ArtFill, bubble: Ar
     ctx.fill('evenodd');
     return;
   }
+  // A large bubble in an ink fill may be left blank.
+  if (bubble.large === 'blank') return;
   ctx.save();
   ctx.clip('evenodd');
-  if (fill === 'rings') {
+  if (bubble.large === 'contours' && bubble.relief) {
+    strokeRuns(ctx, [contourLines(bubble, Math.max(4, 3 * line) / cell)], [0.6], line, cell);
+  } else if (fill === 'shaped' && bubble.relief) {
+    strokeRuns(ctx, shapedEngraving(bubble, Math.max(4, 2.8 * line) / cell), ENGRAVE_WIDTHS, line, cell);
+  } else if (fill === 'rings') {
     // The bubble in a dark tone of its colour, and copies of its outline
     // drawn in towards the middle in its colour, a lighter and a darker by turns.
     ctx.fillStyle = rgba(mix(colour, 0, 0.72), 1);
@@ -202,19 +468,7 @@ export function drawArt(ctx: CanvasRenderingContext2D, fill: ArtFill, bubble: Ar
     ctx.lineWidth = Math.max(1, 0.7 * line);
     ctx.stroke();
   } else {
-    const runs = engraving(x, y, r, bubble.turn, Math.max(4, 2.8 * line));
-    ctx.strokeStyle = INK;
-    ctx.lineCap = 'round';
-    runs.forEach((run, k) => {
-      ctx.beginPath();
-      for (let i = 0; i < run.length; i += 4) {
-        ctx.moveTo(run[i], run[i + 1]);
-        ctx.lineTo(run[i + 2], run[i + 3]);
-      }
-      ctx.lineWidth = Math.max(0.5, ENGRAVE_WIDTHS[k] * line);
-      ctx.stroke();
-    });
-    ctx.lineCap = 'butt';
+    strokeRuns(ctx, engraving(x, y, r, bubble.turn, Math.max(4, 2.8 * line)), ENGRAVE_WIDTHS, line, 1);
   }
   ctx.beginPath();
   traceShell(ctx, shell, cell);
@@ -269,9 +523,14 @@ export function svgArt(fill: ArtFill, bubble: ArtBubble, id: number, line: numbe
     body.push(`<path fill-rule="evenodd" fill="url(#g${id})" d="${d}"/>`);
     return { defs, body };
   }
+  if (bubble.large === 'blank') return { defs, body };
   defs.push(`<clipPath id="c${id}"><path clip-rule="evenodd" d="${d}"/></clipPath>`);
   const inside: string[] = [];
-  if (fill === 'rings') {
+  if (bubble.large === 'contours' && bubble.relief) {
+    inside.push(...svgRuns([contourLines(bubble, Math.max(1.6, 3 * line))], [0.6], line));
+  } else if (fill === 'shaped' && bubble.relief) {
+    inside.push(...svgRuns(shapedEngraving(bubble, Math.max(1.6, 2.8 * line)), ENGRAVE_WIDTHS, line));
+  } else if (fill === 'rings') {
     inside.push(`<path fill-rule="evenodd" fill="${hex(mix(colour, 0, 0.72))}" d="${d}"/>`);
     const gap = Math.max(2, 3.5 * line);
     const count = Math.floor(c.r / gap);
@@ -288,12 +547,7 @@ export function svgArt(fill: ArtFill, bubble: ArtBubble, id: number, line: numbe
     );
     inside.push(`<path fill-rule="evenodd" fill="url(#h${id})" d="${d}"/>`);
   } else {
-    const runs = engraving(c.x, c.y, c.r, bubble.turn, Math.max(1.6, 2.8 * line));
-    runs.forEach((run, k) => {
-      let path = '';
-      for (let i = 0; i < run.length; i += 4) path += `M${f(run[i])} ${f(run[i + 1])}L${f(run[i + 2])} ${f(run[i + 3])}`;
-      if (path) inside.push(`<path fill="none" stroke="${INK}" stroke-linecap="round" stroke-width="${f(ENGRAVE_WIDTHS[k] * line)}" d="${path}"/>`);
-    });
+    inside.push(...svgRuns(engraving(c.x, c.y, c.r, bubble.turn, Math.max(1.6, 2.8 * line)), ENGRAVE_WIDTHS, line));
   }
   body.push(`<g clip-path="url(#c${id})">${inside.join('')}</g>`);
   return { defs, body };

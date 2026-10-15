@@ -97,7 +97,20 @@
             <option value="glass">Stained glass, by sides</option>
             <option value="hatch">Hatching, in ink</option>
             <option value="engrave">Engraving, strokes bowed over each bubble</option>
+            <option value="shaped">Engraving, following each bubble's shape</option>
           </select>
+        </label>
+        <label id="pick-large">
+          <span>Large bubbles</span>
+          <select id="large">
+            <option value="same">Drawn as the others</option>
+            <option value="blank">Left blank</option>
+            <option value="contours">In contour lines</option>
+          </select>
+        </label>
+        <label id="pick-large-from">
+          <span>Large from, times the median area <output id="large-from-out"></output></span>
+          <input id="large-from" type="range" min="2" max="40" step="1" value="8" />
         </label>
         <label id="pick-fill-opacity">
           <span>Fill <output id="fill-opacity-out"></output></span>

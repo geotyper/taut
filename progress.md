@@ -496,6 +496,15 @@ in its shade, in five widths so that each is one path; rings take one
 colour a bubble; the neon is a tube along every shell drawn over all the
 fills and added up, on black. Looked at plain, wet and in kaleidoscopes of
 6 and 8 sectors; every fill saved as an SVG that parses.
+Then the user found the engraving lost on large bubbles: grown out of a
+circle into long petals, each got a dome the size of a disc of its area in
+its middle and bare or half-struck ends. Kept as it is, with a second
+engraving next to it on a distance transform of the field, and an option
+for large bubbles in the ink fills: blank or in contour lines. Looked at on
+a field grown inside a circle and let out, with all four; the contours by
+Euclidean distance come out as straight-sided rings. 7.5 frames a second
+for the first engraving and 5 for the shaped one at 512 with 400 bubbles,
+2.3 and 1.5 at 1024 with 2000, in a headless browser running four at once.
 
 The rule also runs on the GPU (`src/foam/foamgpu.ts`), reading the labels
 back every four steps. Compared with the CPU in the browser at 320: without

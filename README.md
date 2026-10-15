@@ -375,8 +375,19 @@ dark leading; *Hatching, in ink*, black strokes on paper at an angle of the
 bubble's own, which mirrors fold into chevrons; and *Engraving*, the same
 strokes bowed over each bubble as if it were a dome lit from the upper
 left, the way lines drawn across a round thing bend, each piece as thick as
-the shade there. All six go into the SVG too, as gradients, clip paths,
-patterns and a blur.
+the shade there. *Engraving, following each bubble's shape* raises the
+dome on the bubble's own outline instead of a disc of its area: the
+height at a point goes up as a quarter circle with the distance to the
+bubble's edge (an exact distance transform of the field, Felzenszwalb and
+Huttenlocher) to the bubble's half width, so a long bubble becomes a
+cylinder and a crooked one a cushion, and the strokes cover all of it
+where the first engraving left the ends of long bubbles bare. In the ink
+fills *Large bubbles* may be drawn as the others, left blank, or drawn in
+contour lines, lines of equal distance from the edge found by marching
+squares; a bubble is large from *Large from* times the median area. All
+seven go into the SVG too, as gradients, clip paths, patterns and a blur.
+The engravings are slow while the foam moves: at 512 with 400 bubbles
+about 7 frames a second for the first and 5 for the shaped one.
 
 *Symmetry* (experimental, *M* steps through it) mirrors the picture, in any
 palette, only as a picture: the visible layers are put together on a canvas

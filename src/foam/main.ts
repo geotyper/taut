@@ -2,7 +2,7 @@ import { AIR, Foam, type FoamParams } from './foam.ts';
 import { FoamGpu } from './foamgpu.ts';
 import { between, lengthOf, loops, outlines, traceFilms, WALL, type FilmLine, type Piece } from './lines.ts';
 import { drawMeasures, measureFilms, Seepage } from './measure.ts';
-import { ART_FILLS, drawArt, drawNeon, lookOf, svgArt, svgArtDefs, type ArtBubble, type ArtFill } from './artfill.ts';
+import { ART_FILLS, drawArt, drawNeon, INK_FILLS, lookOf, reliefOf, svgArt, svgArtDefs, type ArtBubble, type ArtFill, type Large, type Relief } from './artfill.ts';
 import { shells, svgPath, traceShell, type Shell } from './shells.ts';
 import { Sheen } from './sheen.ts';
 
@@ -78,6 +78,13 @@ let filmLines: FilmLine[] = [];
 type Fill = 'none' | 'flat' | 'stress' | ArtFill;
 let fill: Fill = 'none';
 let fillOpacity = 0.35;
+/** What the ink fills do with a large bubble, and from how many times the median area a bubble is large. */
+let large: Large = 'same';
+let largeFrom = 8;
+/** The relief of the field and the median area of its bubbles, for the step they were worked out at. */
+let relief: Relief | null = null;
+let medianArea = 0;
+let reliefAt = '';
 let bubbleOutlines = new Map<number, Float32Array[][]>();
 let bubbleLoops = new Map<number, Piece[][]>();
 /** The bubbles drawn as smooth shells with liquid between, instead of lines. */
@@ -299,6 +306,13 @@ fillSelect.addEventListener('change', () => {
 });
 fill = fillSelect.value as Fill;
 bindRange('fill-opacity', 2, (v) => (fillOpacity = v));
+const largeSelect = byId<HTMLSelectElement>('large');
+largeSelect.addEventListener('change', () => {
+  large = largeSelect.value as Large;
+  syncControls();
+});
+large = largeSelect.value as Large;
+bindRange('large-from', 0, (v) => (largeFrom = v));
 bindRange('wetness', 2, (v) => (wetness = v));
 const shellsToggle = byId<HTMLInputElement>('as-shells');
 shellsToggle.addEventListener('change', () => {
@@ -357,6 +371,9 @@ function syncControls(): void {
   byId('pick-line-width').hidden = !drawingLines();
   byId('pick-fill').hidden = !drawingLines();
   byId('pick-fill-opacity').hidden = !drawingLines() || fill !== 'flat';
+  const ink = drawingLines() && asShells && INK_FILLS.includes(fill);
+  byId('pick-large').hidden = !ink;
+  byId('pick-large-from').hidden = !ink || large === 'same';
   // The fills made for pictures are drawn on the shells only.
   const fillPick = byId<HTMLSelectElement>('fill');
   for (const option of fillPick.options) option.hidden = !asShells && ART_FILLS.includes(option.value);
@@ -703,12 +720,32 @@ function renderShells(width: number): void {
 /** A bubble as the fills made for pictures see it. */
 function artBubble(shell: Shell): ArtBubble {
   const c = SHEEN_BRIGHT[hue(shell.label)];
-  return {
+  const bubble: ArtBubble = {
     shell,
     colour: [c & 255, (c >> 8) & 255, (c >> 16) & 255],
     turn: hue(shell.label) / HUES,
     sides: bubbleSides.get(shell.label)?.size ?? 0,
   };
+  if (!INK_FILLS.includes(fill)) return bubble;
+  if (fill === 'shaped' || large === 'contours') bubble.relief = currentRelief();
+  if (large !== 'same') {
+    currentRelief();
+    if (foam.areaOf(shell.label) > largeFrom * medianArea) bubble.large = large;
+  }
+  return bubble;
+}
+
+/** The relief of the field and the median area of the bubbles, worked out again when the field has changed. */
+function currentRelief(): Relief {
+  if (!relief || reliefAt !== tracedAt) {
+    relief = reliefOf(foam.label, size, size, foam.labelCount);
+    const areas: number[] = [];
+    for (let l = 1; l <= foam.labelCount; l++) if (foam.areaOf(l) > 0) areas.push(foam.areaOf(l));
+    areas.sort((a, b) => a - b);
+    medianArea = areas[areas.length >> 1] ?? 0;
+    reliefAt = tracedAt;
+  }
+  return relief;
 }
 
 function saveSvg(): void {
