@@ -275,6 +275,14 @@ bubble below its area counts for more, one above it for less. The films then
 settle into arcs. This part is not local, since a cell has to know the area
 of the whole bubble.
 
+A bubble smaller than about 50 squared kernel radii pushes back more gently,
+by the square root of its area against that. At full strength a small
+bubble overshoots: a few cells short, its whole rim takes a cell at once and
+it is as far over, then back the next step, and the whole fine foam
+flickered every other step, with no noise and the smallest kernel too. The
+GPU works the weights out every four steps and keeps them meanwhile, so
+there the push is gentler again by those four steps.
+
 *Coarsening* chooses how a fine foam gets coarser:
 
 - **None** — areas are kept and the foam only settles.

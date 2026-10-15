@@ -462,6 +462,20 @@ count of air, so the foam counts as full inside the disc and the bubbles
 take their areas then. Looked at on the GPU with two mirrors and on the CPU
 at 320 with 60 centres: the bubbles at the rim grew out to the square's
 walls as petals in a few thousand steps.
+Then the user saw a fine foam flicker, whatever the noise and the kernel.
+It was the area keeping: on the CPU at 200 with 600 bubbles, no noise and
+kernel 2, 5800 of 40000 cells changed every step but only 20 over two
+steps, the bubbles swinging between 59 and 80 cells with their weights
+pinned at 0.5 and 1.5; with no area keeping nothing moved. At kernel 6 the
+same with bubbles of 230 cells. The push of a bubble below 50·r² cells now
+goes down as the square root of its area against that: all those cases
+stood still, and with noise 0.1 the changes were as many over one step as
+over two, the noise alone. On the GPU at one step a frame that was enough,
+but at four the weights, kept for four steps, swung the foam with a period
+of eight steps (46000 pixels a frame); with the push divided by the steps a
+weight is kept, it stood still at 4 and 16 steps a frame, and 1972 of 2000
+centres grew into bubbles at four steps a frame against 971 before. 40
+bubbles at 320 still held over 28000 steps and 100 at 512 over 17000.
 
 The rule also runs on the GPU (`src/foam/foamgpu.ts`), reading the labels
 back every four steps. Compared with the CPU in the browser at 320: without

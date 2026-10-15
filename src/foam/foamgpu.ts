@@ -190,7 +190,7 @@ export class FoamGpu {
 
     // The weights for this batch, from the counts of the last one.
     const used = Math.min(foam.labelCount, MAX_LABELS) + 1;
-    for (let l = 0; l < used; l++) this.weights[l] = foam.weightOf(l, p.keepArea);
+    for (let l = 0; l < used; l++) this.weights[l] = foam.weightOf(l, p, steps);
     const rows = Math.ceil(used / WEIGHT_SIDE);
     gl.bindTexture(gl.TEXTURE_2D, this.weightTexture);
     gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, WEIGHT_SIDE, rows, gl.RED, gl.FLOAT, this.weights);

@@ -14,6 +14,14 @@ export const AIR_WEIGHT = 0.6;
 /** How hard a bubble away from its area pushes or gives way, with `keepArea`. */
 const PRESSURE_GAIN = 4;
 const PRESSURE_LIMIT = 0.5;
+/**
+ * Bubbles smaller than this many squared kernel radii push back more gently.
+ * At full strength a small bubble overshoots: a few cells short, its whole
+ * rim takes a cell at once and it ends up as far over, and the next step
+ * back, so the foam flickers every other step. The cells a step moves go as
+ * the rim, the square root of the area, so the push goes as it too.
+ */
+const GENTLE_BELOW = 50;
 
 export interface FoamParams {
   /** Radius of the neighbourhood a cell counts labels in, in cells. */
@@ -248,7 +256,7 @@ export class Foam {
         let bestScore = -Infinity;
         for (let k = 0; k < kinds; k++) {
           const kind = seen[k];
-          const score = count[k] * this.weightOf(kind, p.keepArea) + jitter * (Math.random() - 0.5);
+          const score = count[k] * this.weightOf(kind, p) + jitter * (Math.random() - 0.5);
           if (score > bestScore) {
             bestScore = score;
             best = kind;
@@ -269,13 +277,19 @@ export class Foam {
     this.stepped(steps);
   }
 
-  /** How much a cell of this label counts for: air less, a bubble off its area more or less. */
-  weightOf(kind: number, keepArea: boolean): number {
+  /**
+   * How much a cell of this label counts for: air less, a bubble off its
+   * area more or less. `lag` is the steps the weight is kept for before it is
+   * worked out again; a weight kept longer pushes for longer and has to be
+   * the gentler.
+   */
+  weightOf(kind: number, p: FoamParams, lag = 1): number {
     if (kind === AIR) return AIR_WEIGHT;
     // While there is air a bubble only defends the area it started with.
     const hold = this.air === 0 ? this.target[kind] : this.least[kind];
-    if (!keepArea || !(hold > 0)) return 1;
-    let lack = (PRESSURE_GAIN * (hold - this.area[kind])) / hold;
+    if (!p.keepArea || !(hold > 0)) return 1;
+    const gentle = Math.min(1, Math.sqrt(hold / (GENTLE_BELOW * p.radius * p.radius)) / lag);
+    let lack = (gentle * PRESSURE_GAIN * (hold - this.area[kind])) / hold;
     if (this.air > 0) lack = Math.max(0, lack);
     return 1 + Math.max(-PRESSURE_LIMIT, Math.min(PRESSURE_LIMIT, lack));
   }
