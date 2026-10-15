@@ -59,6 +59,14 @@
             <option value="kaleido-6">Kaleidoscope, 12 sectors</option>
           </select>
         </label>
+        <label class="check" id="pick-bent">
+          <input id="kaleido-bent" type="checkbox" />
+          <span>Bend the whole field into the wedge</span>
+        </label>
+        <label id="pick-wedge-size">
+          <span>Size of the bent field <output id="wedge-size-out"></output></span>
+          <input id="wedge-size" type="range" min="1" max="1.42" step="0.02" value="1.2" />
+        </label>
         <div class="buttons">
           <button id="bake-mirror">Make it the field, a film at the mirrors</button>
           <button id="bake-mirror-joined">Make it the field, no film at the mirrors</button>

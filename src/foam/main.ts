@@ -130,6 +130,22 @@ function kaleidoFrame(): { tip: number; zoom: number } {
 let mirror: Mirror = 'none';
 const mirrorCanvas = byId<HTMLCanvasElement>('field-mirror');
 const mirrorCtx = mirrorCanvas.getContext('2d')!;
+/**
+ * The kaleidoscope with the whole field bent into its wedge: the field's
+ * angles from the tip, 0 to 90°, are squeezed into the wedge's, and its reach
+ * at each angle, out to the far wall, into a radius of `wedgeSize` halves of
+ * the screen; past that the picture is cut off.
+ */
+let kaleidoBent = false;
+let wedgeSize = 1.2;
+/** The layers put together at the field's scale, for the bent kaleidoscope to read from. */
+const bentSource = document.createElement('canvas');
+const bentSourceCtx = bentSource.getContext('2d', { willReadFrequently: true })!;
+/** Samples a side of every pixel of the bent picture, which are averaged so thin lines do not break up. */
+const BENT_SAMPLES = 2;
+/** For every sample of the bent picture, the pixel of `bentSource` it shows, or -1; and what it was made for. */
+let bentLookup = new Int32Array(0);
+let bentLookupFor = '';
 
 let size = 0;
 let foam!: Foam;
@@ -232,8 +248,17 @@ const syncMirror = () => {
   mirrorCanvas.hidden = mirror === 'none';
   bakeButton.hidden = mirror === 'none';
   bakeJoinedButton.hidden = mirror === 'none';
+  byId('pick-bent').hidden = !kaleidoMirrors();
+  byId('pick-wedge-size').hidden = !kaleidoMirrors() || !kaleidoBent;
 };
 mirrorSelect.addEventListener('change', syncMirror);
+const bentToggle = byId<HTMLInputElement>('kaleido-bent');
+bentToggle.addEventListener('change', () => {
+  kaleidoBent = bentToggle.checked;
+  syncMirror();
+});
+kaleidoBent = bentToggle.checked;
+bindRange('wedge-size', 2, (v) => (wedgeSize = v));
 syncMirror();
 
 const linesToggle = byId<HTMLInputElement>('as-lines');
@@ -659,6 +684,10 @@ function mirrorSource(): { w: number; h: number } {
 
 /** The visible layers of the picture, put together in the tiles of the mirror. */
 function renderMirror(): void {
+  if (kaleidoMirrors() && kaleidoBent) {
+    renderBent();
+    return;
+  }
   const scale = window.devicePixelRatio || 1;
   const width = Math.max(1, Math.round(mirrorCanvas.clientWidth * scale));
   if (mirrorCanvas.width !== width || mirrorCanvas.height !== width) {
@@ -687,6 +716,86 @@ function renderMirror(): void {
     }
   }
   ctx.setTransform(1, 0, 0, 1, 0, 0);
+}
+
+/**
+ * The bent kaleidoscope, pixel by pixel through a lookup table: the layers are
+ * put together at the field's scale, read back, and every pixel of the
+ * picture takes the one it shows. It is drawn at CSS pixels, not device ones,
+ * to keep the work per frame down.
+ */
+function renderBent(): void {
+  const width = Math.max(1, Math.round(mirrorCanvas.clientWidth));
+  if (mirrorCanvas.width !== width || mirrorCanvas.height !== width) {
+    mirrorCanvas.width = width;
+    mirrorCanvas.height = width;
+  }
+  const n = 1024;
+  if (bentSource.width !== n) {
+    bentSource.width = n;
+    bentSource.height = n;
+  }
+  const src = bentSourceCtx;
+  src.fillStyle = '#0b0d11';
+  src.fillRect(0, 0, n, n);
+  for (const layer of [canvas, sheenCanvas, linesCanvas]) {
+    if (layer.hidden || !layer.width) continue;
+    src.imageSmoothingEnabled = layer !== canvas;
+    src.drawImage(layer, 0, 0, n, n);
+  }
+  const key = `${width}:${n}:${mirror}:${wedgeSize}:${size}`;
+  const s = BENT_SAMPLES;
+  if (key !== bentLookupFor) {
+    bentLookup = new Int32Array(width * width * s * s);
+    let k = 0;
+    for (let y = 0; y < width; y++) {
+      for (let x = 0; x < width; x++) {
+        for (let sy = 0; sy < s; sy++) {
+          for (let sx = 0; sx < s; sx++) {
+            const at = unmirror((x + (sx + 0.5) / s) / width, (y + (sy + 0.5) / s) / width);
+            bentLookup[k++] = at ? Math.min(n - 1, Math.floor(at[1] * n)) * n + Math.min(n - 1, Math.floor(at[0] * n)) : -1;
+          }
+        }
+      }
+    }
+    bentLookupFor = key;
+  }
+  const from = src.getImageData(0, 0, n, n).data;
+  const image = mirrorCtx.createImageData(width, width);
+  const to = image.data;
+  const samples = s * s;
+  for (let i = 0, k = 0; i < width * width; i++) {
+    let r = 0;
+    let g = 0;
+    let b = 0;
+    for (let q = 0; q < samples; q++, k++) {
+      const at = bentLookup[k] * 4;
+      if (at < 0) {
+        r += 11;
+        g += 13;
+        b += 17;
+      } else {
+        r += from[at];
+        g += from[at + 1];
+        b += from[at + 2];
+      }
+    }
+    to[i * 4] = r / samples;
+    to[i * 4 + 1] = g / samples;
+    to[i * 4 + 2] = b / samples;
+    to[i * 4 + 3] = 255;
+  }
+  mirrorCtx.putImageData(image, 0, 0);
+}
+
+/** A point of the unit disc to the point of the square [-1, 1]² that Fong's elliptical grid mapping takes there. */
+function discToSquare(u: number, v: number): [number, number] {
+  const r = 2 * Math.SQRT2;
+  const a = 2 + u * u - v * v;
+  const b = 2 - u * u + v * v;
+  const x = 0.5 * Math.sqrt(Math.max(0, a + r * u)) - 0.5 * Math.sqrt(Math.max(0, a - r * u));
+  const y = 0.5 * Math.sqrt(Math.max(0, b + r * v)) - 0.5 * Math.sqrt(Math.max(0, b - r * v));
+  return [Math.min(1, Math.max(-1, x)), Math.min(1, Math.max(-1, y))];
 }
 
 /** The number of mirrors of a kaleidoscope, which makes twice as many wedges; 0 for the others. */
@@ -740,6 +849,15 @@ function unmirror(u: number, v: number): [number, number, number] | null {
     const j = Math.min(2 * mirrors - 1, Math.floor(angle / wedge));
     let turned = angle - j * wedge;
     if (j % 2 === 1) turned = wedge - turned;
+    if (kaleidoBent) {
+      // The wedge opened out into a quarter of a disc, which is the field's
+      // square mapped smoothly onto it (Fong's elliptical grid mapping).
+      const out = Math.hypot(dx, dy) / (0.5 * wedgeSize);
+      if (out > 1) return null;
+      const bent = (turned / wedge) * (Math.PI / 2);
+      const [sx, sy] = discToSquare(out * Math.cos(bent), out * Math.sin(bent));
+      return [tip + (1 - tip) * sx, tip + (1 - tip) * sy, j];
+    }
     return [tip + r * Math.cos(turned), tip + r * Math.sin(turned), j];
   }
   const source = mirrorSource();

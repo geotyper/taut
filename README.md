@@ -370,6 +370,16 @@ of the foam, shown at about 0.7 of its size. One of its sides runs along the
 top wall: films meet a wall square, so mirrored there they run on without a
 seam, and the four cells keep the wall itself out of the picture.
 
+*Bend the whole field into the wedge* uses all of the foam instead: the
+field's square is mapped smoothly onto a quarter of a disc (Fong's
+elliptical grid mapping), and the quarter's 90° are squeezed into the
+wedge's angle, so the bubbles come out drawn out along the radius, the
+more so the more sectors there are. *Size of the bent field* sets the
+disc's radius: at 1 it fits the screen whole, round, with dark corners; up
+to 1.42 it reaches the corners and its rim is cut off. The bent picture is
+made pixel by pixel through a lookup table, at CSS pixels with 2×2 samples
+each, from the layers put together at 1024 and read back.
+
 *Make it the field* puts the mirrored picture into the field itself: every
 cell takes the label it shows. With *a film at the mirrors* every copy of a
 bubble gets a label of its own, so where copies meet there is a straight

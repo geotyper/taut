@@ -446,6 +446,15 @@ Baking can now join copies of a bubble across the mirrors, with no film,
 as the first mirrors looked. Looked at with 6, 8 and 12 sectors, with the
 shells and the stress palette, and baked joined from four quarters and six
 sectors.
+Then, on the user's idea, the whole field bent into the wedge. The first
+bending took the field's reach at each angle to its far wall, which has a
+kink at 45°; it showed as arrowheads down the middle of every wedge. Fong's
+elliptical mapping of the square onto a quarter disc is smooth and has a
+closed inverse. At twelve sectors the squeeze broke thin lines up into a
+moiré, read one sample a pixel; 2×2 samples averaged keep them whole.
+Looked at with 6, 8 and 12 sectors at sizes 1, 1.2, 1.3 and 1.42, and baked
+joined from six sectors; 51 steps a second at 512 with the shells, 32 with
+the stress shader.
 
 The rule also runs on the GPU (`src/foam/foamgpu.ts`), reading the labels
 back every four steps. Compared with the CPU in the browser at 320: without
