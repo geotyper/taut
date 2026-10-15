@@ -436,6 +436,16 @@ six-sector field seemed not to be symmetric; measured, every film above the
 middle had its mirror below, as six sectors have a mirror across the middle
 but none down it. The measure then showed the symmetry wearing down as the
 rule runs, to 64% within a cell after 600 steps.
+Then, on a look by the user, the kaleidoscope showed too little of the foam,
+blown up: a wedge from the centre to the middle of an edge, enlarged by √2.
+Its tip is now near the top left corner and it reaches the far walls, at
+about four times the foam, shown smaller. With the tip right in the corner
+the walls showed as straight films along the mirrors; four cells in, they
+are out of the picture, and a film mirrored at the wall runs on smoothly.
+Baking can now join copies of a bubble across the mirrors, with no film,
+as the first mirrors looked. Looked at with 6, 8 and 12 sectors, with the
+shells and the stress palette, and baked joined from four quarters and six
+sectors.
 
 The rule also runs on the GPU (`src/foam/foamgpu.ts`), reading the labels
 back every four steps. Compared with the CPU in the browser at 320: without

@@ -362,14 +362,20 @@ crosses the axis turns into one symmetric bubble, with a notch where its
 outline did not meet the axis square; where whole fields meet, the wall
 shows as a doubled film.
 
-The *Kaleidoscope* takes the wedge of the field from its centre at angles 0
-to 180°/k, for k of 3, 4 or 6 mirrors, enlarged by √2 so that it reaches the
-corners, and turns it round into 2k wedges, turned over in every second one:
-6, 8 or 12 sectors.
+The *Kaleidoscope* takes a wedge of the field at angles 0 to 180°/k, for k
+of 3, 4 or 6 mirrors, and turns it round into 2k wedges, turned over in
+every second one: 6, 8 or 12 sectors. The wedge has its tip four cells in
+from the top left corner and reaches the far walls, so it holds a good part
+of the foam, shown at about 0.7 of its size. One of its sides runs along the
+top wall: films meet a wall square, so mirrored there they run on without a
+seam, and the four cells keep the wall itself out of the picture.
 
 *Make it the field* puts the mirrored picture into the field itself: every
-cell takes the label it shows, every copy of a bubble a label of its own, so
-where copies meet there is a straight film along the mirror. Each bubble
+cell takes the label it shows. With *a film at the mirrors* every copy of a
+bubble gets a label of its own, so where copies meet there is a straight
+film along the mirror. With *no film at the mirrors* copies of a bubble that
+touch across a mirror are joined into one bubble, as the picture shows
+them. Each bubble
 holds on to the area it has then. The rule then goes on as usual and smooths
 the seams, the films at the axes bending to meet them square. Right after,
 the field is mirror-true: with six sectors every film above the middle had

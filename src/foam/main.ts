@@ -111,10 +111,22 @@ const measurePlot = byId<HTMLCanvasElement>('measure-plot');
 type Mirror = 'none' | 'two-crop' | 'four-crop' | 'two-whole' | 'four-whole' | 'kaleido-3' | 'kaleido-4' | 'kaleido-6';
 const MIRRORS: Mirror[] = ['none', 'two-crop', 'four-crop', 'two-whole', 'four-whole', 'kaleido-3', 'kaleido-4', 'kaleido-6'];
 /**
- * A kaleidoscope's wedge of the field, from its centre out to the middle of
- * an edge, is shown this much larger, so that its tip reaches the corners.
+ * A kaleidoscope's wedge has its tip near the top left corner of the field,
+ * this many cells in from both walls, so that the walls themselves stay out
+ * of the picture: films meet a wall square, so mirrored there they run on
+ * without a seam.
  */
-const KALEIDO_ZOOM = Math.SQRT2;
+const KALEIDO_MARGIN = 4;
+
+/**
+ * Where the tip of a kaleidoscope's wedge is, as a fraction of the field, and
+ * how much smaller the wedge is shown: its reach, to the far walls, comes to
+ * the corners of the screen from its middle.
+ */
+function kaleidoFrame(): { tip: number; zoom: number } {
+  const tip = Math.min(0.25, KALEIDO_MARGIN / size);
+  return { tip, zoom: Math.SQRT1_2 / (1 - tip) };
+}
 let mirror: Mirror = 'none';
 const mirrorCanvas = byId<HTMLCanvasElement>('field-mirror');
 const mirrorCtx = mirrorCanvas.getContext('2d')!;
@@ -213,10 +225,13 @@ mirrorSelect.addEventListener('change', () => {
 mirror = mirrorSelect.value as Mirror;
 mirrorCanvas.hidden = mirror === 'none';
 const bakeButton = byId<HTMLButtonElement>('bake-mirror');
-bakeButton.addEventListener('click', bakeMirror);
+bakeButton.addEventListener('click', () => bakeMirror(false));
+const bakeJoinedButton = byId<HTMLButtonElement>('bake-mirror-joined');
+bakeJoinedButton.addEventListener('click', () => bakeMirror(true));
 const syncMirror = () => {
   mirrorCanvas.hidden = mirror === 'none';
   bakeButton.hidden = mirror === 'none';
+  bakeJoinedButton.hidden = mirror === 'none';
 };
 mirrorSelect.addEventListener('change', syncMirror);
 syncMirror();
@@ -680,12 +695,13 @@ function kaleidoMirrors(): number {
 }
 
 /**
- * The wedge of the layer from its centre at angles 0 to π/mirrors, turned
- * round into every other wedge, and turned over in every second one.
+ * The wedge of the layer from near its top left corner at angles 0 to π/mirrors,
+ * turned round into every other wedge, and turned over in every second one.
  */
 function drawKaleidoscope(ctx: CanvasRenderingContext2D, layer: HTMLCanvasElement, width: number, mirrors: number): void {
   const wedge = Math.PI / mirrors;
   const centre = width / 2;
+  const { tip, zoom } = kaleidoFrame();
   for (let j = 0; j < 2 * mirrors; j++) {
     ctx.save();
     // A hair wider than the wedge, so that no seam shows between them.
@@ -700,8 +716,8 @@ function drawKaleidoscope(ctx: CanvasRenderingContext2D, layer: HTMLCanvasElemen
       ctx.rotate((j + 1) * wedge);
       ctx.scale(1, -1);
     }
-    ctx.scale((width * KALEIDO_ZOOM) / layer.width, (width * KALEIDO_ZOOM) / layer.height);
-    ctx.drawImage(layer, -layer.width / 2, -layer.height / 2);
+    ctx.scale((width * zoom) / layer.width, (width * zoom) / layer.height);
+    ctx.drawImage(layer, -tip * layer.width, -tip * layer.height);
     ctx.restore();
   }
 }
@@ -717,13 +733,14 @@ function unmirror(u: number, v: number): [number, number, number] | null {
     const wedge = Math.PI / mirrors;
     const dx = u - 0.5;
     const dy = v - 0.5;
-    const r = Math.hypot(dx, dy) / KALEIDO_ZOOM;
+    const { tip, zoom } = kaleidoFrame();
+    const r = Math.hypot(dx, dy) / zoom;
     let angle = Math.atan2(dy, dx);
     if (angle < 0) angle += 2 * Math.PI;
     const j = Math.min(2 * mirrors - 1, Math.floor(angle / wedge));
     let turned = angle - j * wedge;
     if (j % 2 === 1) turned = wedge - turned;
-    return [0.5 + r * Math.cos(turned), 0.5 + r * Math.sin(turned), j];
+    return [tip + r * Math.cos(turned), tip + r * Math.sin(turned), j];
   }
   const source = mirrorSource();
   const tiles = mirrorTiles();
@@ -742,10 +759,15 @@ function unmirror(u: number, v: number): [number, number, number] | null {
 /**
  * The mirrored picture made into the field: every cell takes the label it
  * shows, each copy of a bubble a label of its own, so that where copies meet
- * there is a film. The rule then goes on from there and smooths the seams.
+ * there is a film along the mirror. With `joined`, copies of a bubble that
+ * touch across a mirror are one bubble instead, with no film between, as the
+ * picture shows them. The rule then goes on from there and smooths the seams.
  */
-function bakeMirror(): void {
+function bakeMirror(joined: boolean): void {
   const label = new Uint16Array(size * size);
+  // What each cell shows: the bubble it was, and the copy it is in.
+  const was = new Uint16Array(size * size);
+  const copy = new Uint8Array(size * size);
   const fresh = new Map<number, number>();
   for (let y = 0; y < size; y++) {
     for (let x = 0; x < size; x++) {
@@ -761,10 +783,36 @@ function bakeMirror(): void {
         mine = Math.min(65534, fresh.size + 1);
         fresh.set(key, mine);
       }
-      label[y * size + x] = mine;
+      const i = y * size + x;
+      label[i] = mine;
+      was[i] = old;
+      copy[i] = at[2];
     }
   }
-  foam.replace(label, fresh.size);
+  let count = fresh.size;
+  if (joined) {
+    // Join the copies of a bubble that are next to each other across a mirror.
+    const parent = new Uint16Array(count + 1).map((_, k) => k);
+    const root = (k: number): number => {
+      while (parent[k] !== k) k = parent[k] = parent[parent[k]];
+      return k;
+    };
+    for (let i = 0; i < label.length; i++) {
+      if (!label[i]) continue;
+      for (const j of [i % size < size - 1 ? i + 1 : -1, i + size < label.length ? i + size : -1]) {
+        if (j < 0 || copy[j] === copy[i] || was[j] !== was[i]) continue;
+        const a = root(label[i]);
+        const b = root(label[j]);
+        if (a !== b) parent[Math.max(a, b)] = Math.min(a, b);
+      }
+    }
+    // Number the joined bubbles from 1 again.
+    const renumber = new Uint16Array(count + 1);
+    count = 0;
+    for (let k = 1; k < parent.length; k++) if (root(k) === k) renumber[k] = ++count;
+    for (let i = 0; i < label.length; i++) if (label[i]) label[i] = renumber[root(label[i])];
+  }
+  foam.replace(label, count);
   seepage.reset();
   mirrorSelect.value = 'none';
   mirrorSelect.dispatchEvent(new Event('change'));
