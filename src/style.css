@@ -106,6 +106,15 @@ canvas.overlay {
   pointer-events: none;
 }
 
+/* A chart in the side panel. */
+canvas.plot {
+  aspect-ratio: auto;
+  height: 360px;
+  border: none;
+  cursor: default;
+  image-rendering: auto;
+}
+
 canvas.smooth {
   image-rendering: auto;
 }

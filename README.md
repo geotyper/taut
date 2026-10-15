@@ -320,6 +320,90 @@ own rims, and draws the lines white over it, as the bright rims of clear
 edges: the shader's colours run on smoothly across the films, and the lines
 give them edges without the corners of the cells.
 
+*Plateau borders* makes the foam wet. In a real foam the liquid gathers
+where three films meet, into a wedge with three concave sides that meet the
+films smoothly. Here the liquid is drawn as the whole field less the
+bubbles with their corners rounded off: at every junction each bubble cuts
+its corner back along its two films, as far as the slider says in sizes of a
+mean bubble but never past most of a film, with a curve tangent to both.
+Bubbles that share a film cut it back at the same place, so the three cut
+corners make the wedge; and since every cut lies inside its own bubble, a
+border never reaches out past the films, and a bubble smaller than the reach
+is rounded all over. Corners on the wall and on air stay sharp. It is only a
+picture: the rule still makes a dry foam, so the bubbles do not come apart
+as a really wet foam would.
+
+*Bubbles as spline shells* (experimental) draws the bubbles instead of the
+films (`src/foam/shells.ts`). Every bubble becomes a closed cubic B-spline
+inside its outline: its control points are the junctions round it and
+points spaced evenly along each of its films, moved inwards by half the
+*Line width*. A B-spline cuts the corners of its control polygon, by more
+the farther apart its points are, so the shells round off at the junctions.
+The field is filled with liquid and the shells are drawn over it, dark or
+in their *Flat colours*, with a thin rim in their colour; the gap left
+between two shells is the film, and it widens by itself into a Plateau
+border at every junction. *Plateau borders* sets the spacing of the control
+points, from 2 cells to 1.2 radii of a mean bubble: dry at 0, and at 0.8 the
+bubbles round off and come apart in the liquid. A bubble with another
+inside it gets a second loop, a hole moved the other way. The B-spline is
+written out as the Béziers it is made of, so *Save as SVG* saves the very
+curves drawn, one path for every bubble, in cells. At 1024 with 2000
+bubbles it runs as fast as the lines.
+
+*Symmetry* (experimental, *M* steps through it) mirrors the picture, in any
+palette, only as a picture: the visible layers are put together on a canvas
+laid over the field. *Two halves* shows the left half of the field at its
+own scale with its mirror image to the right, *Four quarters* the top left
+quarter mirrored both ways, a kaleidoscope; *Two* and *Four* shrink the
+whole field into a half or a quarter of the screen and mirror its copies,
+so nothing is lost but the bubbles are smaller. A click on any copy lands on
+the same place of the field. Where the cut halves meet, a bubble that
+crosses the axis turns into one symmetric bubble, with a notch where its
+outline did not meet the axis square; where whole fields meet, the wall
+shows as a doubled film.
+
+*Line width by* makes some films wider than the slider says. *Bend* changes
+the width along a film, which is drawn as a filled ribbon: at every point it
+goes by the curvature of the circle through the point and two others a
+quarter of the film to either side (the end points take it from where that
+window is whole), smoothed along the film and taken against the radius of a
+mean bubble, and it widens a little towards the ends, as a film does into
+the liquid of a junction. It is never more than twice the slider's width,
+nor wider than a third of the radius the film bends round, so a ring round
+a small bubble does not fill it. By Laplace's law the bend of a film is the
+difference in pressure between the bubbles on its two sides, divided by its
+tension, so the wide films are those round small bubbles, which are about
+to be squeezed out. *Shortness* goes by the film's length against the mean,
+so the widest are the short films on the way to a T1 swap.
+
+*Measure the films*, in any palette, charts three things twice a second
+from the traced lines (`src/foam/measure.ts`). Only bubbles closed round by
+films count, not those on the wall or on air.
+
+- **Sides.** How many bubbles have n sides, with ⟨n⟩ and its variance μ₂.
+  Euler's rule makes ⟨n⟩ 6 in a large foam. Gold marks m(n), the mean sides
+  of the neighbours of a bubble with n sides, and *a* comes from fitting
+  Aboav–Weaire's law, n·m(n) = (6 − a)·n + 6a + μ₂: a bubble with many sides
+  has neighbours with few.
+- **Angles** where three films meet, taken from the direction of each film
+  three cells out. Plateau's rule is 120°. The three always add up to 360°,
+  so their mean says nothing; the chart gives their spread round 120° and
+  the share within 10° of it.
+- **Von Neumann's law.** When gas seeps through the films, a bubble with n
+  sides grows or shrinks at a rate k·(n − 6), whatever its size. Every 100
+  steps after the field is full, the change of area of every closed bubble
+  is put down against the sides it had, a bubble that vanished meanwhile
+  left out, and the means by n are charted with the line fitted through all
+  of them. It needs *Gas seeps through the films*; with the areas kept the
+  rates are only noise round zero.
+
+In this rule's foam, at kernel radius 6 and noise 0.1, the sides came out
+with ⟨n⟩ about 5.9 and a between 1.1 and 1.8, the angles about 10–12° off
+120° (rms), and seeping gas followed von Neumann's law with k about 610–640
+cells per 100 steps at 320, 512, 768 and 1024 alike: the rate does not
+depend on the size of the bubbles. The fitted c, about −85 to −110, puts the
+bubble that neither grows nor shrinks at about 6.15 sides instead of 6.
+
 With *Shimmer of a thin film*, on by default for the two light palettes, the
 picture is drawn by a WebGL2 shader instead. Every bubble has a thin-film
 colour of its own that drifts with time, is stirred by a slow swirl and

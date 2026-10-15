@@ -377,6 +377,58 @@ canvas under the lines, which are drawn white on a clear canvas laid over
 it. Looked at in a screenshot and zoomed in; the flat fill and the soap
 palette were looked at again after the canvases were stacked.
 
+Then three things from the list of ideas (branch `foam-plateau-physics`):
+Plateau borders drawn as concave wedges at the junctions, the line width by
+a film's bend or shortness, and measurements of the films with three charts
+in the side panel. The first borders reached 0.45 of a mean bubble's radius
+at most and looked like small dots; they now reach 0.8. The first von
+Neumann fit gave k about 640 and a large c in every run: it counted the
+growth into air before the field was full, so looks start once there is no
+air left. The mean angle at junctions was always 120.0°, as three angles
+round a point must be; it was replaced by their spread round 120° and the
+share within 10°. Checked in screenshots: wet borders at 0.6 and 1 at 320,
+the bend width at 1024 with 2000 centres and gas seeping, all options at
+once on the CPU with the stress fill, and the measurements with the soap
+palette at 768. The numbers are in the README. Not checked: the cost of
+measuring at 1024 on its own, and the borders where a junction has four
+films.
+
+On a look by the user two of these were redone. The bend made a whole film
+wider, which looked false; the width now changes along the film, drawn as a
+ribbon. A bend taken over four points on either side saw the steps of the
+cells and gave ragged ribbons; over a quarter of the film it is smooth, but
+the ends, where the window shrank, made blots at the junctions until they
+took the bend from where the window is whole. And the borders, a wedge per
+junction with curves through the junction, grew horns round a small bubble,
+whose films are short and bent: a wedge could reach out past them. The
+liquid is now the field less the bubbles with rounded corners, so it cannot
+leave the space between them. Checked in screenshots at 512 with borders at
+0.6 and 1, alone and with the bend, and zoomed in on small bubbles.
+Then, on a screenshot by the user, the rings of the bend round the smallest
+bubbles were still thick enough to fill them; the width is now held to twice
+the slider's and to a third of the radius of the bend.
+
+Then, on the user's idea, the bubbles as spline shells (branch
+`foam-spline-shells`, experimental): instead of the films, every bubble as a
+closed B-spline on its outline moved inwards, over a field of liquid, so
+that films and borders are the gaps between the shells, and saved as SVG.
+The control points keep the junctions and are spaced evenly along each film
+between, so the rounding is the same at every corner. Checked in screenshots
+at 512 at spacings 0.3 and 0.8, dark and with flat colours, and at 1024 with
+2000 bubbles, where it ran at the speed of the lines. The SVG was caught in
+the browser, parsed without errors (400 bubbles, 800 paths, about 360 kB)
+and looked like the canvas. Not checked: bubbles inside others, and the
+shells while the foam coarsens; the smallest bubbles come out as thin
+slivers, since an inset of a fixed depth is too much for them.
+
+Then symmetry, as a picture (branch `foam-mirror`, experimental): a half or
+a quarter of the field mirrored at its own scale, or the whole field shrunk
+and mirrored, on a canvas over the others, with clicks mapped back through
+the mirror. Looked at in screenshots with the spline shells (four quarters,
+four whole, two halves) and the soap palette (four quarters). The cut
+halves make notches and thin slivers where bubbles cross the axis; a foam
+grown symmetric, with the rule mirrored at the axis, would meet it square.
+
 The rule also runs on the GPU (`src/foam/foamgpu.ts`), reading the labels
 back every four steps. Compared with the CPU in the browser at 320: without
 area keeping 16 bubbles were left after about 1000 steps and 7 after about

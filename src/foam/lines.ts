@@ -138,12 +138,17 @@ function smooth(points: Float32Array, closed: boolean): void {
   }
 }
 
+/** A line in a loop round a bubble, and whether the loop runs along it from start to end. */
+export interface Piece {
+  line: FilmLine;
+  forward: boolean;
+}
+
 /**
- * The outline of every bubble, made of the lines round it: for a label, its
- * lines joined end to end into closed loops. A bubble with another inside it
- * gets two loops, to be filled with the even-odd rule.
+ * The lines round every bubble: for a label, its lines joined end to end into
+ * closed loops. A bubble with another inside it gets two loops.
  */
-export function outlines(lines: FilmLine[]): Map<number, Float32Array[][]> {
+export function loops(lines: FilmLine[]): Map<number, Piece[][]> {
   const byLabel = new Map<number, FilmLine[]>();
   for (const line of lines) {
     for (const side of [line.a, line.b]) {
@@ -153,7 +158,7 @@ export function outlines(lines: FilmLine[]): Map<number, Float32Array[][]> {
       own.push(line);
     }
   }
-  const result = new Map<number, Float32Array[][]>();
+  const result = new Map<number, Piece[][]>();
   for (const [label, own] of byLabel) {
     // Which of its lines meet at each corner.
     const meeting = new Map<number, number[]>();
@@ -165,11 +170,11 @@ export function outlines(lines: FilmLine[]): Map<number, Float32Array[][]> {
       }
     });
     const used = new Uint8Array(own.length);
-    const loops: Float32Array[][] = [];
+    const found: Piece[][] = [];
     for (let first = 0; first < own.length; first++) {
       if (used[first]) continue;
       // Round the loop from the start of its first line until it is back there.
-      const loop: Float32Array[] = [];
+      const loop: Piece[] = [];
       const home = own[first].start;
       let k = first;
       let from = home;
@@ -177,7 +182,7 @@ export function outlines(lines: FilmLine[]): Map<number, Float32Array[][]> {
         used[k] = 1;
         const line = own[k];
         const forward = line.start === from;
-        loop.push(forward ? line.points : reversed(line.points));
+        loop.push({ line, forward });
         const to = forward ? line.end : line.start;
         if (to === home) break;
         const next = (meeting.get(to) ?? []).find((j) => !used[j]);
@@ -185,11 +190,40 @@ export function outlines(lines: FilmLine[]): Map<number, Float32Array[][]> {
         k = next;
         from = to;
       }
-      loops.push(loop);
+      found.push(loop);
     }
-    result.set(label, loops);
+    result.set(label, found);
   }
   return result;
+}
+
+/**
+ * The outline of every bubble, made of the lines round it, as points: each
+ * loop of `loops` as its lines' points in the order it runs. To be filled with
+ * the even-odd rule.
+ */
+export function outlines(lines: FilmLine[]): Map<number, Float32Array[][]> {
+  const result = new Map<number, Float32Array[][]>();
+  for (const [label, found] of loops(lines)) {
+    result.set(
+      label,
+      found.map((loop) => loop.map(({ line, forward }) => (forward ? line.points : reversed(line.points)))),
+    );
+  }
+  return result;
+}
+
+/** The part of a line between these two distances along it from its start, as x, y, x, y, ... */
+export function between(points: Float32Array, from: number, to: number): number[] {
+  const out: number[] = [];
+  let walked = 0;
+  out.push(...along(points, true, from));
+  for (let k = 2; k < points.length; k += 2) {
+    walked += Math.hypot(points[k] - points[k - 2], points[k + 1] - points[k - 1]);
+    if (walked > from && walked < to) out.push(points[k], points[k + 1]);
+  }
+  out.push(...along(points, true, to));
+  return out;
 }
 
 function reversed(points: Float32Array): Float32Array {
@@ -199,4 +233,55 @@ function reversed(points: Float32Array): Float32Array {
     out[k + 1] = points[points.length - 1 - k];
   }
   return out;
+}
+
+/** A point where three or more lines end, with the lines, each as it leaves the point. */
+export interface Junction {
+  x: number;
+  y: number;
+  arms: { line: FilmLine; fromStart: boolean }[];
+}
+
+/** The points where three or more lines meet; the corners of the field are left out. */
+export function junctions(lines: FilmLine[]): Junction[] {
+  const byCorner = new Map<number, Junction>();
+  for (const line of lines) {
+    for (const fromStart of [true, false]) {
+      const corner = fromStart ? line.start : line.end;
+      let junction = byCorner.get(corner);
+      if (!junction) {
+        const k = fromStart ? 0 : line.points.length - 2;
+        junction = { x: line.points[k], y: line.points[k + 1], arms: [] };
+        byCorner.set(corner, junction);
+      }
+      junction.arms.push({ line, fromStart });
+    }
+  }
+  return [...byCorner.values()].filter((j) => j.arms.length >= 3);
+}
+
+/** The length of a line along its points. */
+export function lengthOf(points: Float32Array): number {
+  let length = 0;
+  for (let k = 2; k < points.length; k += 2) length += Math.hypot(points[k] - points[k - 2], points[k + 1] - points[k - 1]);
+  return length;
+}
+
+/** The point this far along a line from one of its ends, or its other end if the line is shorter. */
+export function along(points: Float32Array, fromStart: boolean, distance: number): [number, number] {
+  const n = points.length / 2;
+  const at = (k: number) => (fromStart ? k : n - 1 - k) * 2;
+  let left = distance;
+  for (let k = 1; k < n; k++) {
+    const a = at(k - 1);
+    const b = at(k);
+    const step = Math.hypot(points[b] - points[a], points[b + 1] - points[a + 1]);
+    if (step >= left && step > 0) {
+      const t = left / step;
+      return [points[a] + t * (points[b] - points[a]), points[a + 1] + t * (points[b + 1] - points[a + 1])];
+    }
+    left -= step;
+  }
+  const last = at(n - 1);
+  return [points[last], points[last + 1]];
 }

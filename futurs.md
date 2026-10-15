@@ -34,20 +34,14 @@ own.
 
 ## 2D foam
 
-- **Lines as SVG.** The films are vector lines now, so the picture can be
-  saved as SVG for printing or for a vector editor.
-- **Plateau borders.** In a real foam the films thicken where three meet,
-  into small triangles with curved sides. These could be drawn on the lines,
-  with a slider for how wet the foam is. A wet foam would also need a rule of
-  its own: the bubbles round off and stop touching.
-- **Line width by tension.** Draw the line wider or brighter where a film is
-  short or under more stress, as the stress fill already suggests.
-- **Physics checks on the films.**
-  - von Neumann's law: when gas seeps through the films, a bubble with n
-    sides grows or shrinks at a rate proportional to n − 6.
-  - The distribution of the number of sides, and Aboav–Weaire: a bubble with
-    many sides has neighbours with few.
-  - The angles at junctions, now easy to measure from the smooth lines.
+- **Lines as SVG.** The spline shells can be saved as SVG; the lines,
+  with their glow, cannot yet.
+- **A wet foam rule.** The Plateau borders are drawn now, but the rule still
+  makes a dry foam. A wet one would need a rule of its own: the bubbles round
+  off and stop touching when there is enough liquid.
+- **More checks on the films.** Lewis's law (a bubble's area grows linearly
+  with its sides) and the T1 events counted over time; von Neumann's
+  rate shown per bubble on the picture, in colour.
 - **Shear.** Push the foam from one side and watch T1 events, where two
   junctions meet and the films between four bubbles swap neighbours.
 - **The lines faster.** The films are traced again from the whole field when

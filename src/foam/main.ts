@@ -1,6 +1,8 @@
 import { AIR, Foam, type FoamParams } from './foam.ts';
 import { FoamGpu } from './foamgpu.ts';
-import { outlines, traceFilms, WALL, type FilmLine } from './lines.ts';
+import { between, lengthOf, loops, outlines, traceFilms, WALL, type FilmLine, type Piece } from './lines.ts';
+import { drawMeasures, measureFilms, Seepage } from './measure.ts';
+import { shells, svgPath, traceShell, type Shell } from './shells.ts';
 import { Sheen } from './sheen.ts';
 
 /** Per-frame time limit for stepping, in ms. */
@@ -76,8 +78,41 @@ type Fill = 'none' | 'flat' | 'stress';
 let fill: Fill = 'none';
 let fillOpacity = 0.35;
 let bubbleOutlines = new Map<number, Float32Array[][]>();
+let bubbleLoops = new Map<number, Piece[][]>();
+/** The bubbles drawn as smooth shells with liquid between, instead of lines. */
+let asShells = false;
+let bubbleShells: Shell[] = [];
+/** The tracing and settings the shells were built for. */
+let shellsAt = '';
+/** The colour of the liquid between the shells. */
+const LIQUID = '#d6e2f6';
 /** The step and edit the lines were traced at. */
 let tracedAt = '';
+/** How far the Plateau borders reach along the films, from 0 for a dry foam, in sizes of a bubble. */
+let wetness = 0;
+/**
+ * What sets the width of a line: nothing, its bend, which is the difference in
+ * pressure of the bubbles on its two sides, or how short it is.
+ */
+type WidthBy = 'even' | 'bend' | 'short';
+let widthBy: WidthBy = 'even';
+/** Measuring the films, every MEASURE_EVERY ms. */
+let measuring = false;
+const MEASURE_EVERY = 500;
+let measuredAt = 0;
+const seepage = new Seepage();
+const measurePlot = byId<HTMLCanvasElement>('measure-plot');
+
+/**
+ * The picture mirrored, only as a picture. 'crop': a half or a quarter of the
+ * field at its own scale, mirrored into the rest. 'whole': the whole field
+ * shrunk, and mirrored copies of it beside it.
+ */
+type Mirror = 'none' | 'two-crop' | 'four-crop' | 'two-whole' | 'four-whole';
+const MIRRORS: Mirror[] = ['none', 'two-crop', 'four-crop', 'two-whole', 'four-whole'];
+let mirror: Mirror = 'none';
+const mirrorCanvas = byId<HTMLCanvasElement>('field-mirror');
+const mirrorCtx = mirrorCanvas.getContext('2d')!;
 
 let size = 0;
 let foam!: Foam;
@@ -140,6 +175,7 @@ const coarseningSelect = byId<HTMLSelectElement>('coarsening');
 const chooseCoarsening = () => {
   coarsening = coarseningSelect.value as Coarsening;
   params.keepArea = coarsening !== 'seep';
+  seepage.reset();
   syncControls();
 };
 coarseningSelect.addEventListener('change', chooseCoarsening);
@@ -156,9 +192,21 @@ window.addEventListener('keydown', (e) => {
   if (e.key === ' ') togglePause();
   else if (e.key === 'n' || e.key === 'N') scatter();
   else if (e.key === 'a' || e.key === 'A') addCentre();
+  else if (e.key === 'm' || e.key === 'M') {
+    mirrorSelect.value = MIRRORS[(MIRRORS.indexOf(mirror) + 1) % MIRRORS.length];
+    mirrorSelect.dispatchEvent(new Event('change'));
+  }
   else return;
   e.preventDefault();
 });
+
+const mirrorSelect = byId<HTMLSelectElement>('mirror');
+mirrorSelect.addEventListener('change', () => {
+  mirror = mirrorSelect.value as Mirror;
+  mirrorCanvas.hidden = mirror === 'none';
+});
+mirror = mirrorSelect.value as Mirror;
+mirrorCanvas.hidden = mirror === 'none';
 
 const linesToggle = byId<HTMLInputElement>('as-lines');
 linesToggle.addEventListener('change', () => {
@@ -174,13 +222,34 @@ fillSelect.addEventListener('change', () => {
 });
 fill = fillSelect.value as Fill;
 bindRange('fill-opacity', 2, (v) => (fillOpacity = v));
+bindRange('wetness', 2, (v) => (wetness = v));
+const shellsToggle = byId<HTMLInputElement>('as-shells');
+shellsToggle.addEventListener('change', () => {
+  asShells = shellsToggle.checked;
+  syncControls();
+});
+asShells = shellsToggle.checked;
+byId('save-svg').addEventListener('click', saveSvg);
+const widthSelect = byId<HTMLSelectElement>('width-by');
+widthSelect.addEventListener('change', () => (widthBy = widthSelect.value as WidthBy));
+widthBy = widthSelect.value as WidthBy;
+const measureToggle = byId<HTMLInputElement>('measure');
+measureToggle.addEventListener('change', () => {
+  measuring = measureToggle.checked;
+  seepage.reset();
+  measurePlot.hidden = !measuring;
+});
+measuring = measureToggle.checked;
+measurePlot.hidden = !measuring;
 
 for (const target of [canvas, sheenCanvas, linesCanvas]) {
   target.addEventListener('contextmenu', (e) => e.preventDefault());
   target.addEventListener('pointerdown', (e) => {
     const rect = target.getBoundingClientRect();
-    const x = Math.floor(((e.clientX - rect.left) / rect.width) * size);
-    const y = Math.floor(((e.clientY - rect.top) / rect.height) * size);
+    const at = unmirror((e.clientX - rect.left) / rect.width, (e.clientY - rect.top) / rect.height);
+    if (!at) return;
+    const x = Math.floor(at[0] * size);
+    const y = Math.floor(at[1] * size);
     if (x < 0 || x >= size || y < 0 || y >= size) return;
     if (e.button === 2 || e.shiftKey) foam.pop(x, y);
     else foam.seed(x, y, brush);
@@ -209,6 +278,10 @@ function syncControls(): void {
   byId('pick-line-width').hidden = !drawingLines();
   byId('pick-fill').hidden = !drawingLines();
   byId('pick-fill-opacity').hidden = !drawingLines() || fill !== 'flat';
+  byId('pick-wetness').hidden = !drawingLines();
+  byId('pick-width-by').hidden = !drawingLines() || asShells;
+  byId('pick-shells').hidden = !drawingLines();
+  byId('save-svg').hidden = !drawingLines() || !asShells;
   // The lines lie over the stress picture, or over the plain field, which they cover.
   canvas.hidden = shimmering() || stressUnder();
   sheenCanvas.hidden = !shimmering() && !stressUnder();
@@ -231,6 +304,7 @@ function build(n: number): void {
 function scatter(): void {
   foam.clear();
   foam.scatter(centreCount, params.radius * SEED_SIZE);
+  seepage.reset();
 }
 
 function addCentre(): void {
@@ -263,6 +337,11 @@ function frame(): void {
     rateSince = now;
   }
   render();
+  if (mirror !== 'none') renderMirror();
+  if (measuring && now - measuredAt > MEASURE_EVERY) {
+    measuredAt = now;
+    measure();
+  }
   requestAnimationFrame(frame);
 }
 
@@ -275,6 +354,319 @@ function coarsen(steps: number): void {
     const done = coarsening === 'burst' ? foam.burstFilm() : foam.popAny();
     if (!done) break;
   }
+}
+
+/** Trace the films again if the field has changed since. */
+function traceLines(): void {
+  const at = `${foam.steps}:${foam.edits}`;
+  if (at === tracedAt) return;
+  filmLines = traceFilms(foam.label, size, size);
+  bubbleOutlines = outlines(filmLines);
+  bubbleLoops = loops(filmLines);
+  tracedAt = at;
+}
+
+/** Count the sides and angles of the films, and how the areas change, and chart them. */
+function measure(): void {
+  traceLines();
+  const measures = measureFilms(filmLines);
+  if (foam.air > 0) seepage.forget();
+  else if (!paused) seepage.update(foam.steps, foam.label, measures.sides);
+  drawMeasures(measurePlot, measures, seepage, coarsening === 'seep');
+}
+
+/** The radius of a bubble of the mean size, in cells. */
+function bubbleRadius(): number {
+  return Math.sqrt((size * size) / Math.max(1, foam.bubbles) / Math.PI);
+}
+
+/** How much wider than the slider says a whole line is drawn, for `widthBy`; the bend goes point by point. */
+function widthFactor(line: FilmLine, meanLength: number): number {
+  if (widthBy === 'short') return Math.min(4, 0.35 + (0.65 * meanLength) / Math.max(0.5, lengthOf(line.points)));
+  return 1;
+}
+
+/** The bend at a point is taken over this share of the line to either side, and no fewer than BEND_REACH points. */
+const BEND_SHARE = 0.25;
+const BEND_REACH = 4;
+/** The most a line is as wide as the radius it bends round. */
+const BEND_CAP = 1 / 3;
+/** Rounds of smoothing of the widths along a line, so that the wobble of the cells does not show. */
+const BEND_SMOOTHING = 10;
+
+/**
+ * The width in pixels of a line at each of its points, from `base`, the
+ * slider's, by the bend there: the curvature of the circle through the point and two
+ * others a quarter of the line to either side, against the radius of a mean
+ * bubble. A film is then wide where it curves and thin where it runs
+ * straight, and wider still towards its ends, where it runs into the liquid
+ * of the junction, as a meniscus.
+ */
+function bendWidths(points: Float32Array, radius: number, base: number, cellPx: number): Float32Array {
+  const n = points.length / 2;
+  const widths = new Float32Array(n);
+  // Near the ends the window would shrink to a few points, which see only the
+  // steps of the cells; there the bend is taken where the window is whole.
+  const window = Math.min(Math.max(BEND_REACH, Math.round(n * BEND_SHARE)), Math.floor((n - 1) / 2));
+  for (let k = 0; k < n; k++) {
+    const middle = Math.min(Math.max(k, window), n - 1 - window);
+    const reach = window;
+    let bend = 0;
+    if (reach > 0) {
+      const k = middle;
+      const a = (k - reach) * 2;
+      const b = k * 2;
+      const c = (k + reach) * 2;
+      const ab = Math.hypot(points[b] - points[a], points[b + 1] - points[a + 1]);
+      const bc = Math.hypot(points[c] - points[b], points[c + 1] - points[b + 1]);
+      const ca = Math.hypot(points[c] - points[a], points[c + 1] - points[a + 1]);
+      const twice = Math.abs((points[b] - points[a]) * (points[c + 1] - points[a + 1]) - (points[b + 1] - points[a + 1]) * (points[c] - points[a]));
+      bend = ab * bc * ca > 0 ? (2 * twice) / (ab * bc * ca) : 0;
+    }
+    widths[k] = bend;
+  }
+  const copy = new Float32Array(n);
+  for (let round = 0; round < BEND_SMOOTHING; round++) {
+    copy.set(widths);
+    for (let k = 1; k < n - 1; k++) widths[k] = (copy[k - 1] + 2 * copy[k] + copy[k + 1]) / 4;
+  }
+  for (let k = 0; k < n; k++) {
+    const t = n > 1 ? (2 * k) / (n - 1) - 1 : 0;
+    const bend = widths[k];
+    widths[k] = base * (0.3 + 1.7 * Math.min(1, bend * radius)) * (0.7 + 0.6 * t * t * t * t);
+    // Never wider than a third of the radius it bends round, nor twice the slider:
+    // round a small bubble a wide line would fill it.
+    if (bend > 0) widths[k] = Math.min(widths[k], (BEND_CAP * cellPx) / bend);
+  }
+  return widths;
+}
+
+/** A line as a filled ribbon whose width changes along it, `widths` in pixels at each point. */
+function drawRibbon(ctx: CanvasRenderingContext2D, points: Float32Array, cell: number, widths: Float32Array): void {
+  const n = points.length / 2;
+  if (n < 2) return;
+  const left: number[] = [];
+  const right: number[] = [];
+  for (let k = 0; k < n; k++) {
+    // The direction over a few points, which the wobble of the cells turns less.
+    const p = Math.max(0, k - 2) * 2;
+    const q = Math.min(n - 1, k + 2) * 2;
+    let tx = points[q] - points[p];
+    let ty = points[q + 1] - points[p + 1];
+    const length = Math.hypot(tx, ty) || 1;
+    tx /= length;
+    ty /= length;
+    const half = widths[k] / 2;
+    const x = points[k * 2] * cell;
+    const y = points[k * 2 + 1] * cell;
+    left.push(x - ty * half, y + tx * half);
+    right.push(x + ty * half, y - tx * half);
+  }
+  ctx.beginPath();
+  ctx.moveTo(left[0], left[1]);
+  for (let k = 2; k < left.length; k += 2) ctx.lineTo(left[k], left[k + 1]);
+  for (let k = right.length - 2; k >= 0; k -= 2) ctx.lineTo(right[k], right[k + 1]);
+  ctx.closePath();
+  ctx.fill();
+}
+
+/**
+ * Plateau borders: the liquid of a wet foam, which is all of the field but the
+ * bubbles with their corners rounded off. At every junction each bubble cuts
+ * its corner back along its two films, as far as `wetness` of a bubble's size
+ * but never past most of a film, with a curve that leaves the films smoothly.
+ * Bubbles that share a film cut it back at the same place, so the cut corners
+ * make the wedge of a border with three concave sides; and as every cut lies
+ * inside its own bubble, a border never reaches out past the films. A bubble
+ * smaller than the reach is rounded all over. Corners on the wall and air are
+ * left sharp.
+ */
+function drawBorders(ctx: CanvasRenderingContext2D, cell: number, radius: number, colour: string): void {
+  const reach = wetness * 0.8 * radius;
+  const walled = new Set<number>();
+  for (const line of filmLines) {
+    if (line.a !== WALL && line.b !== WALL) continue;
+    walled.add(line.start);
+    walled.add(line.end);
+  }
+  const lengths = new Map<FilmLine, number>();
+  const lengthOfLine = (line: FilmLine) => {
+    let length = lengths.get(line);
+    if (length === undefined) lengths.set(line, (length = lengthOf(line.points)));
+    return length;
+  };
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.fillStyle = colour;
+  ctx.beginPath();
+  ctx.rect(0, 0, size * cell, size * cell);
+  for (const [label, found] of bubbleLoops) {
+    for (const loop of found) {
+      const sharp = label === AIR || (loop.length === 1 && loop[0].line.start === loop[0].line.end);
+      /** How far a piece is cut back at its first or last corner, as the loop runs. */
+      const cut = ({ line, forward }: Piece, first: boolean) => {
+        const corner = forward === first ? line.start : line.end;
+        if (sharp || walled.has(corner)) return 0;
+        return Math.min(reach, 0.45 * lengthOfLine(line));
+      };
+      // Each piece cut back at both ends, in the order the loop runs.
+      const cutPieces = loop.map((piece) => {
+        const length = lengthOfLine(piece.line);
+        const head = cut(piece, true);
+        const tail = cut(piece, false);
+        const { points } = piece.line;
+        if (piece.forward) return between(points, head, length - tail);
+        const part = between(points, tail, length - head);
+        const turned: number[] = [];
+        for (let k = part.length - 2; k >= 0; k -= 2) turned.push(part[k], part[k + 1]);
+        return turned;
+      });
+      const corner = ({ line, forward }: Piece) => {
+        const k = forward ? line.points.length - 2 : 0;
+        return [line.points[k] * cell, line.points[k + 1] * cell];
+      };
+      ctx.moveTo(cutPieces[0][0] * cell, cutPieces[0][1] * cell);
+      for (let i = 0; i < cutPieces.length; i++) {
+        const part = cutPieces[i];
+        for (let k = 2; k < part.length; k += 2) ctx.lineTo(part[k] * cell, part[k + 1] * cell);
+        // Round the corner to where the next piece starts, the corner itself the control point.
+        const next = cutPieces[(i + 1) % cutPieces.length];
+        const [cx, cy] = corner(loop[i]);
+        ctx.quadraticCurveTo(cx, cy, next[0] * cell, next[1] * cell);
+      }
+      ctx.closePath();
+    }
+  }
+  ctx.fill('evenodd');
+}
+
+/**
+ * The shells for the present tracing. The Plateau borders slider sets how far
+ * apart their control points are, and so how much they round off at the
+ * junctions; the line width sets the films, the gap between two shells.
+ */
+function currentShells(): Shell[] {
+  const spacing = 2 + wetness * 1.2 * bubbleRadius();
+  const cssCell = Math.max(1e-6, linesCanvas.clientWidth / size);
+  const inset = lineWidth / 2 / cssCell;
+  const at = `${tracedAt}:${spacing}:${inset}`;
+  if (at !== shellsAt) {
+    bubbleShells = shells(bubbleLoops, spacing, inset);
+    shellsAt = at;
+  }
+  return bubbleShells;
+}
+
+/** The liquid over the whole field, and the shells over it, each with a thin rim in its colour. */
+function renderShells(width: number): void {
+  const ctx = linesCtx;
+  const cell = width / size;
+  const scale = window.devicePixelRatio || 1;
+  ctx.globalCompositeOperation = 'source-over';
+  ctx.globalAlpha = 1;
+  ctx.fillStyle = LIQUID;
+  ctx.fillRect(0, 0, width, width);
+  for (const shell of currentShells()) {
+    ctx.beginPath();
+    traceShell(ctx, shell, cell);
+    ctx.fillStyle = '#0b0d11';
+    ctx.fill('evenodd');
+    if (shell.label === AIR) continue;
+    const colour = css(SHEEN_BRIGHT[hue(shell.label)]);
+    if (fill === 'flat') {
+      ctx.globalAlpha = fillOpacity;
+      ctx.fillStyle = colour;
+      ctx.fill('evenodd');
+      ctx.globalAlpha = 1;
+    }
+    ctx.strokeStyle = colour;
+    ctx.lineWidth = Math.max(1, 0.6 * scale * Math.min(2, lineWidth));
+    ctx.stroke();
+  }
+}
+
+/** The shells and the liquid as an SVG file, in cells. */
+function saveSvg(): void {
+  traceLines();
+  const parts = [
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" width="${size * 2}" height="${size * 2}">`,
+    `<rect width="${size}" height="${size}" fill="${LIQUID}"/>`,
+  ];
+  for (const shell of currentShells()) {
+    const d = svgPath(shell);
+    parts.push(`<path fill-rule="evenodd" fill="#0b0d11" d="${d}"/>`);
+    if (shell.label === AIR) continue;
+    const colour = css(SHEEN_BRIGHT[hue(shell.label)]);
+    const inner = fill === 'flat' ? `fill="${colour}" fill-opacity="${fillOpacity}"` : 'fill="none"';
+    parts.push(`<path fill-rule="evenodd" ${inner} stroke="${colour}" stroke-width="0.4" d="${d}"/>`);
+  }
+  parts.push('</svg>');
+  const link = document.createElement('a');
+  link.href = URL.createObjectURL(new Blob([parts.join('\n')], { type: 'image/svg+xml' }));
+  link.download = `foam-${size}-step${foam.steps}.svg`;
+  link.click();
+  URL.revokeObjectURL(link.href);
+}
+
+/** The tiles of the mirrored picture: where each goes, as fractions of the screen, and which way it is turned. */
+function mirrorTiles(): { x: number; y: number; w: number; h: number; flipX: boolean; flipY: boolean }[] {
+  const four = mirror === 'four-crop' || mirror === 'four-whole';
+  // A cropped half fills the height; two whole fields side by side fill the middle half of it.
+  const h = four ? 0.5 : mirror === 'two-crop' ? 1 : 0.5;
+  const top = mirror === 'two-whole' ? 0.25 : 0;
+  const tiles = [];
+  for (let j = 0; j < (four ? 2 : 1); j++) {
+    for (let i = 0; i < 2; i++) tiles.push({ x: i * 0.5, y: top + j * 0.5, w: 0.5, h, flipX: i === 1, flipY: j === 1 });
+  }
+  return tiles;
+}
+
+/** What part of the field is mirrored, as fractions of it. */
+function mirrorSource(): { w: number; h: number } {
+  if (mirror === 'two-crop') return { w: 0.5, h: 1 };
+  if (mirror === 'four-crop') return { w: 0.5, h: 0.5 };
+  return { w: 1, h: 1 };
+}
+
+/** The visible layers of the picture, put together in the tiles of the mirror. */
+function renderMirror(): void {
+  const scale = window.devicePixelRatio || 1;
+  const width = Math.max(1, Math.round(mirrorCanvas.clientWidth * scale));
+  if (mirrorCanvas.width !== width || mirrorCanvas.height !== width) {
+    mirrorCanvas.width = width;
+    mirrorCanvas.height = width;
+  }
+  const ctx = mirrorCtx;
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+  ctx.fillStyle = '#0b0d11';
+  ctx.fillRect(0, 0, width, width);
+  const source = mirrorSource();
+  for (const layer of [canvas, sheenCanvas, linesCanvas]) {
+    if (layer.hidden || !layer.width) continue;
+    // The cells of the plain field stay sharp, as on the page.
+    ctx.imageSmoothingEnabled = layer !== canvas;
+    for (const tile of mirrorTiles()) {
+      ctx.setTransform(1, 0, 0, 1, 0, 0);
+      ctx.translate((tile.x + (tile.flipX ? tile.w : 0)) * width, (tile.y + (tile.flipY ? tile.h : 0)) * width);
+      ctx.scale(tile.flipX ? -1 : 1, tile.flipY ? -1 : 1);
+      ctx.drawImage(layer, 0, 0, source.w * layer.width, source.h * layer.height, 0, 0, tile.w * width, tile.h * width);
+    }
+  }
+  ctx.setTransform(1, 0, 0, 1, 0, 0);
+}
+
+/** Where on the field a point of the screen is, as fractions, through the mirror; null off the picture. */
+function unmirror(u: number, v: number): [number, number] | null {
+  if (mirror === 'none') return [u, v];
+  const source = mirrorSource();
+  for (const tile of mirrorTiles()) {
+    if (u < tile.x || u >= tile.x + tile.w || v < tile.y || v >= tile.y + tile.h) continue;
+    let s = (u - tile.x) / tile.w;
+    let t = (v - tile.y) / tile.h;
+    if (tile.flipX) s = 1 - s;
+    if (tile.flipY) t = 1 - t;
+    return [s * source.w, t * source.h];
+  }
+  return null;
 }
 
 function drawingLines(): boolean {
@@ -297,11 +689,10 @@ function renderLines(): void {
     linesCanvas.width = width;
     linesCanvas.height = width;
   }
-  const at = `${foam.steps}:${foam.edits}`;
-  if (at !== tracedAt) {
-    filmLines = traceFilms(foam.label, size, size);
-    bubbleOutlines = outlines(filmLines);
-    tracedAt = at;
+  traceLines();
+  if (asShells) {
+    renderShells(width);
+    return;
   }
   const ctx = linesCtx;
   const cell = width / size;
@@ -338,6 +729,20 @@ function renderLines(): void {
     }
     ctx.globalAlpha = 1;
   }
+  const radius = bubbleRadius();
+  let meanLength = 0;
+  if (widthBy === 'short') {
+    let count = 0;
+    for (const line of filmLines) {
+      if (line.a === WALL || line.b === WALL) continue;
+      meanLength += lengthOf(line.points);
+      count++;
+    }
+    meanLength /= Math.max(1, count);
+  }
+  // The widths by bend, worked out once for both passes.
+  const bends = widthBy === 'bend' ? new Map<FilmLine, Float32Array>() : null;
+  if (bends) for (const line of filmLines) if (line.a !== WALL && line.b !== WALL) bends.set(line, bendWidths(line.points, radius, lineWidth * scale, cell));
   ctx.globalCompositeOperation = 'lighter';
   ctx.lineCap = 'round';
   ctx.lineJoin = 'round';
@@ -345,14 +750,23 @@ function renderLines(): void {
     [3, 0.22],
     [1, 1],
   ]) {
-    ctx.lineWidth = lineWidth * scale * wide;
     ctx.globalAlpha = alpha;
     for (const line of filmLines) {
       // The edge of the field closes the bubbles but is no film.
       if (line.a === WALL || line.b === WALL) continue;
       const { points } = line;
       // Over the stress colours a line is the light rim of a clear edge.
-      ctx.strokeStyle = stress ? '#fff8fa' : css(SHEEN_BRIGHT[pairHue(line.a, line.b)]);
+      const colour = stress ? '#fff8fa' : css(SHEEN_BRIGHT[pairHue(line.a, line.b)]);
+      if (bends) {
+        const widths = bends.get(line)!;
+        const px = new Float32Array(widths.length);
+        for (let k = 0; k < widths.length; k++) px[k] = widths[k] * wide;
+        ctx.fillStyle = colour;
+        drawRibbon(ctx, points, cell, px);
+        continue;
+      }
+      ctx.lineWidth = lineWidth * scale * wide * widthFactor(line, meanLength);
+      ctx.strokeStyle = colour;
       ctx.beginPath();
       ctx.moveTo(points[0] * cell, points[1] * cell);
       for (let k = 2; k < points.length; k += 2) ctx.lineTo(points[k] * cell, points[k + 1] * cell);
@@ -360,6 +774,7 @@ function renderLines(): void {
     }
   }
   ctx.globalAlpha = 1;
+  if (wetness > 0) drawBorders(ctx, cell, radius, stress ? '#fff8fa' : 'rgba(214, 228, 250, 0.92)');
 }
 
 /** One hue for a film, the same whichever side it is seen from. */

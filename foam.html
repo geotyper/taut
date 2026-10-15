@@ -14,6 +14,7 @@
             <canvas id="field"></canvas>
             <canvas id="field-sheen" class="smooth" hidden></canvas>
             <canvas id="field-lines" class="smooth overlay" hidden></canvas>
+            <canvas id="field-mirror" class="smooth overlay" hidden></canvas>
           </div>
           <p class="stat" id="stat"></p>
         </figure>
@@ -29,7 +30,7 @@
         </p>
         <p class="hint">
           Left button starts a bubble, right button or Shift bursts one. Keys:
-          <kbd>N</kbd> new centres, <kbd>A</kbd> add a centre, <kbd>Space</kbd> pause.
+          <kbd>N</kbd> new centres, <kbd>A</kbd> add a centre, <kbd>M</kbd> symmetry, <kbd>Space</kbd> pause.
         </p>
 
         <label>
@@ -45,10 +46,26 @@
           </select>
         </label>
 
+        <label>
+          <span>Symmetry</span>
+          <select id="mirror">
+            <option value="none">None</option>
+            <option value="two-crop">Two halves: the left half mirrored</option>
+            <option value="four-crop">Four quarters: the top left mirrored</option>
+            <option value="two-whole">Two: the whole field and its mirror</option>
+            <option value="four-whole">Four: the whole field mirrored both ways</option>
+          </select>
+        </label>
+
         <label class="check" id="pick-lines">
           <input id="as-lines" type="checkbox" />
           <span>Films as lines</span>
         </label>
+        <label class="check" id="pick-shells">
+          <input id="as-shells" type="checkbox" />
+          <span>Bubbles as spline shells (experimental)</span>
+        </label>
+        <button id="save-svg">Save as SVG</button>
         <label id="pick-line-width">
           <span>Line width <output id="line-width-out"></output></span>
           <input id="line-width" type="range" min="0.5" max="8" step="0.5" value="2" />
@@ -64,6 +81,18 @@
         <label id="pick-fill-opacity">
           <span>Fill <output id="fill-opacity-out"></output></span>
           <input id="fill-opacity" type="range" min="0.05" max="1" step="0.05" value="0.35" />
+        </label>
+        <label id="pick-wetness">
+          <span>Plateau borders <output id="wetness-out"></output></span>
+          <input id="wetness" type="range" min="0" max="1" step="0.05" value="0" />
+        </label>
+        <label id="pick-width-by">
+          <span>Line width by</span>
+          <select id="width-by">
+            <option value="even">Nothing: all alike</option>
+            <option value="bend">Bend: pressure difference</option>
+            <option value="short">Shortness</option>
+          </select>
         </label>
 
         <label class="check" id="pick-sheen">
@@ -84,6 +113,12 @@
           <span>Bursts per 1000 steps <output id="rate-out"></output></span>
           <input id="rate" type="range" min="1" max="100" step="1" value="10" />
         </label>
+
+        <label class="check">
+          <input id="measure" type="checkbox" />
+          <span>Measure the films</span>
+        </label>
+        <canvas id="measure-plot" class="plot" hidden></canvas>
 
         <label>
           <span>Field size</span>
