@@ -360,18 +360,23 @@ bubbles it runs as fast as the lines.
 With the stress fill the shells are cut out of the liquid as windows onto
 the stress picture underneath; the SVG keeps only their outlines then.
 
-Five more fills, made for pictures and for the mirrors, are offered with
+Six more fills, made for pictures and for the mirrors, are offered with
 the shells only (`src/foam/artfill.ts`), each drawn from the shell itself
 so that a mirror turns it into a pattern: *Glowing spheres*, a radial
 light from a little above the middle of each bubble fading to its rim;
-*Neon rims*, light bands inside the rim of a dark bubble; *Contour rings*,
-copies of the outline drawn in towards its middle, the colour drifting
-from ring to ring; *Stained glass, by sides*, a pane coloured by how many
-bubbles it touches (red for three or fewer, then orange, yellow, green for
-six, blue, violet, magenta for nine or more) in dark leading; and
-*Hatching*, parallel strokes at an angle of the bubble's own, which mirrors
-fold into chevrons. All five go into the SVG too, as gradients, clip paths
-and patterns.
+*Neon rims*, a tube along every shell on black, a core near white inside
+widening halos of its colour, drawn last and adding up, so where two
+bubbles meet their light runs together; *Contour rings*, the bubble in a
+dark tone of its colour and copies of its outline drawn in towards the
+middle, lighter and darker by turns; *Stained glass, by sides*, a pane
+coloured by how many bubbles it touches (red for three or fewer, then
+orange, yellow, green for six, blue, violet, magenta for nine or more) in
+dark leading; *Hatching, in ink*, black strokes on paper at an angle of the
+bubble's own, which mirrors fold into chevrons; and *Engraving*, the same
+strokes bowed over each bubble as if it were a dome lit from the upper
+left, the way lines drawn across a round thing bend, each piece as thick as
+the shade there. All six go into the SVG too, as gradients, clip paths,
+patterns and a blur.
 
 *Symmetry* (experimental, *M* steps through it) mirrors the picture, in any
 palette, only as a picture: the visible layers are put together on a canvas

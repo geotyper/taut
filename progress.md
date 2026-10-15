@@ -488,6 +488,14 @@ of its shell's Bézier end points. Looked at plain and in mirrors of four,
 widths, broke into moiré and are now three and a half apart, and the neon
 rim went from four hard bands to nine faint ones. Every fill saved as an
 SVG that parses.
+Then on the user's look: stained glass is the best; hatching better in
+black and white; rings lost the pattern of the areas in their rainbow; the
+neon had nothing of neon. Hatching is now ink on paper, with an engraving
+next to it whose strokes bow over the bubble as over a lit dome and thicken
+in its shade, in five widths so that each is one path; rings take one
+colour a bubble; the neon is a tube along every shell drawn over all the
+fills and added up, on black. Looked at plain, wet and in kaleidoscopes of
+6 and 8 sectors; every fill saved as an SVG that parses.
 
 The rule also runs on the GPU (`src/foam/foamgpu.ts`), reading the labels
 back every four steps. Compared with the CPU in the browser at 320: without

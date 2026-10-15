@@ -2,7 +2,7 @@ import { AIR, Foam, type FoamParams } from './foam.ts';
 import { FoamGpu } from './foamgpu.ts';
 import { between, lengthOf, loops, outlines, traceFilms, WALL, type FilmLine, type Piece } from './lines.ts';
 import { drawMeasures, measureFilms, Seepage } from './measure.ts';
-import { ART_FILLS, drawArt, LEAD, svgArt, type ArtBubble, type ArtFill } from './artfill.ts';
+import { ART_FILLS, drawArt, drawNeon, lookOf, svgArt, svgArtDefs, type ArtBubble, type ArtFill } from './artfill.ts';
 import { shells, svgPath, traceShell, type Shell } from './shells.ts';
 import { Sheen } from './sheen.ts';
 
@@ -665,11 +665,12 @@ function renderShells(width: number): void {
   ctx.globalCompositeOperation = 'source-over';
   ctx.globalAlpha = 1;
   const art = ART_FILLS.includes(fill) ? (fill as ArtFill) : null;
-  const glass = fill === 'glass';
-  ctx.fillStyle = glass ? LEAD : LIQUID;
+  const look = art ? lookOf(art, LIQUID, '#0b0d11') : null;
+  ctx.fillStyle = look?.liquid ?? LIQUID;
   ctx.fillRect(0, 0, width, width);
   const line = Math.max(1, 0.6 * scale * Math.min(2, lineWidth));
-  for (const shell of currentShells()) {
+  const all = currentShells();
+  for (const shell of all) {
     ctx.beginPath();
     traceShell(ctx, shell, cell);
     if (stress && shell.label !== AIR) {
@@ -677,7 +678,7 @@ function renderShells(width: number): void {
       ctx.fill('evenodd');
       ctx.globalCompositeOperation = 'source-over';
     } else {
-      ctx.fillStyle = '#0b0d11';
+      ctx.fillStyle = shell.label === AIR ? '#0b0d11' : (look?.inside ?? '#0b0d11');
       ctx.fill('evenodd');
     }
     if (shell.label === AIR) continue;
@@ -689,10 +690,13 @@ function renderShells(width: number): void {
       ctx.globalAlpha = 1;
     }
     if (art) drawArt(ctx, art, artBubble(shell), cell, line);
-    ctx.strokeStyle = glass ? LEAD : colour;
-    ctx.lineWidth = glass ? 1.5 * line : line;
+    if (look && look.outline === null) continue;
+    ctx.strokeStyle = look && look.outline !== 'own' ? look.outline! : colour;
+    ctx.lineWidth = (look?.width ?? 1) * line;
     ctx.stroke();
   }
+  // The neon tubes go over everything, so the light of neighbours adds up.
+  if (art === 'neon') for (const shell of all) if (shell.label !== AIR) drawNeon(ctx, artBubble(shell), cell, line);
 }
 
 /** The shells and the liquid as an SVG file, in cells. */
@@ -710,15 +714,15 @@ function artBubble(shell: Shell): ArtBubble {
 function saveSvg(): void {
   traceLines();
   const art = ART_FILLS.includes(fill) ? (fill as ArtFill) : null;
-  const glass = fill === 'glass';
+  const look = art ? lookOf(art, LIQUID, '#0b0d11') : null;
   const parts = [
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" width="${size * 2}" height="${size * 2}">`,
-    `<rect width="${size}" height="${size}" fill="${glass ? LEAD : LIQUID}"/>`,
+    `<rect width="${size}" height="${size}" fill="${look?.liquid ?? LIQUID}"/>`,
   ];
-  const defs: string[] = [];
+  const defs: string[] = art ? [svgArtDefs(art, 0.4)] : [];
   currentShells().forEach((shell, id) => {
     const d = svgPath(shell);
-    parts.push(`<path fill-rule="evenodd" fill="#0b0d11" d="${d}"/>`);
+    parts.push(`<path fill-rule="evenodd" fill="${shell.label === AIR ? '#0b0d11' : (look?.inside ?? '#0b0d11')}" d="${d}"/>`);
     if (shell.label === AIR) return;
     const colour = css(SHEEN_BRIGHT[hue(shell.label)]);
     if (art) {
@@ -727,7 +731,8 @@ function saveSvg(): void {
       parts.push(...made.body);
     }
     const inner = fill === 'flat' ? `fill="${colour}" fill-opacity="${fillOpacity}"` : 'fill="none"';
-    const stroke = glass ? `stroke="${LEAD}" stroke-width="0.6"` : `stroke="${colour}" stroke-width="0.4"`;
+    if (look && look.outline === null) return;
+    const stroke = `stroke="${look && look.outline !== 'own' ? look.outline : colour}" stroke-width="${(0.4 * (look?.width ?? 1)).toFixed(2)}"`;
     parts.push(`<path fill-rule="evenodd" ${inner} ${stroke} d="${d}"/>`);
   });
   parts.splice(2, 0, `<defs>${defs.join('')}</defs>`);
