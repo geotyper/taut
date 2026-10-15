@@ -296,6 +296,30 @@ to air and the neighbours grow in. *Palette* only changes the picture: *Soap
 film* runs the colours of a thin film down every bubble, *Films only* leaves
 the bubbles dark and colours the films.
 
+With *Films as lines*, in *Films only*, the films are drawn as lines instead
+of pixels, as the skeleton of the 3D foam is (`src/foam/lines.ts`). The cell
+edges between unlike cells are walked from corner to corner and joined into
+lines that end where three films meet or at the wall, or close on themselves
+round a bubble inside another. Six rounds of pulling every point halfway to
+the middle of its neighbours, with the ends held, take the staircase of the
+cells away. Each line has a colour of its pair of bubbles and is drawn twice,
+wide and faint for a glow and then thin, the light adding up where lines
+meet, so the corners shine white. *Line width* sets it in screen pixels.
+The lines are traced again whenever the labels change; at 1024 with 2000
+bubbles, some 5900 lines, the page went from 26 to 22 steps a second.
+
+*Fill the bubbles* puts something under the lines. *Flat colours* fills
+every bubble inside the same lines, in its colour, as opaque as *Fill* says,
+so fill and lines meet exactly. For that the edge
+of the field is traced as well, as lines with the wall on one side that are
+not drawn, and the lines round each bubble are joined end to end into
+closed loops; a bubble with another inside it gets two, filled by the
+even-odd rule. Air is left unfilled. *Stress, in polarised light* puts the
+smoothed stress picture of the shader under the lines instead, without its
+own rims, and draws the lines white over it, as the bright rims of clear
+edges: the shader's colours run on smoothly across the films, and the lines
+give them edges without the corners of the cells.
+
 With *Shimmer of a thin film*, on by default for the two light palettes, the
 picture is drawn by a WebGL2 shader instead. Every bubble has a thin-film
 colour of its own that drifts with time, is stirred by a slow swirl and

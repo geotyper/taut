@@ -10,8 +10,11 @@
     <main>
       <div class="fields single">
         <figure>
-          <canvas id="field"></canvas>
-          <canvas id="field-sheen" class="smooth" hidden></canvas>
+          <div class="stack">
+            <canvas id="field"></canvas>
+            <canvas id="field-sheen" class="smooth" hidden></canvas>
+            <canvas id="field-lines" class="smooth overlay" hidden></canvas>
+          </div>
           <p class="stat" id="stat"></p>
         </figure>
       </div>
@@ -40,6 +43,27 @@
             <option value="films">Films only</option>
             <option value="dark">Dark</option>
           </select>
+        </label>
+
+        <label class="check" id="pick-lines">
+          <input id="as-lines" type="checkbox" />
+          <span>Films as lines</span>
+        </label>
+        <label id="pick-line-width">
+          <span>Line width <output id="line-width-out"></output></span>
+          <input id="line-width" type="range" min="0.5" max="8" step="0.5" value="2" />
+        </label>
+        <label id="pick-fill">
+          <span>Fill the bubbles</span>
+          <select id="fill">
+            <option value="none">None</option>
+            <option value="flat">Flat colours</option>
+            <option value="stress">Stress, in polarised light</option>
+          </select>
+        </label>
+        <label id="pick-fill-opacity">
+          <span>Fill <output id="fill-opacity-out"></output></span>
+          <input id="fill-opacity" type="range" min="0.05" max="1" step="0.05" value="0.35" />
         </label>
 
         <label class="check" id="pick-sheen">

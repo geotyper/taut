@@ -364,6 +364,19 @@ screenshots of a cluster of small bubbles they came out round. Soap was
 looked at as through a white veil, the film's colours making only a third of
 it; they now make about two thirds.
 
+Then the films as lines, a choice in *Films only* (branch `foam-film-lines`):
+traced along the cell edges, smoothed, drawn with a glow and a width set by
+a slider. Looked at in screenshots at 320 at two widths and zoomed in; the
+lines keep a slight wobble where the staircase was irregular.
+Then a fill inside the lines, by the loops the lines make round each
+bubble, with the field's edge traced to close them. Looked at while growing,
+with air between the bubbles, filled at two opacities, and with a bubble
+added on top of others; a bubble wholly inside another was not tried.
+Then the stress picture as a fill: the shader draws it without rims on a
+canvas under the lines, which are drawn white on a clear canvas laid over
+it. Looked at in a screenshot and zoomed in; the flat fill and the soap
+palette were looked at again after the canvases were stacked.
+
 The rule also runs on the GPU (`src/foam/foamgpu.ts`), reading the labels
 back every four steps. Compared with the CPU in the browser at 320: without
 area keeping 16 bubbles were left after about 1000 steps and 7 after about

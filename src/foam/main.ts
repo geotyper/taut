@@ -1,5 +1,6 @@
 import { AIR, Foam, type FoamParams } from './foam.ts';
 import { FoamGpu } from './foamgpu.ts';
+import { outlines, traceFilms, WALL, type FilmLine } from './lines.ts';
 import { Sheen } from './sheen.ts';
 
 /** Per-frame time limit for stepping, in ms. */
@@ -60,6 +61,23 @@ const ctx = canvas.getContext('2d')!;
 const stat = byId('stat');
 /** The shader picture, drawn on a canvas of its own. */
 const sheenCanvas = byId<HTMLCanvasElement>('field-sheen');
+/** The films drawn as lines, in 'films' with `asLines`. */
+const linesCanvas = byId<HTMLCanvasElement>('field-lines');
+const linesCtx = linesCanvas.getContext('2d')!;
+let asLines = false;
+/** Width of a line on the screen, in CSS pixels. */
+let lineWidth = 2;
+let filmLines: FilmLine[] = [];
+/**
+ * What fills the bubbles under their lines: nothing, a flat colour each, as
+ * opaque as `fillOpacity`, or the smoothed stress picture of the shader.
+ */
+type Fill = 'none' | 'flat' | 'stress';
+let fill: Fill = 'none';
+let fillOpacity = 0.35;
+let bubbleOutlines = new Map<number, Float32Array[][]>();
+/** The step and edit the lines were traced at. */
+let tracedAt = '';
 
 let size = 0;
 let foam!: Foam;
@@ -142,7 +160,22 @@ window.addEventListener('keydown', (e) => {
   e.preventDefault();
 });
 
-for (const target of [canvas, sheenCanvas]) {
+const linesToggle = byId<HTMLInputElement>('as-lines');
+linesToggle.addEventListener('change', () => {
+  asLines = linesToggle.checked;
+  syncControls();
+});
+asLines = linesToggle.checked;
+bindRange('line-width', 1, (v) => (lineWidth = v));
+const fillSelect = byId<HTMLSelectElement>('fill');
+fillSelect.addEventListener('change', () => {
+  fill = fillSelect.value as Fill;
+  syncControls();
+});
+fill = fillSelect.value as Fill;
+bindRange('fill-opacity', 2, (v) => (fillOpacity = v));
+
+for (const target of [canvas, sheenCanvas, linesCanvas]) {
   target.addEventListener('contextmenu', (e) => e.preventDefault());
   target.addEventListener('pointerdown', (e) => {
     const rect = target.getBoundingClientRect();
@@ -172,8 +205,14 @@ function shaded(p: Palette): boolean {
 function syncControls(): void {
   byId('pick-rate').hidden = coarsening !== 'burst' && coarsening !== 'pop';
   byId('pick-sheen').hidden = !shaded(palette);
-  canvas.hidden = shimmering();
-  sheenCanvas.hidden = !shimmering();
+  byId('pick-lines').hidden = palette !== 'films';
+  byId('pick-line-width').hidden = !drawingLines();
+  byId('pick-fill').hidden = !drawingLines();
+  byId('pick-fill-opacity').hidden = !drawingLines() || fill !== 'flat';
+  // The lines lie over the stress picture, or over the plain field, which they cover.
+  canvas.hidden = shimmering() || stressUnder();
+  sheenCanvas.hidden = !shimmering() && !stressUnder();
+  linesCanvas.hidden = !drawingLines();
 }
 
 /** A new field of this many cells a side, on the GPU where it can run. */
@@ -238,9 +277,108 @@ function coarsen(steps: number): void {
   }
 }
 
+function drawingLines(): boolean {
+  return palette === 'films' && asLines;
+}
+
+function stressUnder(): boolean {
+  return drawingLines() && fill === 'stress' && sheen !== null;
+}
+
+/**
+ * The films as smooth lines, each in a colour of its pair of bubbles, drawn
+ * twice as the skeleton of the 3D foam is: wide and faint for a glow, then
+ * thin and bright, the light adding up where they meet.
+ */
+function renderLines(): void {
+  const scale = window.devicePixelRatio || 1;
+  const width = Math.max(1, Math.round(linesCanvas.clientWidth * scale));
+  if (linesCanvas.width !== width || linesCanvas.height !== width) {
+    linesCanvas.width = width;
+    linesCanvas.height = width;
+  }
+  const at = `${foam.steps}:${foam.edits}`;
+  if (at !== tracedAt) {
+    filmLines = traceFilms(foam.label, size, size);
+    bubbleOutlines = outlines(filmLines);
+    tracedAt = at;
+  }
+  const ctx = linesCtx;
+  const cell = width / size;
+  ctx.globalCompositeOperation = 'source-over';
+  const stress = stressUnder();
+  if (stress) {
+    sheen!.draw(foam.label, hue, 5, performance.now() / 1000);
+    ctx.clearRect(0, 0, width, width);
+  } else {
+    ctx.fillStyle = '#0b0d11';
+    ctx.fillRect(0, 0, width, width);
+  }
+  if (fill === 'flat') {
+    // Inside the same lines as are drawn over it, so the two meet exactly.
+    ctx.globalAlpha = fillOpacity;
+    for (const [label, loops] of bubbleOutlines) {
+      if (label === AIR) continue;
+      ctx.fillStyle = css(SHEEN_BRIGHT[hue(label)]);
+      ctx.beginPath();
+      for (const loop of loops) {
+        let first = true;
+        for (const points of loop) {
+          for (let k = 0; k < points.length; k += 2) {
+            const x = points[k] * cell;
+            const y = points[k + 1] * cell;
+            if (first) ctx.moveTo(x, y);
+            else ctx.lineTo(x, y);
+            first = false;
+          }
+        }
+        ctx.closePath();
+      }
+      ctx.fill('evenodd');
+    }
+    ctx.globalAlpha = 1;
+  }
+  ctx.globalCompositeOperation = 'lighter';
+  ctx.lineCap = 'round';
+  ctx.lineJoin = 'round';
+  for (const [wide, alpha] of [
+    [3, 0.22],
+    [1, 1],
+  ]) {
+    ctx.lineWidth = lineWidth * scale * wide;
+    ctx.globalAlpha = alpha;
+    for (const line of filmLines) {
+      // The edge of the field closes the bubbles but is no film.
+      if (line.a === WALL || line.b === WALL) continue;
+      const { points } = line;
+      // Over the stress colours a line is the light rim of a clear edge.
+      ctx.strokeStyle = stress ? '#fff8fa' : css(SHEEN_BRIGHT[pairHue(line.a, line.b)]);
+      ctx.beginPath();
+      ctx.moveTo(points[0] * cell, points[1] * cell);
+      for (let k = 2; k < points.length; k += 2) ctx.lineTo(points[k] * cell, points[k + 1] * cell);
+      ctx.stroke();
+    }
+  }
+  ctx.globalAlpha = 1;
+}
+
+/** One hue for a film, the same whichever side it is seen from. */
+function pairHue(a: number, b: number): number {
+  return hue(Math.min(a, b) * 65599 + Math.max(a, b));
+}
+
+function css(colour: number): string {
+  return `rgb(${colour & 255},${(colour >> 8) & 255},${(colour >> 16) & 255})`;
+}
+
 function render(): void {
   const label = foam.label;
   stat.textContent = status();
+  if (drawingLines()) {
+    stat.textContent = `${status()} · ${filmLines.length} lines`;
+    renderLines();
+    return;
+  }
   if (shimmering()) {
     sheen!.draw(label, hue, MODES[palette], performance.now() / 1000);
     return;

@@ -83,7 +83,7 @@ void main() {
   vec2 cell = texture(uCells, vAt).rg;
   // In cells; the texture is filtered, so this is smooth across cells.
   vec2 reaches = texture(uReach, vAt).rg * 255.0 / ${STEP}.0;
-  if (uMode == 4) {
+  if (uMode >= 4) {
     // Blurred over about a cell, so the fringes do not follow the steps of
     // the cells a film runs along.
     vec2 sum = 4.0 * reaches;
@@ -122,7 +122,7 @@ void main() {
     float gather = exp(-corner / 14.0);
     // Smoothed, the bubbles' own levels meet at their film, so the colour runs
     // on across it and does not change in the steps of the cells.
-    float level = uMode == 4 ? mix(0.5, own, smoothstep(0.5, 4.0, reach)) : own;
+    float level = uMode >= 4 ? mix(0.5, own, smoothstep(0.5, 4.0, reach)) : own;
     float strain = 450.0 + 500.0 * level + 150.0 * swirl + 80.0 * sin(uTime * 0.15 + level * 6.2832)
                  + (150.0 + 750.0 * gather) * exp(-reach / (3.0 + 6.0 * gather));
     color = interference(TINT + strain);
@@ -131,6 +131,11 @@ void main() {
     // Lifted towards the light pink of a photograph, which sees the sheet against a bright lamp.
     if (cell.g < 0.5) color = mix(interference(TINT_AIR), vec3(1.0, 0.55, 0.75), 0.55);
     float edge = 1.0 - smoothstep(0.5, 1.0, reach);
+    if (uMode == 5) {
+      // Under lines drawn over it, which are its edges.
+      outColor = vec4(color, 1.0);
+      return;
+    }
     if (uMode == 4) {
       // The same light rim on the blurred distance, which no longer starts at half a cell.
       edge = (1.0 - smoothstep(0.55, 1.05, reach)) * (1.0 - 0.5 * exp(-corner / 2.0));
@@ -214,7 +219,7 @@ export class Sheen {
     gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
   }
 
-  /** Mode: 0 soap, 1 pastel, 2 stress in polarised light, 3 the same with light edges, 4 and smoothed. */
+  /** Mode: 0 soap, 1 pastel, 2 stress in polarised light, 3 the same with light edges, 4 and smoothed, 5 that without edges. */
   draw(label: Uint16Array, hue: (label: number) => number, mode: number, seconds: number): void {
     const { gl, canvas, w, h, cells, reaches } = this;
     const scale = window.devicePixelRatio || 1;
@@ -229,7 +234,7 @@ export class Sheen {
       cells[i * 2] = hue(label[i]);
       cells[i * 2 + 1] = label[i] === AIR ? 0 : 255;
     }
-    this.measure(label, mode === 4);
+    this.measure(label, mode >= 4);
 
     gl.viewport(0, 0, width, height);
     gl.useProgram(this.program);
