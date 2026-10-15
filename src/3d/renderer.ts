@@ -22,6 +22,27 @@ export interface View {
    * come from whoever computes the field (see Renderer.setEdges).
    */
   light?: { films: number; lines: number };
+  /**
+   * The colour of the films instead of a hue per bubble: 'soap' for the
+   * interference colours of a thin soap film, thinner towards the top and
+   * thinning as it drains, 'stress' for a strained clear sheet between
+   * crossed polarisers. Both read the edges (see Renderer.setEdges), which
+   * must then have mip levels. `time` in seconds drives their slow drift;
+   * `front` is how far up, as a share of the sphere's height, the soap
+   * film is still thick enough for colour: a little over 1 when fresh, and
+   * lower as the black film spreads down.
+   */
+  film?: { mode: 'soap' | 'stress'; time: number; front: number };
+  /**
+   * Voxels only: the edges alone, the films left out, silver where three
+   * films meet and gold where four do. 'voxels' draws them as solid cubes;
+   * a number draws them as smooth tubes, blurred over that many mip levels
+   * of the edge texture: thicker and rounder the higher. 'lines' draws
+   * tubes round the lines set by Renderer.setLineTubes, `tubeRadius` cells
+   * thick, with a ball a little thicker where four films meet.
+   */
+  skeleton?: 'voxels' | number | 'lines';
+  tubeRadius?: number;
 }
 
 const MEMBRANE_COLOR = [1.0, 0.82, 0.4];
@@ -49,6 +70,10 @@ uniform vec3 uEye;
 uniform mat3 uCamera;
 uniform float uOpacity;
 uniform vec3 uStoneColor;
+uniform sampler3D uEdges;
+uniform int uFilm;
+uniform float uTime;
+uniform float uFront;
 
 out vec4 outColor;
 
@@ -70,6 +95,100 @@ vec3 hueColor(uint kind) {
   return mix(vec3(1.0), c, 0.7);
 }
 
+// One lobe of the fit of Wyman, Sloan and Shirley to the CIE colour matching functions.
+float lobe(float l, float mu, float below, float above) {
+  float t = (l - mu) / (l < mu ? below : above);
+  return exp(-0.5 * t * t);
+}
+
+vec3 spectral(float l) {
+  vec3 xyz = vec3(
+    1.056 * lobe(l, 599.8, 37.9, 31.0) + 0.362 * lobe(l, 442.0, 16.0, 26.7) - 0.065 * lobe(l, 501.1, 20.4, 26.2),
+    0.821 * lobe(l, 568.8, 46.9, 40.5) + 0.286 * lobe(l, 530.9, 16.3, 31.1),
+    1.217 * lobe(l, 437.0, 11.8, 36.0) + 0.681 * lobe(l, 459.0, 26.0, 13.8));
+  return mat3(3.2406, -0.9689, 0.0557, -1.5372, 1.8758, -0.2040, -0.4986, 0.0415, 1.0570) * xyz;
+}
+
+// Light whose two parts are this many nm apart in path: each wavelength
+// comes through as sin² of its phase. The same colours for light reflected
+// off both faces of a soap film (twice its optical thickness apart, one
+// reflection turning the phase over) and for a strained clear sheet between
+// crossed polarisers: black, grey, white, yellow, red, blue, green, and on
+// to pale pinks and greens that fade into white at high orders.
+vec3 interference(float path) {
+  vec3 sum = vec3(0.0);
+  vec3 white = vec3(0.0);
+  for (int i = 0; i < 24; i++) {
+    float l = 400.0 + float(i) * 13.0;
+    vec3 c = spectral(l);
+    float s = sin(3.14159 * path / l);
+    sum += c * s * s;
+    white += c;
+  }
+  return pow(max(sum / white, 0.0), vec3(1.0 / 2.2));
+}
+
+// A slow swirl through the field, so a film never stands still.
+float swirl(vec3 p) {
+  vec3 q = p / uSize * 6.0;
+  float t = uTime;
+  return (sin(q.x * 1.3 + t * 0.21 + 1.7 * sin(q.y * 1.1 - t * 0.13))
+        + sin(q.y * 1.7 - t * 0.17 + 1.3 * sin(q.z * 0.8 + t * 0.11))
+        + sin(q.z * 1.5 + t * 0.19 + 1.5 * sin(q.x * 0.9 - t * 0.07))) / 3.0;
+}
+
+// How close the edges where films meet are, at two reaches: from the mip
+// levels of the edge texture, scaled so that a line counts about 1 at either.
+// More where lines meet.
+vec2 nearEdges(vec3 p) {
+  vec3 at = p / uSize;
+  return vec2(textureLod(uEdges, at, 1.0).r * 8.0, textureLod(uEdges, at, 2.5).r * 64.0);
+}
+
+// The film's own colour at p, seen along rd; facing is |cos| of the angle
+// between the ray and the film, 1 where it is not known. kind tells the
+// bubbles apart.
+vec3 filmColor(vec3 p, float facing, uint kind) {
+  float own = fract(float(kind) * 0.618034);
+  vec2 edges = min(nearEdges(p), vec2(2.0));
+  float s = swirl(p);
+  if (uFilm == 1) {
+    // Water drains down: a film is thinnest at the top of the sphere. As the
+    // foam drains the black film spreads down from the top, while the bottom
+    // stays wet, so the bands of colour spread over the height below the
+    // front and do not crowd at the bottom. Every film thickens into the
+    // meniscus along the edges where it meets others.
+    float sphereBottom = 0.06 * uSize;
+    float height = clamp((p.y - sphereBottom) / (0.88 * uSize), 0.0, 1.0);
+    float below = clamp((uFront - height) / uFront, 0.0, 1.0);
+    float thickness = (1200.0 * pow(below, 1.2) + 120.0 * own * below)
+                    * (1.0 + 0.14 * s) * (1.0 + 0.5 * edges.x + 0.25 * edges.y)
+    // The Plateau borders stay wet after the films have gone black, so the
+    // skeleton of the foam still shows above the front, in greys and gold.
+                    + 70.0 * edges.x + 30.0 * edges.y;
+    // Refracted into water, the light crosses the film at a slant.
+    float sine = (1.0 - facing * facing) / (1.33 * 1.33);
+    float path = 2.0 * 1.33 * thickness * sqrt(1.0 - sine);
+    // Thinner than about 30 nm a film reflects next to nothing: the black
+    // film, which spreads down from the top as the foam drains.
+    return interference(path) * smoothstep(12.0, 35.0, thickness);
+  }
+  // Stress gathers where films meet, so the fringes crowd towards the edges
+  // and most towards the corners; every bubble is strained a little
+  // differently, and the strain drifts. A tint plate puts it all 560 nm on.
+  float strain = 560.0 + 350.0 + 400.0 * own + 120.0 * s + 70.0 * sin(uTime * 0.15 + own * 6.2832)
+               + 500.0 * edges.x + 300.0 * edges.y;
+  vec3 color = interference(strain);
+  return clamp(mix(vec3(dot(color, vec3(0.3, 0.59, 0.11))), color, 1.4), 0.0, 1.0);
+}
+
+// How much of the light a film of this colour stops. A soap film shows only
+// what it reflects and lets the rest through: a black film hides nothing.
+float filmOpacity(vec3 tint) {
+  if (uFilm != 1) return uOpacity;
+  return uOpacity * clamp(1.5 * max(tint.r, max(tint.g, tint.b)), 0.0, 1.0);
+}
+
 bool clipToField(vec3 rd, out float tEnter, out float tExit, out vec3 entryNormal) {
   vec3 inv = 1.0 / rd;
   vec3 t0 = -uEye * inv;
@@ -85,8 +204,14 @@ bool clipToField(vec3 rd, out float tEnter, out float tExit, out vec3 entryNorma
 
 const VOXEL_FRAGMENT = `${COMMON}
 uniform usampler3D uVoxels;
-uniform sampler3D uEdges;
 uniform bool uGlow;
+uniform bool uSkeleton;
+uniform float uTubes;
+uniform bool uLineTubes;
+uniform sampler3D uLineField;
+uniform float uLineReach;
+uniform float uTubeRadius;
+uniform float uLineTexel;
 uniform float uFilms;
 uniform float uLines;
 
@@ -103,6 +228,85 @@ float shade(vec3 normal, vec3 hit, vec3 toEye) {
   return light * mix(0.7, 1.0, edge);
 }
 
+// The edges blurred over uTubes mip levels, scaled so that the middle of a
+// steady line is about 1 whatever the level; more where lines meet.
+float tubeField(vec3 p) {
+  return textureLod(uEdges, p / uSize, uTubes).r * 2.0 * exp2(2.0 * uTubes);
+}
+
+const float TUBE_SURFACE = 0.4;
+
+// The edges as smooth tubes: march the blurred field to where it crosses
+// TUBE_SURFACE, refine by halving, and shade by its gradient. Gold where
+// lines meet, where the field is well over that of a single line.
+vec3 tubes(vec3 rd, float tEnter, float tExit) {
+  float t = tEnter + 1e-3;
+  float previous = t;
+  for (int i = 0; i < MAX_STEPS; i++) {
+    if (t > tExit) break;
+    if (tubeField(uEye + rd * t) >= TUBE_SURFACE) {
+      float a = previous;
+      float b = t;
+      for (int k = 0; k < 6; k++) {
+        float m = 0.5 * (a + b);
+        if (tubeField(uEye + rd * m) >= TUBE_SURFACE) b = m; else a = m;
+      }
+      vec3 hit = uEye + rd * b;
+      vec2 e = vec2(0.5 * exp2(uTubes), 0.0);
+      vec3 g = vec3(
+        tubeField(hit + e.xyy) - tubeField(hit - e.xyy),
+        tubeField(hit + e.yxy) - tubeField(hit - e.yxy),
+        tubeField(hit + e.yyx) - tubeField(hit - e.yyx));
+      vec3 n = -normalize(g + 1e-6);
+      // Lit from the camera and a little from above, with a glint.
+      vec3 toLight = normalize(-rd + vec3(0.0, 0.8, 0.0));
+      float light = 0.18 + 0.6 * max(dot(n, -rd), 0.0) + 0.25 * max(dot(n, toLight), 0.0);
+      float glint = pow(max(dot(reflect(rd, n), toLight), 0.0), 24.0);
+      float core = tubeField(hit - n * 0.75 * exp2(uTubes));
+      vec3 c = mix(vec3(0.8, 0.84, 0.92), vec3(1.0, 0.78, 0.4), smoothstep(1.7, 2.7, core));
+      return c * light + vec3(0.6) * glint;
+    }
+    previous = t;
+    t += 0.5;
+  }
+  return BACKGROUND;
+}
+
+// Signed distance to the tubes round the lines, and to the balls where four
+// films meet, joined smoothly; y tells how much of it is ball.
+vec2 lineTubes(vec3 p) {
+  vec2 d = texture(uLineField, p / uSize).rg * uLineReach;
+  float tube = d.x - uTubeRadius;
+  float ball = d.y - 1.5 * uTubeRadius;
+  float k = 0.6 * uTubeRadius;
+  float h = clamp(0.5 + 0.5 * (ball - tube) / k, 0.0, 1.0);
+  return vec2(mix(ball, tube, h) - k * h * (1.0 - h), 1.0 - h);
+}
+
+// Trace the tubes by their distance, stepping no further than it says.
+vec3 traceLineTubes(vec3 rd, float tEnter, float tExit) {
+  float t = tEnter + 1e-3;
+  for (int i = 0; i < MAX_STEPS; i++) {
+    if (t > tExit) break;
+    vec3 p = uEye + rd * t;
+    vec2 d = lineTubes(p);
+    if (d.x < 0.01) {
+      vec2 e = vec2(0.5 * uLineTexel, 0.0);
+      vec3 n = normalize(vec3(
+        lineTubes(p + e.xyy).x - lineTubes(p - e.xyy).x,
+        lineTubes(p + e.yxy).x - lineTubes(p - e.yxy).x,
+        lineTubes(p + e.yyx).x - lineTubes(p - e.yyx).x) + 1e-6);
+      vec3 toLight = normalize(-rd + vec3(0.0, 0.8, 0.0));
+      float light = 0.18 + 0.6 * max(dot(n, -rd), 0.0) + 0.25 * max(dot(n, toLight), 0.0);
+      float glint = pow(max(dot(reflect(rd, n), toLight), 0.0), 24.0);
+      vec3 c = mix(vec3(0.8, 0.84, 0.92), vec3(1.0, 0.78, 0.4), smoothstep(0.3, 0.8, d.y));
+      return c * light + vec3(0.6) * glint;
+    }
+    t += max(0.9 * d.x, 0.04);
+  }
+  return BACKGROUND;
+}
+
 void main() {
   vec3 rd = rayDirection();
   float tEnter;
@@ -110,6 +314,14 @@ void main() {
   vec3 normal;
   if (!clipToField(rd, tEnter, tExit, normal)) {
     outColor = vec4(BACKGROUND, 1.0);
+    return;
+  }
+  if (uLineTubes) {
+    outColor = vec4(traceLineTubes(rd, tEnter, tExit), 1.0);
+    return;
+  }
+  if (uTubes > 0.0) {
+    outColor = vec4(tubes(rd, tEnter, tExit), 1.0);
     return;
   }
 
@@ -127,6 +339,19 @@ void main() {
   float through = 1.0;
   for (int i = 0; i < MAX_STEPS; i++) {
     uint voxel = texelFetch(uVoxels, cell, 0).r;
+    if (uSkeleton) {
+      // The edges are kept from frame to frame, so a steady line holds 0.5
+      // and a point 1, while a voxel the line only flickers through stays low.
+      float edge = texelFetch(uEdges, cell, 0).r;
+      if (edge > 0.3) {
+        vec3 c = edge > 0.7 ? vec3(1.0, 0.8, 0.45) : vec3(0.82, 0.85, 0.92);
+        color += through * c * shade(normal, uEye + rd * t, -rd);
+        through = 0.0;
+        break;
+      }
+      // Only the edges: the films between them are left empty.
+      voxel = 0u;
+    }
     if (voxel == 2u) {
       color += through * uStoneColor * shade(normal, uEye + rd * t, -rd);
       through = 0.0;
@@ -136,17 +361,19 @@ void main() {
       // Light goes with the length of the path through the voxel, so a line
       // a voxel thin does not break up into beads.
       float path = min(tNext.x, min(tNext.y, tNext.z)) - t;
-      vec3 tint = voxel == 1u ? MEMBRANE : hueColor(voxel);
+      vec3 tint = voxel == 1u ? MEMBRANE : uFilm > 0 ? filmColor(uEye + rd * (t + 0.5 * path), 1.0, voxel) : hueColor(voxel);
       if (voxel == 1u || voxel >= 3u) color += uFilms * tint * path;
       // Read filtered, halfway along the path: 0.5 on a line where three
       // films meet, 1 at a point where four do, and smooth in between.
-      float edge = texture(uEdges, (uEye + rd * (t + 0.5 * path)) / uSize).r;
+      float edge = textureLod(uEdges, (uEye + rd * (t + 0.5 * path)) / uSize, 0.0).r;
       vec3 edgeTint = voxel >= 3u ? mix(tint, vec3(1.0), 0.45) : vec3(0.85, 0.88, 0.95);
       color += uLines * 2.0 * edge * edgeTint * path;
     } else if (voxel == 1u || voxel >= 3u) {
-      vec3 tint = voxel == 1u ? MEMBRANE : hueColor(voxel);
-      color += through * uOpacity * tint * shade(normal, uEye + rd * t, -rd);
-      through *= 1.0 - uOpacity;
+      // The faces of the cubes are no guide to which way the film runs.
+      vec3 tint = voxel == 1u ? MEMBRANE : uFilm > 0 ? filmColor(uEye + rd * t, 1.0, voxel) : hueColor(voxel);
+      float alpha = filmOpacity(tint);
+      color += through * alpha * tint * shade(normal, uEye + rd * t, -rd);
+      through *= 1.0 - alpha;
       if (through < 0.02) break;
     }
     if (tNext.x < tNext.y && tNext.x < tNext.z) {
@@ -226,12 +453,12 @@ vec3 stoneNormal(vec3 p) {
 
 // The membrane's colour at a point on its surface: one colour, or the hue of
 // the first inside cell found a little way in against the outward normal.
-vec3 membraneColor(vec3 hit, vec3 normal) {
+vec3 membraneColor(vec3 hit, vec3 normal, vec3 rd) {
   if (!uTinted) return MEMBRANE;
   for (int k = 0; k < 4; k++) {
     vec3 p = hit - normal * (0.5 + float(k));
     uint kind = texelFetch(uTint, ivec3(clamp(floor(p), 0.0, uSize - 1.0)), 0).r;
-    if (kind >= 3u) return hueColor(kind);
+    if (kind >= 3u) return uFilm > 0 ? filmColor(hit, abs(dot(normal, rd)), kind) : hueColor(kind);
   }
   return MEMBRANE;
 }
@@ -281,8 +508,10 @@ void main() {
         through = 0.0;
         break;
       }
-      color += through * uOpacity * membraneColor(hit, normal) * shade(normal, -rd);
-      through *= 1.0 - uOpacity;
+      vec3 tint = membraneColor(hit, normal, rd);
+      float alpha = filmOpacity(tint);
+      color += through * alpha * tint * shade(normal, -rd);
+      through *= 1.0 - alpha;
       if (through < 0.02) break;
       inside = true;
     } else if (inside && stoneAt(p) >= 0.5) {
@@ -306,8 +535,10 @@ void main() {
       }
       vec3 hit = uEye + rd * b;
       vec3 normal = phaseNormal(hit);
-      color += through * uOpacity * membraneColor(hit, normal) * shade(normal, -rd);
-      through *= 1.0 - uOpacity;
+      vec3 tint = membraneColor(hit, normal, rd);
+      float alpha = filmOpacity(tint);
+      color += through * alpha * tint * shade(normal, -rd);
+      through *= 1.0 - alpha;
       if (through < 0.02) break;
       inside = false;
     }
@@ -338,6 +569,10 @@ export class Renderer {
   /** Edges to draw in light, set from outside; a blank texel stands in. */
   private readonly blankEdges: WebGLTexture;
   private edges: WebGLTexture | null = null;
+  /** Distances to the lines of a skeleton, for tubes round them. */
+  private readonly lineTexture: WebGLTexture;
+  private lineSize = 0;
+  private lineReach = 1;
 
   constructor(canvas: HTMLCanvasElement) {
     const gl = canvas.getContext('webgl2', { antialias: false });
@@ -349,6 +584,9 @@ export class Renderer {
     this.phaseTexture = this.createTexture(gl.LINEAR_MIPMAP_LINEAR, gl.LINEAR);
     this.stoneTexture = this.createTexture(gl.LINEAR_MIPMAP_LINEAR, gl.LINEAR);
     this.tintTexture = this.createTexture(gl.NEAREST, gl.NEAREST);
+    this.lineTexture = this.createTexture(gl.LINEAR, gl.LINEAR);
+    gl.texImage3D(gl.TEXTURE_3D, 0, gl.RG8, 1, 1, 1, 0, gl.RG, gl.UNSIGNED_BYTE, new Uint8Array([255, 255]));
+    this.lineSize = 1;
     this.blankEdges = this.createTexture(gl.NEAREST, gl.NEAREST);
     gl.texImage3D(gl.TEXTURE_3D, 0, gl.R8, 1, 1, 1, 0, gl.RED, gl.UNSIGNED_BYTE, new Uint8Array(1));
     gl.pixelStorei(gl.UNPACK_ALIGNMENT, 1);
@@ -388,10 +626,24 @@ export class Renderer {
 
   /**
    * The edges the light look draws: a 3D texture of one normalised channel
-   * over the field, read with filtering. Null draws none.
+   * over the field, read with filtering. The film colours also read its mip
+   * levels, for how near the edges are. Null draws none.
    */
   setEdges(edges: WebGLTexture | null): void {
     this.edges = edges;
+  }
+
+  /**
+   * Distances to the lines of a skeleton, two bytes a texel (to a line, to a
+   * point where four meet), `size` texels a side over the whole field, a
+   * byte of 255 standing for `reach` cells.
+   */
+  setLineTubes(data: Uint8Array, size: number, reach: number): void {
+    const { gl } = this;
+    gl.bindTexture(gl.TEXTURE_3D, this.lineTexture);
+    gl.texImage3D(gl.TEXTURE_3D, 0, gl.RG8, size, size, size, 0, gl.RG, gl.UNSIGNED_BYTE, data);
+    this.lineSize = size;
+    this.lineReach = reach;
   }
 
   /**
@@ -417,6 +669,14 @@ export class Renderer {
     gl.useProgram(program);
     gl.uniform1i(gl.getUniformLocation(program, 'uVoxels'), 0);
     gl.uniform1i(gl.getUniformLocation(program, 'uEdges'), 3);
+    gl.activeTexture(gl.TEXTURE4);
+    gl.bindTexture(gl.TEXTURE_3D, this.lineTexture);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.uniform1i(gl.getUniformLocation(program, 'uLineField'), 4);
+    gl.uniform1i(gl.getUniformLocation(program, 'uLineTubes'), view.skeleton === 'lines' ? 1 : 0);
+    gl.uniform1f(gl.getUniformLocation(program, 'uLineReach'), this.lineReach);
+    gl.uniform1f(gl.getUniformLocation(program, 'uLineTexel'), n / this.lineSize);
+    gl.uniform1f(gl.getUniformLocation(program, 'uTubeRadius'), view.tubeRadius ?? 1);
     this.finish(program, n, camera, view);
   }
 
@@ -467,6 +727,10 @@ export class Renderer {
     gl.uniform1i(gl.getUniformLocation(program, 'uStones'), 1);
     gl.uniform1i(gl.getUniformLocation(program, 'uTint'), 2);
     gl.uniform1i(gl.getUniformLocation(program, 'uTinted'), tint || !phase ? 1 : 0);
+    gl.activeTexture(gl.TEXTURE3);
+    gl.bindTexture(gl.TEXTURE_3D, this.edges ?? this.blankEdges);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.uniform1i(gl.getUniformLocation(program, 'uEdges'), 3);
     gl.uniform1f(gl.getUniformLocation(program, 'uSmooth'), view.smoothness);
     this.finish(program, n, camera, view);
   }
@@ -501,8 +765,14 @@ export class Renderer {
     gl.uniformMatrix3fv(gl.getUniformLocation(program, 'uCamera'), false, [...right, ...up, ...forward]);
     gl.uniform1f(gl.getUniformLocation(program, 'uOpacity'), view.opacity);
     gl.uniform1i(gl.getUniformLocation(program, 'uGlow'), view.light ? 1 : 0);
+    gl.uniform1i(gl.getUniformLocation(program, 'uSkeleton'), view.skeleton === 'voxels' ? 1 : 0);
+    gl.uniform1f(gl.getUniformLocation(program, 'uTubes'), typeof view.skeleton === 'number' ? view.skeleton : 0);
     gl.uniform1f(gl.getUniformLocation(program, 'uFilms'), view.light?.films ?? 0);
     gl.uniform1f(gl.getUniformLocation(program, 'uLines'), view.light?.lines ?? 0);
+    const film = view.film;
+    gl.uniform1i(gl.getUniformLocation(program, 'uFilm'), !film ? 0 : film.mode === 'soap' ? 1 : 2);
+    gl.uniform1f(gl.getUniformLocation(program, 'uTime'), film?.time ?? 0);
+    gl.uniform1f(gl.getUniformLocation(program, 'uFront'), film?.front ?? 1);
     gl.uniform3fv(
       gl.getUniformLocation(program, 'uStoneColor'),
       view.oneColor ? MEMBRANE_COLOR : STONE_COLOR,

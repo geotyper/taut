@@ -10,6 +10,7 @@ import {
   type Contours,
   type Skeleton,
 } from './skeleton.ts';
+import { tubeField } from './tubes.ts';
 
 /** A scattered centre starts as a ball this many kernel radii across. */
 const SEED_SIZE = 1.5;
@@ -74,6 +75,18 @@ let smooth = byId<HTMLSelectElement>('surface').value === 'smooth';
 let paused = false;
 let look = 'glass';
 const light = { films: 0.05, lines: 0.25 };
+/** The films' own colours, if not a hue per bubble; see View.film. */
+let colours: 'hues' | 'soap' | 'stress' = 'hues';
+/** Seconds the films have been draining, and how fast they drain. */
+let drained = 0;
+let drainage = 0.3;
+let lastFrame = performance.now();
+/** Mip levels the tubes of the smoothed skeleton are blurred over. */
+let tubeBlur = 1;
+/** Radius of the tubes round the skeleton's lines, in cells. */
+let tubeRadius = 0.8;
+/** The black film spreads down no further than this share of the sphere: below, the foam would burst first. */
+const LOWEST_FRONT = 0.3;
 /** Bursts or pops a step, on average, and those owed but not yet made. */
 let burstRate = 0.01;
 let burstsOwed = 0;
@@ -124,6 +137,18 @@ const lookSelect = onSelect('look', (v) => {
   syncView();
 });
 bindRange('films', 3, (v) => (light.films = v));
+const coloursSelect = onSelect('colours', (v) => {
+  colours = v as typeof colours;
+  syncView();
+});
+bindRange('drain', 2, (v) => (drainage = v));
+bindRange('tubes', 2, (v) => (tubeBlur = v));
+bindRange('tube-radius', 2, (v) => {
+  tubeRadius = v;
+  // The distances are kept only as far as the tubes need.
+  skeletonStep = -1;
+  skeletonAt = 0;
+});
 bindRange('lines', 2, (v) => (light.lines = v));
 
 const pauseButton = byId<HTMLButtonElement>('pause');
@@ -140,6 +165,11 @@ window.addEventListener('keydown', (e) => {
   const key = e.key.toLowerCase();
   if (key === 'n') scatter();
   else if (key === ' ') pauseButton.click();
+  else if (key === 'w') drained = 0;
+  else if (key === 'c') {
+    coloursSelect.selectedIndex = (coloursSelect.selectedIndex + 1) % coloursSelect.options.length;
+    coloursSelect.dispatchEvent(new Event('change'));
+  }
   else if (key === 'g') {
     lookSelect.value = look === 'light' ? 'glass' : 'light';
     lookSelect.dispatchEvent(new Event('change'));
@@ -191,6 +221,7 @@ function build(): void {
 }
 
 function scatter(): void {
+  drained = 0;
   foam?.scatter(bubbleCount, params.radius * SEED_SIZE, enclosure);
 }
 
@@ -203,6 +234,8 @@ function frame(): void {
       coarsen(foam.steps - before);
     }
     const now = performance.now();
+    if (!paused) drained += Math.min(0.1, (now - lastFrame) / 1000);
+    lastFrame = now;
     if (now - rateSince > 1000) {
       rate = (rateSteps * 1000) / (now - rateSince);
       rateSteps = 0;
@@ -223,15 +256,45 @@ function frame(): void {
         partsFor = '';
       }
       drawSkeleton(foam.n);
+    } else if (look === 'lines-tubes') {
+      // The distances take longer than the lines; rebuilt more seldom, so
+      // the view does not stall for long.
+      if (foam.steps !== skeletonStep && now - skeletonAt > Math.max(SKELETON_EVERY, 8 * skeletonMs)) {
+        skeletonStep = foam.steps;
+        skeletonAt = now;
+        skeleton = extractSkeleton(foam.readLabels(), foam.n);
+        // Finer than the field where that is cheap, so thin tubes stay round.
+        const scale = foam.n <= 96 ? 2 : 1;
+        const field = tubeField(skeleton, foam.n, scale, tubeRadius * 1.5 + 1.5);
+        renderer.setLineTubes(field.data, field.size, field.reach);
+        skeletonMs = performance.now() - now;
+      }
+      const view: View = { opacity, oneColor: false, smoothness: 0.6, skeleton: 'lines', tubeRadius };
+      renderer.drawVoxels(null, foam.n, camera, view);
     } else {
-      foam.show(smooth);
+      // The skeleton is drawn in voxels whatever the surface.
+      const skeletonView = look === 'skeleton' || look === 'tubes';
+      const smoothView = smooth && !skeletonView;
+      foam.show(smoothView);
       const lit = look === 'light' && !smooth;
-      const view: View = { opacity, oneColor: false, smoothness: 0.6, light: lit ? light : undefined };
-      if (smooth) renderer.drawSmooth(null, foam.n, camera, view);
+      const view: View = {
+        opacity,
+        oneColor: false,
+        smoothness: 0.6,
+        light: lit ? light : undefined,
+        skeleton: look === 'skeleton' ? 'voxels' : look === 'tubes' ? tubeBlur : undefined,
+      };
+      if (colours !== 'hues') {
+        // A draining film thins about as one over the root of the time, and
+        // the black film comes down as fast.
+        const front = Math.max(LOWEST_FRONT, 1.05 / Math.sqrt(1 + drained * drainage * 0.1));
+        view.film = { mode: colours, time: drained, front };
+      }
+      if (smoothView) renderer.drawSmooth(null, foam.n, camera, view);
       else renderer.drawVoxels(null, foam.n, camera, view);
     }
     const air = foam.growing ? ` · growing, ${Math.round(foam.air)} cells of air left` : '';
-    const lines = look === 'vector' && skeleton ? ` · ${skeleton.lines.length} lines in ${Math.round(skeletonMs)} ms` : '';
+    const lines = (look === 'vector' || look === 'lines-tubes') && skeleton ? ` · ${skeleton.lines.length} lines in ${Math.round(skeletonMs)} ms` : '';
     stat.textContent = `${foam.bubbles} bubbles · step ${foam.steps}${air} · ${Math.round(rate)} steps/s on the GPU${lines}`;
   } else {
     stat.textContent = `The 3D foam needs WebGL2 with float blending: ${failure}`;
@@ -243,14 +306,19 @@ function frame(): void {
 function syncView(): void {
   const lit = look === 'light' && !smooth;
   const vector = look === 'vector';
-  byId('pick-look').hidden = smooth && !vector;
+  const skeletonLook = look === 'skeleton' || look === 'tubes' || look === 'lines-tubes';
+  byId('pick-tube-radius').hidden = look !== 'lines-tubes';
+  byId('pick-look').hidden = smooth && !vector && !skeletonLook;
+  byId('pick-colours').hidden = vector || skeletonLook;
+  byId('pick-drain').hidden = vector || skeletonLook || colours !== 'soap';
+  byId('pick-tubes').hidden = look !== 'tubes';
   byId('pick-films').hidden = !lit;
   byId('pick-lines').hidden = !lit && !vector;
   byId('pick-through').hidden = !vector;
   byId('pick-contours').hidden = !vector;
   byId('pick-spacing').hidden = !vector || contourShape === 'off';
-  byId('pick-opacity').hidden = lit || vector;
-  byId('pick-surface').hidden = vector;
+  byId('pick-opacity').hidden = lit || vector || skeletonLook;
+  byId('pick-surface').hidden = vector || skeletonLook;
   vectorCanvas.hidden = !vector;
   skeletonStep = -1;
 }

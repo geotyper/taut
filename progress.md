@@ -471,6 +471,58 @@ out a little past its outline, and rebuilding takes up to about 120 ms at
 checked in screenshots of an open cluster with spheres at 1.5 and 7. Close
 together the lines show where the pieces join in short straight bits.
 
+Then film colours (branch `foam-3d-film-colours`): soap-film interference
+with drainage, and the stress palette of the 2D foam, as a choice beside a
+hue per bubble. Both use the spectral colour of the 2D sheen, moved into the
+renderer, so the membrane page could use it too; it does not yet. A film's
+thickness comes from its height below a front that comes down as the foam
+drains (as one over the root of the time, to 0.3 of the sphere's height), a
+swirl, and how near the edges are, from two mip levels of the edge texture,
+which now has them. The first try left the top of the foam silver after it
+drained: 40 nm of film, lifted by the gamma and added up over many films
+along a ray, still looks light. The film then went dark below about 30 nm.
+Then, on a look by the user, the drained foam was mostly silver with the
+colour squeezed into a strip at the bottom: the whole thickness was scaled
+down, so the first order took most of the height. Now a front of black film
+comes down and the bands spread over the height below it. The black films
+then hid everything behind them, as the glass look stops light at every
+film; for soap a film now stops light as much as it reflects, so a black one
+is clear. Above the front the foam then vanished, so the Plateau borders keep
+a thickness of their own and stay in sight, in silver. Checked in screenshots at 96³: glass sphere
+with voxels, fresh and after 15, 40 and 80 s of fast drainage, stress with voxels, both
+on the smooth surface, stress in the light look, and the open sphere smooth.
+Speed was the same as with hues, 24 to 27 steps a second. Not checked: the
+time it runs for long, coarsening with the colours on, and resolutions other
+than 96³. On the smooth surface the colours show the haze of that view; with
+the light look most of the stress colour is lost under the bright edges.
+
+Then the skeleton look, on a look by the user at the wet borders above the
+black films: the edge voxels drawn as solid shaded cubes, silver on a line
+and gold at a point, from the edge texture already kept from frame to frame
+(over 0.3 a line, over 0.7 a point). At first the films stayed round it as
+glass; the user wanted them gone, so the skeleton looks now draw edges only.
+And a smoothed skeleton: the edge texture read at a mip level, scaled so a
+line is about 1 at any level, marched in half-cell steps to the level 0.4,
+refined by halving and shaded by the gradient; gold where the field a little
+inside the surface is well over that of one line. Gold first came out on
+every bend, and the threshold went up. Checked in screenshots at 96³: cubes,
+and tubes blurred over 1 and 1.6 levels, during growth (step about 110). Not
+checked: the speed of the tubes alone, at 160³, and a settled foam. The glass
+sphere's own cage of edges covers the outside; a choice to leave it out
+would show the inside better.
+
+The user then asked for the smoothness of the lines with the volume of the
+tubes: a third skeleton look, tubes round the lines of the lines view. The
+lines are cut into short pieces along the same curves through midpoints,
+the distance to them and to the points where four meet is splatted on the
+CPU into an RG8 texture, out to the reach the tubes need, twice as fine as
+the field at 96³ and below, and the shader traces a smooth union of tubes and
+balls by that distance. Checked in screenshots at 96³ with radius 0.8 and
+1.6: smooth bent tubes with gold balls at the corners. A build took 86 ms at
+0.8 and 170 ms at 1.6, so it is rebuilt at most every eight times its own
+time. Not checked: 128³ and 160³, where the texture is only as fine as the
+field.
+
 Not done: the smooth view blurs the films, which are only a voxel or two
 thick, into a haze; the voxel view is the one to use. Pop mode in the open
 was run only at a high rate, where the foam spends most of its time growing

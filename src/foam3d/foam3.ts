@@ -339,8 +339,9 @@ export class Foam3 {
       gl.texStorage3D(gl.TEXTURE_3D, 1, gl.R32UI, n, n, n);
     }
     this.edges = [0, 1].map(() => {
-      const texture = createTexture(gl, gl.LINEAR, gl.LINEAR);
-      gl.texStorage3D(gl.TEXTURE_3D, 1, gl.R8, n, n, n);
+      // With mip levels, for the film colours to see how near the edges are.
+      const texture = createTexture(gl, gl.LINEAR_MIPMAP_LINEAR, gl.LINEAR);
+      gl.texStorage3D(gl.TEXTURE_3D, Math.floor(Math.log2(n)) + 1, gl.R8, n, n, n);
       return texture;
     });
     this.weightTexture = flat(gl, gl.R32F);
@@ -536,6 +537,8 @@ export class Foam3 {
       gl.framebufferTextureLayer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT3, null, 0, 0);
       gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.bindTexture(gl.TEXTURE_3D, edges);
+      gl.generateMipmap(gl.TEXTURE_3D);
     }
     if (smooth) {
       gl.bindTexture(gl.TEXTURE_3D, targets.phase);

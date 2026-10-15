@@ -27,7 +27,7 @@
         </p>
         <p class="hint">
           Keys: <kbd>N</kbd> new foam, <kbd>S</kbd> smooth or voxels, <kbd>G</kbd> light or glass,
-          <kbd>Space</kbd> pause.
+          <kbd>C</kbd> film colours, <kbd>W</kbd> wet the films again, <kbd>Space</kbd> pause.
         </p>
 
         <label>
@@ -96,7 +96,30 @@
             <option value="glass">Tinted glass</option>
             <option value="light">Light: films and their edges glow</option>
             <option value="vector">Lines: only the edges, drawn as lines</option>
+            <option value="skeleton">Skeleton: the edges as solid voxels</option>
+            <option value="tubes">Skeleton, smoothed: the edges as tubes</option>
+            <option value="lines-tubes">Skeleton from the lines: smooth tubes round them</option>
           </select>
+        </label>
+        <label id="pick-colours">
+          <span>Film colours</span>
+          <select id="colours">
+            <option value="hues">A hue for every bubble</option>
+            <option value="soap">Soap film, draining down</option>
+            <option value="stress">Stress, in polarised light</option>
+          </select>
+        </label>
+        <label id="pick-drain">
+          <span>Drainage <output id="drain-out"></output></span>
+          <input id="drain" type="range" min="0" max="1" step="0.05" value="0.3" />
+        </label>
+        <label id="pick-tubes">
+          <span>Tube thickness <output id="tubes-out"></output></span>
+          <input id="tubes" type="range" min="0.5" max="2" step="0.05" value="1" />
+        </label>
+        <label id="pick-tube-radius">
+          <span>Tube radius, cells <output id="tube-radius-out"></output></span>
+          <input id="tube-radius" type="range" min="0.3" max="2.5" step="0.05" value="0.8" />
         </label>
         <label id="pick-films">
           <span>Films <output id="films-out"></output></span>

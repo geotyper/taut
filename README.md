@@ -457,6 +457,53 @@ from the spheres, which it nearly follows: a film lying along the surfaces
 would otherwise come out as a filled patch. The pieces are hidden or faded
 by the films in front, judged at their middles, like the edges.
 
+*Film colours* chooses what colour the films are, in the glass and light
+looks, voxels or smooth:
+
+- **A hue for every bubble**, as before.
+- **Soap film, draining down** — the colours of light reflected off both faces
+  of a thin film, worked out over the spectrum. The film is thinnest at the
+  top of the sphere and thicker downwards, thickens into the meniscus along
+  the edges where films meet, and has a slow swirl in it. On the smooth
+  surface the slant of the light through the film counts too. From the
+  bottom up: pale high orders, then green and pink, blue and purple, gold,
+  silver, and at the top, under about 30 nm, the black film. As the foam
+  drains, the black film spreads down while the bottom stays wet, so the
+  bands of colour move down and stay spread over what is left. A film shows
+  only the light it reflects, so a black film is clear and the foam behind it
+  shows through; the Plateau borders stay wet and draw the skeleton of the
+  foam in silver above the front. The *Drainage* slider sets how fast; *W*
+  makes the films fresh again, and so does a new foam.
+- **Stress, in polarised light** — the colours of the 2D stress palette:
+  strain gathers along the edges where films meet and most where they cross,
+  so the fringes crowd towards them in rings, and every bubble is strained a
+  little differently.
+
+How near the edges are is read from mip levels of the edge texture, at two
+reaches. *C* steps through the colours.
+
+The two *Skeleton* looks draw the edges alone, with the films between them
+left empty: silver where three films meet, gold where four do.
+
+- **Skeleton: the edges as solid voxels** — a cube per voxel of an edge.
+  Only steady edges count, those held for a few frames, so the cage does not
+  flicker with the noise of the rule.
+- **Skeleton, smoothed: the edges as tubes** — the edge texture blurred over
+  its mip levels, as for the meniscus of the draining films, and drawn as a
+  smooth surface where it crosses a level, lit with a glint. *Tube thickness*
+  sets how many levels it is blurred over, 0.5 to 2: thicker and rounder the
+  higher, until neighbouring tubes merge.
+- **Skeleton from the lines: smooth tubes round them** — the lines of the
+  *Lines* look, bent through their midpoints as there, with tubes round them
+  and a ball at every point where four films meet. The distance to the lines
+  is worked out on the CPU into a 3D texture, twice as fine as the field up
+  to 96³, and the tubes are traced by it. *Tube radius* sets their thickness
+  in cells. Built from the labels as the lines are, it is rebuilt every
+  0.4 s at most, or less often if it takes long: about 90 ms at 96³ with 60
+  bubbles, and more for thick tubes.
+
+In a glass sphere the edges along the glass make an outer cage too.
+
 The page needs WebGL2 with float blending. On one machine it made about 30
 steps a second at 96³ with 60 bubbles and 10 at 160³, the finest
 resolution.
