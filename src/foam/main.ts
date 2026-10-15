@@ -2,6 +2,7 @@ import { AIR, Foam, type FoamParams } from './foam.ts';
 import { FoamGpu } from './foamgpu.ts';
 import { between, lengthOf, loops, outlines, traceFilms, WALL, type FilmLine, type Piece } from './lines.ts';
 import { drawMeasures, measureFilms, Seepage } from './measure.ts';
+import { ART_FILLS, drawArt, LEAD, svgArt, type ArtBubble, type ArtFill } from './artfill.ts';
 import { shells, svgPath, traceShell, type Shell } from './shells.ts';
 import { Sheen } from './sheen.ts';
 
@@ -74,7 +75,7 @@ let filmLines: FilmLine[] = [];
  * What fills the bubbles under their lines: nothing, a flat colour each, as
  * opaque as `fillOpacity`, or the smoothed stress picture of the shader.
  */
-type Fill = 'none' | 'flat' | 'stress';
+type Fill = 'none' | 'flat' | 'stress' | ArtFill;
 let fill: Fill = 'none';
 let fillOpacity = 0.35;
 let bubbleOutlines = new Map<number, Float32Array[][]>();
@@ -88,6 +89,8 @@ let shellsAt = '';
 const LIQUID = '#d6e2f6';
 /** The step and edit the lines were traced at. */
 let tracedAt = '';
+/** The bubbles each bubble shares a film with. */
+let bubbleSides = new Map<number, Set<number>>();
 /** How far the Plateau borders reach along the films, from 0 for a dry foam, in sizes of a bubble. */
 let wetness = 0;
 /**
@@ -354,6 +357,13 @@ function syncControls(): void {
   byId('pick-line-width').hidden = !drawingLines();
   byId('pick-fill').hidden = !drawingLines();
   byId('pick-fill-opacity').hidden = !drawingLines() || fill !== 'flat';
+  // The fills made for pictures are drawn on the shells only.
+  const fillPick = byId<HTMLSelectElement>('fill');
+  for (const option of fillPick.options) option.hidden = !asShells && ART_FILLS.includes(option.value);
+  if (!asShells && ART_FILLS.includes(fill)) {
+    fillPick.value = 'none';
+    fill = 'none';
+  }
   byId('pick-wetness').hidden = !drawingLines();
   byId('pick-width-by').hidden = !drawingLines() || asShells;
   byId('pick-shells').hidden = !drawingLines();
@@ -439,6 +449,15 @@ function traceLines(): void {
   filmLines = traceFilms(foam.label, size, size);
   bubbleOutlines = outlines(filmLines);
   bubbleLoops = loops(filmLines);
+  bubbleSides = new Map();
+  for (const line of filmLines) {
+    if (line.a === WALL || line.b === WALL || line.a === AIR || line.b === AIR) continue;
+    for (const [one, other] of [[line.a, line.b], [line.b, line.a]]) {
+      let set = bubbleSides.get(one);
+      if (!set) bubbleSides.set(one, (set = new Set()));
+      set.add(other);
+    }
+  }
   tracedAt = at;
 }
 
@@ -645,8 +664,11 @@ function renderShells(width: number): void {
   }
   ctx.globalCompositeOperation = 'source-over';
   ctx.globalAlpha = 1;
-  ctx.fillStyle = LIQUID;
+  const art = ART_FILLS.includes(fill) ? (fill as ArtFill) : null;
+  const glass = fill === 'glass';
+  ctx.fillStyle = glass ? LEAD : LIQUID;
   ctx.fillRect(0, 0, width, width);
+  const line = Math.max(1, 0.6 * scale * Math.min(2, lineWidth));
   for (const shell of currentShells()) {
     ctx.beginPath();
     traceShell(ctx, shell, cell);
@@ -666,27 +688,49 @@ function renderShells(width: number): void {
       ctx.fill('evenodd');
       ctx.globalAlpha = 1;
     }
-    ctx.strokeStyle = colour;
-    ctx.lineWidth = Math.max(1, 0.6 * scale * Math.min(2, lineWidth));
+    if (art) drawArt(ctx, art, artBubble(shell), cell, line);
+    ctx.strokeStyle = glass ? LEAD : colour;
+    ctx.lineWidth = glass ? 1.5 * line : line;
     ctx.stroke();
   }
 }
 
 /** The shells and the liquid as an SVG file, in cells. */
+/** A bubble as the fills made for pictures see it. */
+function artBubble(shell: Shell): ArtBubble {
+  const c = SHEEN_BRIGHT[hue(shell.label)];
+  return {
+    shell,
+    colour: [c & 255, (c >> 8) & 255, (c >> 16) & 255],
+    turn: hue(shell.label) / HUES,
+    sides: bubbleSides.get(shell.label)?.size ?? 0,
+  };
+}
+
 function saveSvg(): void {
   traceLines();
+  const art = ART_FILLS.includes(fill) ? (fill as ArtFill) : null;
+  const glass = fill === 'glass';
   const parts = [
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 ${size} ${size}" width="${size * 2}" height="${size * 2}">`,
-    `<rect width="${size}" height="${size}" fill="${LIQUID}"/>`,
+    `<rect width="${size}" height="${size}" fill="${glass ? LEAD : LIQUID}"/>`,
   ];
-  for (const shell of currentShells()) {
+  const defs: string[] = [];
+  currentShells().forEach((shell, id) => {
     const d = svgPath(shell);
     parts.push(`<path fill-rule="evenodd" fill="#0b0d11" d="${d}"/>`);
-    if (shell.label === AIR) continue;
+    if (shell.label === AIR) return;
     const colour = css(SHEEN_BRIGHT[hue(shell.label)]);
+    if (art) {
+      const made = svgArt(art, artBubble(shell), id, 0.4);
+      defs.push(...made.defs);
+      parts.push(...made.body);
+    }
     const inner = fill === 'flat' ? `fill="${colour}" fill-opacity="${fillOpacity}"` : 'fill="none"';
-    parts.push(`<path fill-rule="evenodd" ${inner} stroke="${colour}" stroke-width="0.4" d="${d}"/>`);
-  }
+    const stroke = glass ? `stroke="${LEAD}" stroke-width="0.6"` : `stroke="${colour}" stroke-width="0.4"`;
+    parts.push(`<path fill-rule="evenodd" ${inner} ${stroke} d="${d}"/>`);
+  });
+  parts.splice(2, 0, `<defs>${defs.join('')}</defs>`);
   parts.push('</svg>');
   const link = document.createElement('a');
   link.href = URL.createObjectURL(new Blob([parts.join('\n')], { type: 'image/svg+xml' }));

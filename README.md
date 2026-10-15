@@ -360,6 +360,19 @@ bubbles it runs as fast as the lines.
 With the stress fill the shells are cut out of the liquid as windows onto
 the stress picture underneath; the SVG keeps only their outlines then.
 
+Five more fills, made for pictures and for the mirrors, are offered with
+the shells only (`src/foam/artfill.ts`), each drawn from the shell itself
+so that a mirror turns it into a pattern: *Glowing spheres*, a radial
+light from a little above the middle of each bubble fading to its rim;
+*Neon rims*, light bands inside the rim of a dark bubble; *Contour rings*,
+copies of the outline drawn in towards its middle, the colour drifting
+from ring to ring; *Stained glass, by sides*, a pane coloured by how many
+bubbles it touches (red for three or fewer, then orange, yellow, green for
+six, blue, violet, magenta for nine or more) in dark leading; and
+*Hatching*, parallel strokes at an angle of the bubble's own, which mirrors
+fold into chevrons. All five go into the SVG too, as gradients, clip paths
+and patterns.
+
 *Symmetry* (experimental, *M* steps through it) mirrors the picture, in any
 palette, only as a picture: the visible layers are put together on a canvas
 laid over the field. *Two halves* shows the left half of the field at its

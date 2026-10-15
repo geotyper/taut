@@ -480,6 +480,14 @@ The stress fill did nothing with the shells: they painted the whole canvas
 over the stress picture, which was not drawn either. Now it is drawn and
 the shells are cut out of the liquid over it; looked at plain, wet and in
 a kaleidoscope of six.
+Then, on the user's wish for fills aimed at art and symmetry, five for the
+shells in `src/foam/artfill.ts`: glowing spheres, neon rims, contour rings,
+stained glass by sides and hatching. The middle of a bubble is the centroid
+of its shell's Bézier end points. Looked at plain and in mirrors of four,
+6, 8 and 12 sectors; the first rings and hatching, a stroke every two line
+widths, broke into moiré and are now three and a half apart, and the neon
+rim went from four hard bands to nine faint ones. Every fill saved as an
+SVG that parses.
 
 The rule also runs on the GPU (`src/foam/foamgpu.ts`), reading the labels
 back every four steps. Compared with the CPU in the browser at 320: without
