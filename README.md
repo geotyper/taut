@@ -362,6 +362,21 @@ crosses the axis turns into one symmetric bubble, with a notch where its
 outline did not meet the axis square; where whole fields meet, the wall
 shows as a doubled film.
 
+The *Kaleidoscope* takes the wedge of the field from its centre at angles 0
+to 180°/k, for k of 3, 4 or 6 mirrors, enlarged by √2 so that it reaches the
+corners, and turns it round into 2k wedges, turned over in every second one:
+6, 8 or 12 sectors.
+
+*Make it the field* puts the mirrored picture into the field itself: every
+cell takes the label it shows, every copy of a bubble a label of its own, so
+where copies meet there is a straight film along the mirror. Each bubble
+holds on to the area it has then. The rule then goes on as usual and smooths
+the seams, the films at the axes bending to meet them square. Right after,
+the field is mirror-true: with six sectors every film above the middle had
+its mirror below it. The noise of the rule then wears the symmetry down:
+within one cell, 90% of the films matched their mirror after 20 steps, 73%
+after 120, 64% after 600, though by eye it stays symmetric for long.
+
 *Line width by* makes some films wider than the slider says. *Bend* changes
 the width along a film, which is drawn as a filled ribbon: at every point it
 goes by the curvature of the circle through the point and two others a

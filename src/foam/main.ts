@@ -108,8 +108,13 @@ const measurePlot = byId<HTMLCanvasElement>('measure-plot');
  * field at its own scale, mirrored into the rest. 'whole': the whole field
  * shrunk, and mirrored copies of it beside it.
  */
-type Mirror = 'none' | 'two-crop' | 'four-crop' | 'two-whole' | 'four-whole';
-const MIRRORS: Mirror[] = ['none', 'two-crop', 'four-crop', 'two-whole', 'four-whole'];
+type Mirror = 'none' | 'two-crop' | 'four-crop' | 'two-whole' | 'four-whole' | 'kaleido-3' | 'kaleido-4' | 'kaleido-6';
+const MIRRORS: Mirror[] = ['none', 'two-crop', 'four-crop', 'two-whole', 'four-whole', 'kaleido-3', 'kaleido-4', 'kaleido-6'];
+/**
+ * A kaleidoscope's wedge of the field, from its centre out to the middle of
+ * an edge, is shown this much larger, so that its tip reaches the corners.
+ */
+const KALEIDO_ZOOM = Math.SQRT2;
 let mirror: Mirror = 'none';
 const mirrorCanvas = byId<HTMLCanvasElement>('field-mirror');
 const mirrorCtx = mirrorCanvas.getContext('2d')!;
@@ -207,6 +212,14 @@ mirrorSelect.addEventListener('change', () => {
 });
 mirror = mirrorSelect.value as Mirror;
 mirrorCanvas.hidden = mirror === 'none';
+const bakeButton = byId<HTMLButtonElement>('bake-mirror');
+bakeButton.addEventListener('click', bakeMirror);
+const syncMirror = () => {
+  mirrorCanvas.hidden = mirror === 'none';
+  bakeButton.hidden = mirror === 'none';
+};
+mirrorSelect.addEventListener('change', syncMirror);
+syncMirror();
 
 const linesToggle = byId<HTMLInputElement>('as-lines');
 linesToggle.addEventListener('change', () => {
@@ -247,6 +260,8 @@ for (const target of [canvas, sheenCanvas, linesCanvas]) {
   target.addEventListener('pointerdown', (e) => {
     const rect = target.getBoundingClientRect();
     const at = unmirror((e.clientX - rect.left) / rect.width, (e.clientY - rect.top) / rect.height);
+    // A kaleidoscope's corners reach past the field.
+    if (at && (at[0] < 0 || at[0] >= 1 || at[1] < 0 || at[1] >= 1)) return;
     if (!at) return;
     const x = Math.floor(at[0] * size);
     const y = Math.floor(at[1] * size);
@@ -644,6 +659,11 @@ function renderMirror(): void {
     if (layer.hidden || !layer.width) continue;
     // The cells of the plain field stay sharp, as on the page.
     ctx.imageSmoothingEnabled = layer !== canvas;
+    const mirrors = kaleidoMirrors();
+    if (mirrors) {
+      drawKaleidoscope(ctx, layer, width, mirrors);
+      continue;
+    }
     for (const tile of mirrorTiles()) {
       ctx.setTransform(1, 0, 0, 1, 0, 0);
       ctx.translate((tile.x + (tile.flipX ? tile.w : 0)) * width, (tile.y + (tile.flipY ? tile.h : 0)) * width);
@@ -654,19 +674,100 @@ function renderMirror(): void {
   ctx.setTransform(1, 0, 0, 1, 0, 0);
 }
 
-/** Where on the field a point of the screen is, as fractions, through the mirror; null off the picture. */
-function unmirror(u: number, v: number): [number, number] | null {
-  if (mirror === 'none') return [u, v];
+/** The number of mirrors of a kaleidoscope, which makes twice as many wedges; 0 for the others. */
+function kaleidoMirrors(): number {
+  return mirror.startsWith('kaleido-') ? Number(mirror.slice(8)) : 0;
+}
+
+/**
+ * The wedge of the layer from its centre at angles 0 to π/mirrors, turned
+ * round into every other wedge, and turned over in every second one.
+ */
+function drawKaleidoscope(ctx: CanvasRenderingContext2D, layer: HTMLCanvasElement, width: number, mirrors: number): void {
+  const wedge = Math.PI / mirrors;
+  const centre = width / 2;
+  for (let j = 0; j < 2 * mirrors; j++) {
+    ctx.save();
+    // A hair wider than the wedge, so that no seam shows between them.
+    ctx.beginPath();
+    ctx.moveTo(centre, centre);
+    ctx.arc(centre, centre, width, j * wedge - 0.003, (j + 1) * wedge + 0.003);
+    ctx.closePath();
+    ctx.clip();
+    ctx.translate(centre, centre);
+    if (j % 2 === 0) ctx.rotate(j * wedge);
+    else {
+      ctx.rotate((j + 1) * wedge);
+      ctx.scale(1, -1);
+    }
+    ctx.scale((width * KALEIDO_ZOOM) / layer.width, (width * KALEIDO_ZOOM) / layer.height);
+    ctx.drawImage(layer, -layer.width / 2, -layer.height / 2);
+    ctx.restore();
+  }
+}
+
+/**
+ * Where on the field a point of the screen is, as fractions, through the
+ * mirror, and which copy it lies in; null off the picture.
+ */
+function unmirror(u: number, v: number): [number, number, number] | null {
+  if (mirror === 'none') return [u, v, 0];
+  const mirrors = kaleidoMirrors();
+  if (mirrors) {
+    const wedge = Math.PI / mirrors;
+    const dx = u - 0.5;
+    const dy = v - 0.5;
+    const r = Math.hypot(dx, dy) / KALEIDO_ZOOM;
+    let angle = Math.atan2(dy, dx);
+    if (angle < 0) angle += 2 * Math.PI;
+    const j = Math.min(2 * mirrors - 1, Math.floor(angle / wedge));
+    let turned = angle - j * wedge;
+    if (j % 2 === 1) turned = wedge - turned;
+    return [0.5 + r * Math.cos(turned), 0.5 + r * Math.sin(turned), j];
+  }
   const source = mirrorSource();
-  for (const tile of mirrorTiles()) {
+  const tiles = mirrorTiles();
+  for (let k = 0; k < tiles.length; k++) {
+    const tile = tiles[k];
     if (u < tile.x || u >= tile.x + tile.w || v < tile.y || v >= tile.y + tile.h) continue;
     let s = (u - tile.x) / tile.w;
     let t = (v - tile.y) / tile.h;
     if (tile.flipX) s = 1 - s;
     if (tile.flipY) t = 1 - t;
-    return [s * source.w, t * source.h];
+    return [s * source.w, t * source.h, k];
   }
   return null;
+}
+
+/**
+ * The mirrored picture made into the field: every cell takes the label it
+ * shows, each copy of a bubble a label of its own, so that where copies meet
+ * there is a film. The rule then goes on from there and smooths the seams.
+ */
+function bakeMirror(): void {
+  const label = new Uint16Array(size * size);
+  const fresh = new Map<number, number>();
+  for (let y = 0; y < size; y++) {
+    for (let x = 0; x < size; x++) {
+      const at = unmirror((x + 0.5) / size, (y + 0.5) / size);
+      if (!at) continue;
+      const sx = Math.min(size - 1, Math.max(0, Math.floor(at[0] * size)));
+      const sy = Math.min(size - 1, Math.max(0, Math.floor(at[1] * size)));
+      const old = foam.label[sy * size + sx];
+      if (old === AIR) continue;
+      const key = old * 64 + at[2];
+      let mine = fresh.get(key);
+      if (mine === undefined) {
+        mine = Math.min(65534, fresh.size + 1);
+        fresh.set(key, mine);
+      }
+      label[y * size + x] = mine;
+    }
+  }
+  foam.replace(label, fresh.size);
+  seepage.reset();
+  mirrorSelect.value = 'none';
+  mirrorSelect.dispatchEvent(new Event('change'));
 }
 
 function drawingLines(): boolean {

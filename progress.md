@@ -428,6 +428,14 @@ the mirror. Looked at in screenshots with the spline shells (four quarters,
 four whole, two halves) and the soap palette (four quarters). The cut
 halves make notches and thin slivers where bubbles cross the axis; a foam
 grown symmetric, with the rule mirrored at the axis, would meet it square.
+Then a kaleidoscope of 6, 8 or 12 sectors, and, on the user's idea, making
+the mirrored picture the field, for the rule to smooth the seams. Looked at
+with the shells in eight sectors and with the stress palette in six, and
+baked from four quarters and from six sectors. A first look at a baked
+six-sector field seemed not to be symmetric; measured, every film above the
+middle had its mirror below, as six sectors have a mirror across the middle
+but none down it. The measure then showed the symmetry wearing down as the
+rule runs, to 64% within a cell after 600 steps.
 
 The rule also runs on the GPU (`src/foam/foamgpu.ts`), reading the labels
 back every four steps. Compared with the CPU in the browser at 320: without

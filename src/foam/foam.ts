@@ -113,6 +113,20 @@ export class Foam {
     this.edits++;
   }
 
+  /**
+   * A whole new field of labels, numbered from 1 to `count`. Every bubble
+   * holds on to the area it has now, as if it had grown to it.
+   */
+  replace(label: Uint16Array, count: number): void {
+    this.label.set(label);
+    this.labels = Math.min(count, MAX_LABELS);
+    this.least.fill(0);
+    this.measure();
+    for (let l = 1; l <= this.labels; l++) this.least[l] = this.area[l];
+    this.retarget();
+    this.edits++;
+  }
+
   /** Burst the bubble at a cell: its cells turn to air and the neighbours grow in. */
   pop(x: number, y: number): void {
     const gone = this.label[y * this.w + x];

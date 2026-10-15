@@ -54,6 +54,10 @@ own.
   - The *Fill* opacity slider for the stress fill: it now acts on flat colours
     only.
 
+- **Symmetry kept.** A baked mirror wears down with the noise of the rule;
+  the rule itself could be mirrored at the axes, or the source wedge copied
+  out again every few steps.
+
 ## 3D foam
 
 - **Kelvin and Weaire–Phelan.** Start the bubbles on a lattice and not at
