@@ -171,6 +171,8 @@ let coarsening: Coarsening = 'none';
 let burstRate = 0.01;
 /** Bursts owed but not yet made, so that a fraction is carried over. */
 let burstsOwed = 0;
+/** Radius of the round wall, as a share of half the field. */
+let fenceSize = 0.7;
 build(Number(byId<HTMLSelectElement>('field-size').value));
 let shimmer = sheen !== null;
 
@@ -200,6 +202,7 @@ byId('count').addEventListener('change', scatter);
 const sizeSelect = byId<HTMLSelectElement>('field-size');
 sizeSelect.addEventListener('change', () => {
   build(Number(sizeSelect.value));
+  applyFence();
   scatter();
 });
 
@@ -214,6 +217,24 @@ const chooseCoarsening = () => {
 coarseningSelect.addEventListener('change', chooseCoarsening);
 chooseCoarsening();
 bindRange('rate', 0, (v) => (burstRate = v / 1000));
+
+// A round wall the foam grows inside, until it is taken away.
+const fenceToggle = byId<HTMLInputElement>('fence');
+const applyFence = () => {
+  foam.setFence(fenceToggle.checked ? (fenceSize * size) / 2 : 0);
+  byId('pick-fence-size').hidden = !fenceToggle.checked;
+  byId('lift-fence').hidden = !fenceToggle.checked;
+};
+fenceToggle.addEventListener('change', applyFence);
+bindRange('fence-size', 2, (v) => {
+  fenceSize = v;
+  if (fenceToggle.checked) applyFence();
+});
+byId('lift-fence').addEventListener('click', () => {
+  fenceToggle.checked = false;
+  applyFence();
+});
+applyFence();
 
 const pauseButton = byId<HTMLButtonElement>('pause');
 pauseButton.addEventListener('click', togglePause);

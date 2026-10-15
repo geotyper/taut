@@ -26,6 +26,8 @@ uniform sampler2D uWeight;
 uniform int uRadius;
 uniform float uJitter;
 uniform uint uSeed;
+// Centre and squared radius of a round wall; no wall where the radius is zero.
+uniform vec3 uFence;
 out uint outLabel;
 
 const uint AIR = 0u;
@@ -42,10 +44,20 @@ float random(uvec2 cell, uint k) {
   return float(h >> 8) / 16777216.0;
 }
 
+bool fenced(ivec2 at) {
+  vec2 d = vec2(at) - uFence.xy;
+  return uFence.z > 0.0 && dot(d, d) > uFence.z;
+}
+
 void main() {
   ivec2 cell = ivec2(gl_FragCoord.xy);
   ivec2 size = textureSize(uLabel, 0);
   uint here = texelFetch(uLabel, cell, 0).r;
+  // Beyond the round wall nothing changes.
+  if (fenced(cell)) {
+    outLabel = here;
+    return;
+  }
 
   // The labels a cell may take are those in its 3x3 block, nine at most.
   uint seen[9];
@@ -55,7 +67,7 @@ void main() {
   for (int dy = -1; dy <= 1; dy++) {
     for (int dx = -1; dx <= 1; dx++) {
       ivec2 at = cell + ivec2(dx, dy);
-      if (any(lessThan(at, ivec2(0))) || any(greaterThanEqual(at, size))) continue;
+      if (any(lessThan(at, ivec2(0))) || any(greaterThanEqual(at, size)) || fenced(at)) continue;
       uint other = texelFetch(uLabel, at, 0).r;
       bool known = false;
       for (int k = 0; k < kinds; k++) known = known || seen[k] == other;
@@ -75,7 +87,7 @@ void main() {
       if (dx * dx + dy * dy > reach) continue;
       ivec2 at = cell + ivec2(dx, dy);
       // Beyond the wall nothing is counted, so films meet it squarely.
-      if (any(lessThan(at, ivec2(0))) || any(greaterThanEqual(at, size))) continue;
+      if (any(lessThan(at, ivec2(0))) || any(greaterThanEqual(at, size)) || fenced(at)) continue;
       uint other = texelFetch(uLabel, at, 0).r;
       for (int k = 0; k < kinds; k++) {
         if (seen[k] == other) {
@@ -190,6 +202,7 @@ export class FoamGpu {
     gl.uniform1i(gl.getUniformLocation(this.program, 'uWeight'), 1);
     gl.uniform1i(gl.getUniformLocation(this.program, 'uRadius'), p.radius);
     gl.uniform1f(gl.getUniformLocation(this.program, 'uJitter'), p.noise * (discCells(p.radius) / 2));
+    gl.uniform3f(gl.getUniformLocation(this.program, 'uFence'), foam.w / 2 - 0.5, foam.h / 2 - 0.5, foam.fence ** 2);
     gl.activeTexture(gl.TEXTURE1);
     gl.bindTexture(gl.TEXTURE_2D, this.weightTexture);
     for (let s = 0; s < steps; s++) {

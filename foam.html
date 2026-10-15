@@ -167,6 +167,16 @@
           <input id="brush" type="range" min="4" max="30" step="1" value="10" />
         </label>
 
+        <label class="check">
+          <input id="fence" type="checkbox" />
+          <span>Grow inside a circle</span>
+        </label>
+        <label id="pick-fence-size">
+          <span>Size of the circle <output id="fence-size-out"></output></span>
+          <input id="fence-size" type="range" min="0.2" max="1" step="0.05" value="0.7" />
+        </label>
+        <button id="lift-fence">Take the circle away</button>
+
         <div class="buttons">
           <button id="random">New centres</button>
           <button id="add">Add a centre</button>

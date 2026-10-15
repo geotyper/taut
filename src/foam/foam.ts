@@ -49,6 +49,12 @@ export class Foam {
   bubbles = 0;
   /** Goes up whenever cells are changed from outside the rule. */
   edits = 0;
+  /**
+   * Radius of a round wall about the middle of the field, in cells, or zero
+   * for none. Cells beyond it stay air and are not counted, as beyond the
+   * edge of the field, so the foam grows only inside it.
+   */
+  fence = 0;
 
   private next: Uint16Array;
   /** Labels handed out so far; label 0 is air. */
@@ -60,6 +66,8 @@ export class Foam {
   private least = new Float64Array(1);
   private disc: Int8Array = new Int8Array(0);
   private discRadius = -1;
+  /** Cells beyond the round wall, which are air but not air left to fill. */
+  private fenced = 0;
 
   constructor(w: number, h: number) {
     this.w = w;
@@ -78,17 +86,54 @@ export class Foam {
     this.measure();
   }
 
+  /** Whether a cell lies inside the round wall, when there is one. */
+  inside(x: number, y: number): boolean {
+    if (!(this.fence > 0)) return true;
+    return (x + 0.5 - this.w / 2) ** 2 + (y + 0.5 - this.h / 2) ** 2 <= this.fence * this.fence;
+  }
+
+  /**
+   * Put up a round wall of this radius, or take it down with zero. Whatever
+   * lies beyond a new wall turns to air. Taken down, the air beyond it is air
+   * to fill again and the bubbles grow on out to the edges.
+   */
+  setFence(radius: number): void {
+    this.fence = radius;
+    const { w, h, label } = this;
+    this.fenced = 0;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        if (this.inside(x, y)) continue;
+        label[y * w + x] = AIR;
+        this.fenced++;
+      }
+    }
+    this.measure();
+    // A bubble cut by the wall holds on to what it has left.
+    for (let l = 1; l <= this.labels; l++) this.least[l] = Math.min(this.least[l], this.area[l]);
+    this.retarget();
+    this.edits++;
+  }
+
   /** Scatter centres of growth, kept apart from each other where there is room. */
   scatter(count: number, size: number): void {
-    const apart = Math.sqrt((this.w * this.h) / Math.max(1, count)) * 0.6;
+    const room = this.fence > 0 ? Math.min(this.w * this.h, Math.PI * this.fence * this.fence) : this.w * this.h;
+    const apart = Math.sqrt(room / Math.max(1, count)) * 0.6;
     const placed: number[][] = [];
     for (let c = 0; c < count; c++) {
       let x = 0;
       let y = 0;
       for (let attempt = 0; attempt < 30; attempt++) {
         // Clear of the walls, so that the centre starts as a whole disc.
-        x = Math.floor(size + Math.random() * Math.max(1, this.w - 2 * size));
-        y = Math.floor(size + Math.random() * Math.max(1, this.h - 2 * size));
+        if (this.fence > 0) {
+          const r = Math.sqrt(Math.random()) * Math.max(0, this.fence - size);
+          const angle = Math.random() * 2 * Math.PI;
+          x = Math.floor(this.w / 2 + r * Math.cos(angle));
+          y = Math.floor(this.h / 2 + r * Math.sin(angle));
+        } else {
+          x = Math.floor(size + Math.random() * Math.max(1, this.w - 2 * size));
+          y = Math.floor(size + Math.random() * Math.max(1, this.h - 2 * size));
+        }
         if (placed.every((p) => Math.hypot(p[0] - x, p[1] - y) >= apart)) break;
       }
       placed.push([x, y]);
@@ -104,7 +149,7 @@ export class Foam {
     const r = Math.ceil(size);
     for (let y = Math.max(0, cy - r); y <= Math.min(h - 1, cy + r); y++) {
       for (let x = Math.max(0, cx - r); x <= Math.min(w - 1, cx + r); x++) {
-        if ((x - cx) ** 2 + (y - cy) ** 2 <= size * size) label[y * w + x] = mine;
+        if ((x - cx) ** 2 + (y - cy) ** 2 <= size * size && this.inside(x, y)) label[y * w + x] = mine;
       }
     }
     this.measure();
@@ -119,6 +164,9 @@ export class Foam {
    */
   replace(label: Uint16Array, count: number): void {
     this.label.set(label);
+    if (this.fence > 0) {
+      for (let i = 0; i < label.length; i++) if (!this.inside(i % this.w, Math.floor(i / this.w))) this.label[i] = AIR;
+    }
     this.labels = Math.min(count, MAX_LABELS);
     this.least.fill(0);
     this.measure();
@@ -145,11 +193,20 @@ export class Foam {
     // The labels a cell may take are those in its 3x3 block, nine at most.
     const seen = new Uint16Array(9);
     const count = new Float64Array(9);
+    const fence = this.fence > 0;
+    const cx = w / 2 - 0.5;
+    const cy = h / 2 - 0.5;
+    const reach = this.fence * this.fence;
 
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
         const i = y * w + x;
         const here = label[i];
+        // Beyond the round wall nothing changes.
+        if (fence && (x + 0.5 - cx) ** 2 + (y + 0.5 - cy) ** 2 > reach) {
+          next[i] = here;
+          continue;
+        }
         let kinds = 1;
         seen[0] = here;
         for (let dy = -1; dy <= 1; dy++) {
@@ -158,6 +215,7 @@ export class Foam {
           for (let dx = -1; dx <= 1; dx++) {
             const nx = x + dx;
             if (nx < 0 || nx >= w) continue;
+            if (fence && (nx - cx) ** 2 + (ny - cy) ** 2 > reach) continue;
             const other = label[ny * w + nx];
             let k = 0;
             while (k < kinds && seen[k] !== other) k++;
@@ -176,6 +234,7 @@ export class Foam {
           const ny = y + disc[d + 1];
           // Beyond the wall nothing is counted, so films meet it squarely.
           if (nx < 0 || nx >= w || ny < 0 || ny >= h) continue;
+          if (fence && (nx - cx) ** 2 + (ny - cy) ** 2 > reach) continue;
           const other = label[ny * w + nx];
           for (let k = 0; k < kinds; k++) {
             if (seen[k] === other) {
@@ -301,7 +360,7 @@ export class Foam {
     const { area, label } = this;
     area.fill(0);
     for (let i = 0; i < label.length; i++) area[label[i]]++;
-    this.air = area[AIR];
+    this.air = area[AIR] - (this.fence > 0 ? this.fenced : 0);
     this.bubbles = 0;
     for (let l = 1; l <= this.labels; l++) if (area[l] > 0) this.bubbles++;
   }

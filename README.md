@@ -393,6 +393,15 @@ its mirror below it. The noise of the rule then wears the symmetry down:
 within one cell, 90% of the films matched their mirror after 20 steps, 73%
 after 120, 64% after 600, though by eye it stays symmetric for long.
 
+*Grow inside a circle* puts up a round wall about the middle of the field,
+*Size of the circle* across as a share of the field. Whatever lies beyond it
+turns to air that the rule never changes and never counts, as beyond the
+edge of the field, so the foam fills the disc and its films meet the wall
+square. *Take the circle away* lets the air out there be filled again: the
+bubbles along the rim grow out to the walls of the square as long petals
+and fans, around the small round bubbles of the middle, which hold their
+area. New centres are scattered inside the circle while it stands.
+
 *Line width by* makes some films wider than the slider says. *Bend* changes
 the width along a film, which is drawn as a filled ribbon: at every point it
 goes by the curvature of the circle through the point and two others a

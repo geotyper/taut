@@ -455,6 +455,13 @@ moiré, read one sample a pixel; 2×2 samples averaged keep them whole.
 Looked at with 6, 8 and 12 sectors at sizes 1, 1.2, 1.3 and 1.42, and baked
 joined from six sectors; 51 steps a second at 512 with the shells, 32 with
 the stress shader.
+Then, on the user's idea seen while watching two mirrors, a round wall the
+foam grows inside and that a button takes away (`Foam.setFence`, and a
+`uFence` uniform in the GPU shader). Cells beyond it are left out of the
+count of air, so the foam counts as full inside the disc and the bubbles
+take their areas then. Looked at on the GPU with two mirrors and on the CPU
+at 320 with 60 centres: the bubbles at the rim grew out to the square's
+walls as petals in a few thousand steps.
 
 The rule also runs on the GPU (`src/foam/foamgpu.ts`), reading the labels
 back every four steps. Compared with the CPU in the browser at 320: without
