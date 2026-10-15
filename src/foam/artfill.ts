@@ -319,10 +319,11 @@ function shapedEngraving(bubble: ArtBubble, gap: number): number[][] {
 
 /**
  * Lines of equal distance from the edge of a bubble, `gap` apart, as x1, y1,
- * x2, y2 runs in cells: the bubble drawn in its own contours, by marching
- * squares over the centres of its cells.
+ * x2, y2 runs in cells, a list for every distance from the edge inwards:
+ * the bubble drawn in its own contours, by marching squares over the
+ * centres of its cells.
  */
-function contourLines(bubble: ArtBubble, gap: number): number[] {
+function contourLines(bubble: ArtBubble, gap: number): number[][] {
   const { w, h, label, depth, top } = bubble.relief!;
   const own = bubble.shell.label;
   const [bx0, by0, bx1, by1] = boxOf(bubble.shell);
@@ -334,8 +335,10 @@ function contourLines(bubble: ArtBubble, gap: number): number[] {
     const i = y * w + x;
     return label[i] === own ? depth[i] : -depth[i];
   };
-  const out: number[] = [];
+  const levels: number[][] = [];
   for (let level = gap; level < top[own]; level += gap) {
+    const out: number[] = [];
+    levels.push(out);
     for (let y = y0; y < y1; y++) {
       for (let x = x0; x < x1; x++) {
         const corners = [value(x, y), value(x + 1, y), value(x + 1, y + 1), value(x, y + 1)];
@@ -359,15 +362,16 @@ function contourLines(bubble: ArtBubble, gap: number): number[] {
       }
     }
   }
-  return out;
+  return levels;
 }
 
 /** Draw runs of strokes in ink, the k-th list `widths[k]` lines wide, scaled by `scale`. */
-function strokeRuns(ctx: CanvasRenderingContext2D, runs: number[][], widths: readonly number[], line: number, scale: number): void {
+function strokeRuns(ctx: CanvasRenderingContext2D, runs: number[][], widths: readonly number[], line: number, scale: number, colours?: string[]): void {
   ctx.strokeStyle = INK;
   ctx.lineCap = 'round';
   runs.forEach((run, k) => {
     if (!run.length) return;
+    if (colours) ctx.strokeStyle = colours[k];
     ctx.beginPath();
     for (let i = 0; i < run.length; i += 4) {
       ctx.moveTo(run[i] * scale, run[i + 1] * scale);
@@ -380,13 +384,13 @@ function strokeRuns(ctx: CanvasRenderingContext2D, runs: number[][], widths: rea
 }
 
 /** The same runs as SVG paths, in cells. */
-function svgRuns(runs: number[][], widths: readonly number[], line: number): string[] {
+function svgRuns(runs: number[][], widths: readonly number[], line: number, colours?: string[]): string[] {
   const f = (v: number) => v.toFixed(2);
   const out: string[] = [];
   runs.forEach((run, k) => {
     let path = '';
     for (let i = 0; i < run.length; i += 4) path += `M${f(run[i])} ${f(run[i + 1])}L${f(run[i + 2])} ${f(run[i + 3])}`;
-    if (path) out.push(`<path fill="none" stroke="${INK}" stroke-linecap="round" stroke-width="${f(widths[k] * line)}" d="${path}"/>`);
+    if (path) out.push(`<path fill="none" stroke="${colours ? colours[k] : INK}" stroke-linecap="round" stroke-width="${f(widths[k] * line)}" d="${path}"/>`);
   });
   return out;
 }
@@ -429,12 +433,17 @@ export function drawArt(ctx: CanvasRenderingContext2D, fill: ArtFill, bubble: Ar
   ctx.save();
   ctx.clip('evenodd');
   if (bubble.large === 'contours' && bubble.relief) {
-    strokeRuns(ctx, [contourLines(bubble, Math.max(4, 3 * line) / cell)], [0.6], line, cell);
+    strokeRuns(ctx, [contourLines(bubble, Math.max(4, 3 * line) / cell).flat()], [0.6], line, cell);
   } else if (fill === 'shaped' && bubble.relief) {
     strokeRuns(ctx, shapedEngraving(bubble, Math.max(4, 2.8 * line) / cell), ENGRAVE_WIDTHS, line, cell);
+  } else if (fill === 'rings' && bubble.relief) {
+    // The bubble in a dark tone of its colour, and its contours, lines of
+    // equal distance from its edge, in its colour, a lighter and a darker by turns.
+    ctx.fillStyle = rgba(mix(colour, 0, 0.72), 1);
+    ctx.fill('evenodd');
+    const levels = contourLines(bubble, Math.max(5, 3.5 * line) / cell);
+    strokeRuns(ctx, levels, levels.map(() => 0.7), line, cell, levels.map((_, k) => rgba(k % 2 ? mix(colour, 0, 0.35) : colour, 0.95)));
   } else if (fill === 'rings') {
-    // The bubble in a dark tone of its colour, and copies of its outline
-    // drawn in towards the middle in its colour, a lighter and a darker by turns.
     ctx.fillStyle = rgba(mix(colour, 0, 0.72), 1);
     ctx.fill('evenodd');
     const gap = Math.max(5, 3.5 * line);
@@ -527,9 +536,13 @@ export function svgArt(fill: ArtFill, bubble: ArtBubble, id: number, line: numbe
   defs.push(`<clipPath id="c${id}"><path clip-rule="evenodd" d="${d}"/></clipPath>`);
   const inside: string[] = [];
   if (bubble.large === 'contours' && bubble.relief) {
-    inside.push(...svgRuns([contourLines(bubble, Math.max(1.6, 3 * line))], [0.6], line));
+    inside.push(...svgRuns([contourLines(bubble, Math.max(1.6, 3 * line)).flat()], [0.6], line));
   } else if (fill === 'shaped' && bubble.relief) {
     inside.push(...svgRuns(shapedEngraving(bubble, Math.max(1.6, 2.8 * line)), ENGRAVE_WIDTHS, line));
+  } else if (fill === 'rings' && bubble.relief) {
+    inside.push(`<path fill-rule="evenodd" fill="${hex(mix(colour, 0, 0.72))}" d="${d}"/>`);
+    const levels = contourLines(bubble, Math.max(2, 3.5 * line));
+    inside.push(...svgRuns(levels, levels.map(() => 0.7), line, levels.map((_, k) => hex(k % 2 ? mix(colour, 0, 0.35) : colour))));
   } else if (fill === 'rings') {
     inside.push(`<path fill-rule="evenodd" fill="${hex(mix(colour, 0, 0.72))}" d="${d}"/>`);
     const gap = Math.max(2, 3.5 * line);

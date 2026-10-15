@@ -367,8 +367,8 @@ light from a little above the middle of each bubble fading to its rim;
 *Neon rims*, a tube along every shell on black, a core near white inside
 widening halos of its colour, drawn last and adding up, so where two
 bubbles meet their light runs together; *Contour rings*, the bubble in a
-dark tone of its colour and copies of its outline drawn in towards the
-middle, lighter and darker by turns; *Stained glass, by sides*, a pane
+dark tone of its colour and its contours, lines of equal distance from its
+edge, in its colour, lighter and darker by turns; *Stained glass, by sides*, a pane
 coloured by how many bubbles it touches (red for three or fewer, then
 orange, yellow, green for six, blue, violet, magenta for nine or more) in
 dark leading; *Hatching, in ink*, black strokes on paper at an angle of the

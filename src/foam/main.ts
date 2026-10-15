@@ -726,6 +726,7 @@ function artBubble(shell: Shell): ArtBubble {
     turn: hue(shell.label) / HUES,
     sides: bubbleSides.get(shell.label)?.size ?? 0,
   };
+  if (fill === 'rings') bubble.relief = currentRelief();
   if (!INK_FILLS.includes(fill)) return bubble;
   if (fill === 'shaped' || large === 'contours') bubble.relief = currentRelief();
   if (large !== 'same') {

@@ -505,6 +505,11 @@ a field grown inside a circle and let out, with all four; the contours by
 Euclidean distance come out as straight-sided rings. 7.5 frames a second
 for the first engraving and 5 for the shaped one at 512 with 400 bubbles,
 2.3 and 1.5 at 1024 with 2000, in a headless browser running four at once.
+Then the contour rings, the weakest of the fills, were made of those same
+lines of equal distance from the edge instead of copies of the outline
+shrunk towards the centroid, which squeezed long bubbles along their length.
+Looked at plain, on long petals grown out of a circle and in a kaleidoscope
+of eight sectors; the SVG parses.
 
 The rule also runs on the GPU (`src/foam/foamgpu.ts`), reading the labels
 back every four steps. Compared with the CPU in the browser at 320: without
