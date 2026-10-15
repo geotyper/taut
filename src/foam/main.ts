@@ -637,6 +637,12 @@ function renderShells(width: number): void {
   const ctx = linesCtx;
   const cell = width / size;
   const scale = window.devicePixelRatio || 1;
+  // With the stress fill the shells are windows onto its picture underneath.
+  const stress = stressUnder();
+  if (stress) {
+    sheen!.draw(foam.label, hue, 5, performance.now() / 1000);
+    ctx.clearRect(0, 0, width, width);
+  }
   ctx.globalCompositeOperation = 'source-over';
   ctx.globalAlpha = 1;
   ctx.fillStyle = LIQUID;
@@ -644,8 +650,14 @@ function renderShells(width: number): void {
   for (const shell of currentShells()) {
     ctx.beginPath();
     traceShell(ctx, shell, cell);
-    ctx.fillStyle = '#0b0d11';
-    ctx.fill('evenodd');
+    if (stress && shell.label !== AIR) {
+      ctx.globalCompositeOperation = 'destination-out';
+      ctx.fill('evenodd');
+      ctx.globalCompositeOperation = 'source-over';
+    } else {
+      ctx.fillStyle = '#0b0d11';
+      ctx.fill('evenodd');
+    }
     if (shell.label === AIR) continue;
     const colour = css(SHEEN_BRIGHT[hue(shell.label)]);
     if (fill === 'flat') {

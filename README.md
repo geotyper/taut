@@ -357,6 +357,8 @@ inside it gets a second loop, a hole moved the other way. The B-spline is
 written out as the Béziers it is made of, so *Save as SVG* saves the very
 curves drawn, one path for every bubble, in cells. At 1024 with 2000
 bubbles it runs as fast as the lines.
+With the stress fill the shells are cut out of the liquid as windows onto
+the stress picture underneath; the SVG keeps only their outlines then.
 
 *Symmetry* (experimental, *M* steps through it) mirrors the picture, in any
 palette, only as a picture: the visible layers are put together on a canvas

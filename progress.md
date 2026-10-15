@@ -476,6 +476,10 @@ of eight steps (46000 pixels a frame); with the push divided by the steps a
 weight is kept, it stood still at 4 and 16 steps a frame, and 1972 of 2000
 centres grew into bubbles at four steps a frame against 971 before. 40
 bubbles at 320 still held over 28000 steps and 100 at 512 over 17000.
+The stress fill did nothing with the shells: they painted the whole canvas
+over the stress picture, which was not drawn either. Now it is drawn and
+the shells are cut out of the liquid over it; looked at plain, wet and in
+a kaleidoscope of six.
 
 The rule also runs on the GPU (`src/foam/foamgpu.ts`), reading the labels
 back every four steps. Compared with the CPU in the browser at 320: without
