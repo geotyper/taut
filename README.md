@@ -703,6 +703,47 @@ The page needs WebGL2 with float blending. On one machine it made about 30
 steps a second at 96³ with 60 bubbles and 10 at 160³, the finest
 resolution.
 
+## Films on wire frames
+
+`wire.html` (`src/wire/`) shows soap films on a wire, with air on both sides,
+as when a frame is dipped in soap and lifted out. It uses the rule of the 3D
+foam, run on the GPU, and the films pull taut to the least area the wire
+allows.
+
+A film on a wire is not a border between two labels: it is an open sheet
+that ends on the wire. The rule still treats it as a border, with one twist
+in how a cell reads its neighbours. Each face of the frame gets a cut, a
+surface spanning its loops of wire. A cell that reads a neighbour across the
+cut of face k swaps that neighbour's labels 0 and k. Any path once round a
+wire crosses a cut, so two cells somewhere on that path must disagree, and
+that is where the film is. The cut itself does not show; it only keeps
+track of the labels. Whether the line between two cells crosses a cut comes
+from the solid angle the face's loops subtend at each cell. That angle
+changes smoothly, except for a jump of 4π across the cut, and it changes by
+less than 2π along a short line that does not cross the cut, even near the
+wire. The angles and the cells near a cut are worked out on the GPU when a
+frame is set.
+
+- **A ring** gives a flat disc.
+- **Two rings** start with a tube between them, which narrows into a
+  catenoid. *Pull the rings apart slowly* widens the gap step by step until
+  the tube breaks into two discs, and the page shows the gap at which it
+  broke.
+- **The edge of a Möbius strip**: one loop of wire that goes round twice.
+  The cut there is only bookkeeping, so the film can take either side.
+- **A tetrahedron** has a face, and its own label, for every opening between
+  its wires. The films grow from the openings and meet in six films that
+  run to the middle.
+- **A cube** ends as twelve flat films meeting in one point at the middle.
+  The thirteen films with a small square in the middle, the shape real soap
+  takes, were not reached (see progress).
+- **A cube with a bubble trapped inside**: the one bubble that keeps a
+  volume, held to a share of its start that a slider sets. It shows as a
+  small cube in the middle.
+
+The wire is drawn as stone. Every film is coloured by the pair of labels on
+its two sides.
+
 ## Running
 
 ```sh

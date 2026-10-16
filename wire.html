@@ -1,0 +1,95 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>taut wire frames</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <main>
+      <div class="fields single">
+        <figure>
+          <div class="stack">
+            <canvas id="field-3d" class="orbit"></canvas>
+          </div>
+          <p class="stat" id="stat"></p>
+        </figure>
+      </div>
+
+      <aside>
+        <h1>taut wire frames</h1>
+        <p class="hint">
+          Soap films on a wire, with air on both sides: they pull taut to the
+          least area the wire allows. Drag to orbit, scroll to zoom.
+          <a href="/foam3d.html">3D foam</a>
+        </p>
+        <p class="hint">Keys: <kbd>N</kbd> start again, <kbd>Space</kbd> pause.</p>
+
+        <label>
+          <span>Frame</span>
+          <select id="frame">
+            <option value="ring">A ring: a flat disc</option>
+            <option value="rings">Two rings: a catenoid</option>
+            <option value="mobius">The edge of a Möbius strip</option>
+            <option value="tetra">A tetrahedron: six films to the middle</option>
+            <option value="cube">A cube: thirteen films</option>
+            <option value="cube-bubble">A cube with a bubble trapped inside</option>
+          </select>
+        </label>
+        <label id="pick-gap">
+          <span>Gap between the rings, in radii <output id="gap-out"></output></span>
+          <input id="gap" type="range" min="0.3" max="1.8" step="0.02" value="0.8" />
+        </label>
+        <label class="check" id="pick-pull">
+          <input id="pull" type="checkbox" />
+          <span>Pull the rings apart slowly</span>
+        </label>
+        <label id="pick-bubble">
+          <span>Bubble, share of its start <output id="bubble-out"></output></span>
+          <input id="bubble" type="range" min="0.05" max="1.5" step="0.05" value="0.5" />
+        </label>
+
+        <label>
+          <span>Resolution</span>
+          <select id="size">
+            <option value="64">Low (64³)</option>
+            <option value="96" selected>Medium (96³)</option>
+            <option value="128">High (128³, slower)</option>
+          </select>
+        </label>
+        <label>
+          <span>Kernel radius <output id="radius-out"></output></span>
+          <input id="radius" type="range" min="2" max="5" step="1" value="3" />
+        </label>
+        <label>
+          <span>Noise <output id="noise-out"></output></span>
+          <input id="noise" type="range" min="0" max="0.5" step="0.01" value="0.15" />
+        </label>
+        <label>
+          <span>Steps per frame <output id="speed-out"></output></span>
+          <input id="speed" type="range" min="1" max="16" step="1" value="2" />
+        </label>
+
+        <h2>View</h2>
+        <label>
+          <span>Surface</span>
+          <select id="surface">
+            <option value="voxels">Voxels</option>
+            <option value="smooth">Smooth</option>
+          </select>
+        </label>
+        <label>
+          <span>Film opacity <output id="opacity-out"></output></span>
+          <input id="opacity" type="range" min="0.03" max="1" step="0.01" value="0.35" />
+        </label>
+
+        <div class="buttons">
+          <button id="restart">Start again</button>
+          <button id="pause">Pause</button>
+        </div>
+      </aside>
+    </main>
+    <script type="module" src="/src/wire/main.ts"></script>
+  </body>
+</html>

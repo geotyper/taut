@@ -7,30 +7,25 @@ are mostly the foams, with the main older ideas listed briefly at the end.
 
 ## Wire frames: the Plateau problem
 
-The foams now grow in an open field or a sphere. A soap film is at its best
-when it hangs on a wire, and the films then find a minimal surface on their
-own.
+Films on wire frames are on `wire.html` (branch `foam3d-wire`); see the
+README for how a film with air on both sides is made a border by cuts.
+Still to do:
 
 - **2D: pins instead of a frame.** A few fixed points that every film must
   reach. The films then form the shortest network joining the points, a
   Steiner tree, with three films at 120° at every junction. Three or four pins
   at the corners of a square is the classic case: the network takes one of
-  two equal shapes, and which one depends on the start.
-- **3D: wire shapes.** The wire is a line of fixed cells, drawn as a tube. Then:
-  - a ring gives a flat disc;
-  - two rings give a catenoid, and when the rings are pulled apart the neck
-    pinches off and the film snaps into two discs;
-  - a tetrahedron gives six films that meet in the centre;
-  - a cube gives thirteen films, with a small square in the middle, or with a
-    small cube in the middle if a bubble is trapped there;
-  - a twisted wire gives a Möbius strip.
-- **How it could work.** The wire holds the labels on its two sides, the way
-  the wall holds them now, and the films grow from it. The difficulty is that
-  a film on a wire has no bubbles behind it, only air on both sides. So it
-  probably needs two phases that a film divides, with the wire as the line
-  where the phases are held apart.
-- **Moving the wire** with the mouse, or with a slider for the gap between the
-  rings, to watch the catenoid break.
+  two equal shapes, and which one depends on the start. The same cuts work
+  in 2D, with the angle round each pin in place of a solid angle.
+- **The cube's thirteen films.** The rule stays at twelve films meeting in
+  a point. To try: a finer field, a kernel of another shape, or the films
+  as a mesh relaxed to least area.
+- **The still look on the wire frames**: the mesh of `src/foam3d/films.ts`
+  built through the cuts, so the films come out exact and can be drawn as
+  pictures.
+- **More frames**: a twisted wire with more half twists (a trefoil edge),
+  a prism, an octahedron, a helix between two rings.
+- **Moving the wire with the mouse**, not only pulling the rings apart.
 
 ## 2D foam
 

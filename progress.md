@@ -730,6 +730,49 @@ The SVG was checked to parse, in node, not opened in an editor. The
 rings are polygons with sharp corners, as the distance from a polygon's
 edge is; how it looks on a foam still growing was not watched.
 
+## Added since: films on wire frames
+
+Branch `foam3d-wire`, from the idea in `futurs.md`. Films with air on both
+sides are borders in the labels thanks to cuts: a cell that reads across the
+cut of a face swaps that face's label with 0 (see the README). Whether a
+line crosses a cut is read from the jump in the face's solid angle, so a cut
+may be any surface spanning the wire, even one that folds over itself, as
+the fan from the middle of a Möbius strip's edge does. Only an odd number of
+crossings swaps.
+
+A prototype ran on the CPU in node at 48³ first. On a ring, the film stayed
+a flat disc. Between two rings 0.8 radii apart, the tube narrowed. In a
+tetrahedron, the inside split from its four openings into four chambers and
+the area of the films halved. In a cube the six flat films stayed put: with
+no pressure, a cube of air closed by flat films pinned at the wire is a
+local minimum. A start from chambers, every cell inside labelled by its
+nearest face, then stayed as twelve films meeting in a point. On the GPU
+at 64³, the same held for 2100 steps, at noise 0.15 and at 0.4. A start
+with the top and bottom chambers already meeting in a square went back to
+the point within 1000 steps, so that start was dropped. Whether the rule
+cannot find the thirteen films or holds the point on the lattice was not
+told apart.
+
+On the GPU at 96³ the frames take 0.2 s to set up (5 to 10 s on the CPU,
+measured with six pages at once) and the rule runs 40 to 60 steps a second.
+Looked at in screenshots at 96³: the disc, the tube, the Möbius film, the
+tetrahedron's six films, the cube's twelve, and the cube with a trapped
+bubble, a small cube in the middle.
+
+The catenoid was checked against its limit. A catenoid exists between two
+rings of radius R only while their gap is under 1.325 R. Held at a fixed gap
+from a tube at 64³ (rings of 16 cells), it stayed a tube at 1.2, 1.3 and 1.4
+radii for 2100 steps and broke into two discs at 1.5. The gaps are measured
+between the middles of the wires. Between their facing sides, 2.2 cells
+less, the limit lies between 1.26 and 1.36 radii, around 1.325. Pulled
+apart at 0.02 radii every 40 steps, the tube broke at 1.64 at 64³ and had
+not broken at 1.8 at 96³: near the limit the neck closes slowly and falls
+behind the pull.
+
+Not done: the still look of the 3D foam does not mesh these films yet. Its
+mesh is built from labels, and here a film is a disagreement through a cut,
+so the mesh would also need the cuts.
+
 ## What could be improved
 
 ### Both
