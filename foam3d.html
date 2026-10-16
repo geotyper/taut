@@ -28,6 +28,7 @@
         <p class="hint">
           Keys: <kbd>N</kbd> new foam, <kbd>S</kbd> smooth or voxels, <kbd>G</kbd> light or glass,
           <kbd>C</kbd> film colours, <kbd>W</kbd> wet the films again, <kbd>Space</kbd> pause.
+          The still look meshes the foam on the CPU and draws it when the view stops moving.
         </p>
 
         <label>
@@ -99,8 +100,52 @@
             <option value="skeleton">Skeleton: the edges as solid voxels</option>
             <option value="tubes">Skeleton, smoothed: the edges as tubes</option>
             <option value="lines-tubes">Skeleton from the lines: smooth tubes round them</option>
+            <option value="still">Still: the films as a mesh, drawn as a picture</option>
           </select>
         </label>
+        <div id="pick-still" hidden>
+          <label>
+            <span>Picture</span>
+            <select id="still-fill">
+              <option value="colour">Films in colour, lines in ink</option>
+              <option value="paper">Ink on paper</option>
+              <option value="dark">Light lines on dark</option>
+            </select>
+          </label>
+          <label>
+            <span>Lines across the films</span>
+            <select id="still-across">
+              <option value="none">None</option>
+              <option value="rings">Rings: at equal distances from the borders</option>
+              <option value="level">Level, like heights on a map</option>
+            </select>
+          </label>
+          <label class="check">
+            <input id="still-light" type="checkbox" />
+            <span>Thicker in the shade, as an engraving</span>
+          </label>
+          <label>
+            <span>Cells between those lines <output id="still-spacing-out"></output></span>
+            <input id="still-spacing" type="range" min="1" max="10" step="0.5" value="2.5" />
+          </label>
+          <label>
+            <span>Border width <output id="still-width-out"></output></span>
+            <input id="still-width" type="range" min="0.5" max="4" step="0.25" value="1.5" />
+          </label>
+          <label class="check">
+            <input id="still-xray" type="checkbox" />
+            <span>Lines behind the films too</span>
+          </label>
+          <label class="check">
+            <input id="still-cut" type="checkbox" />
+            <span>Cut the near half away</span>
+          </label>
+          <div class="buttons">
+            <button id="still-again">Mesh the foam again</button>
+            <button id="still-png">Save as PNG</button>
+            <button id="still-svg">Save as SVG</button>
+          </div>
+        </div>
         <label id="pick-colours">
           <span>Film colours</span>
           <select id="colours">

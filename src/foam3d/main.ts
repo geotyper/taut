@@ -11,6 +11,8 @@ import {
   type Skeleton,
 } from './skeleton.ts';
 import { tubeField } from './tubes.ts';
+import { buildFilms, distanceFromBorders, type Films } from './films.ts';
+import { drawPicture, pictureSvg, renderStill, type Picture, type StillOptions } from './still.ts';
 
 /** A scattered centre starts as a ball this many kernel radii across. */
 const SEED_SIZE = 1.5;
@@ -53,6 +55,27 @@ let contourLight = new Float32Array(0);
 let contourSpacing = 3;
 let partsFor = '';
 const stat = byId('stat');
+/** The still look: the films meshed from the labels, and the picture last drawn of them. */
+let films: Films | null = null;
+let filmsDistance: Float64Array | null = null;
+let filmsStep = -1;
+let filmsAt = 0;
+let filmsMs = 0;
+let picture: Picture | null = null;
+let pictureFor = '';
+let pictureMs = 0;
+/** The view must hold still this long, in ms, before the picture is drawn again. */
+const STILL_AFTER = 150;
+let movedAt = 0;
+const still: Omit<StillOptions, 'width' | 'height' | 'scale'> = {
+  fill: 'colour',
+  across: 'none',
+  byLight: false,
+  spacing: 2.5,
+  lineWidth: 1.5,
+  xray: false,
+  cut: false,
+};
 const camera: Camera = { yaw: 0.7, pitch: 0.4, distance: 1.45 };
 const params: Foam3Params = { radius: 3, noise: 0.1, keepVolume: true };
 
@@ -150,6 +173,25 @@ bindRange('tube-radius', 2, (v) => {
   skeletonAt = 0;
 });
 bindRange('lines', 2, (v) => (light.lines = v));
+onSelect('still-fill', (v) => (still.fill = v as StillOptions['fill']));
+onSelect('still-across', (v) => (still.across = v as StillOptions['across']));
+bindRange('still-spacing', 1, (v) => (still.spacing = v));
+bindRange('still-width', 2, (v) => (still.lineWidth = v));
+onCheck('still-light', (v) => (still.byLight = v));
+onCheck('still-xray', (v) => (still.xray = v));
+onCheck('still-cut', (v) => (still.cut = v));
+byId('still-again').addEventListener('click', () => (filmsStep = -1));
+byId('still-png').addEventListener('click', () => {
+  if (!foam || !films) return;
+  const canvas = renderOffscreen(foam.n, 2);
+  canvas.toBlob((blob) => blob && download(blob, 'foam3d.png'));
+});
+byId('still-svg').addEventListener('click', () => {
+  if (!foam || !films) return;
+  const { picture: big, canvas } = renderPicture(foam.n, 2);
+  const url = big.image ? canvas.toDataURL('image/png') : null;
+  download(new Blob([pictureSvg(big, url)], { type: 'image/svg+xml' }), 'foam3d.svg');
+});
 
 const pauseButton = byId<HTMLButtonElement>('pause');
 pauseButton.addEventListener('click', () => {
@@ -189,6 +231,7 @@ canvas.addEventListener('pointerdown', (e) => {
 });
 canvas.addEventListener('pointermove', (e) => {
   if (!dragging) return;
+  movedAt = performance.now();
   camera.yaw -= e.movementX * 0.008;
   camera.pitch = Math.max(-1.5, Math.min(1.5, camera.pitch + e.movementY * 0.008));
 });
@@ -198,6 +241,7 @@ canvas.addEventListener(
   'wheel',
   (e) => {
     e.preventDefault();
+    movedAt = performance.now();
     camera.distance = Math.max(0.6, Math.min(4, camera.distance * Math.exp(e.deltaY * 0.001)));
   },
   { passive: false },
@@ -241,7 +285,19 @@ function frame(): void {
       rateSteps = 0;
       rateSince = now;
     }
-    if (look === 'vector') {
+    if (look === 'still') {
+      renderer.clear();
+      // Meshing is slow; while the foam moves it is done again only now and then.
+      if (foam.steps !== filmsStep && now - filmsAt > Math.max(1000, 6 * filmsMs) && !dragging) {
+        filmsStep = foam.steps;
+        films = buildFilms(foam.readLabels(), foam.n);
+        filmsDistance = null;
+        filmsMs = performance.now() - now;
+        filmsAt = performance.now();
+        pictureFor = '';
+      }
+      drawStill(foam.n, now);
+    } else if (look === 'vector') {
       renderer.clear();
       if (foam.steps !== skeletonStep && now - skeletonAt > SKELETON_EVERY) {
         skeletonStep = foam.steps;
@@ -294,7 +350,12 @@ function frame(): void {
       else renderer.drawVoxels(null, foam.n, camera, view);
     }
     const air = foam.growing ? ` · growing, ${Math.round(foam.air)} cells of air left` : '';
-    const lines = (look === 'vector' || look === 'lines-tubes') && skeleton ? ` · ${skeleton.lines.length} lines in ${Math.round(skeletonMs)} ms` : '';
+    const lines =
+      look === 'still' && films
+        ? ` · ${films.triangles.length / 3} triangles, ${films.borders.length} borders, meshed in ${Math.round(filmsMs)} ms, drawn in ${Math.round(pictureMs)} ms`
+        : (look === 'vector' || look === 'lines-tubes') && skeleton
+          ? ` · ${skeleton.lines.length} lines in ${Math.round(skeletonMs)} ms`
+          : '';
     stat.textContent = `${foam.bubbles} bubbles · step ${foam.steps}${air} · ${Math.round(rate)} steps/s on the GPU${lines}`;
   } else {
     stat.textContent = `The 3D foam needs WebGL2 with float blending: ${failure}`;
@@ -319,8 +380,111 @@ function syncView(): void {
   byId('pick-spacing').hidden = !vector || contourShape === 'off';
   byId('pick-opacity').hidden = lit || vector || skeletonLook;
   byId('pick-surface').hidden = vector || skeletonLook;
-  vectorCanvas.hidden = !vector;
+  const stillLook = look === 'still';
+  byId('pick-still').hidden = !stillLook;
+  if (stillLook) {
+    byId('pick-colours').hidden = true;
+    byId('pick-drain').hidden = true;
+    byId('pick-opacity').hidden = true;
+    byId('pick-surface').hidden = true;
+    byId('pick-look').hidden = false;
+  }
+  vectorCanvas.hidden = !vector && !stillLook;
   skeletonStep = -1;
+  filmsStep = -1;
+}
+
+/** The size of the overlay in device pixels, and the scale to CSS pixels. */
+function overlaySize(): { w: number; h: number; scale: number } {
+  const scale = Math.min(window.devicePixelRatio || 1, 2);
+  const w = Math.max(1, Math.round(vectorCanvas.clientWidth * scale));
+  const h = Math.max(1, Math.round(vectorCanvas.clientHeight * scale));
+  return { w, h, scale };
+}
+
+/** The still picture at the overlay's size times this, on a canvas of its own. */
+function renderPicture(n: number, times: number): { picture: Picture; canvas: HTMLCanvasElement } {
+  const { w, h, scale } = overlaySize();
+  if (still.across === 'rings' && !filmsDistance && films) filmsDistance = distanceFromBorders(films);
+  const big = renderStill(films!, filmsDistance, cameraFrame(camera, n), n, {
+    ...still,
+    width: w * times,
+    height: h * times,
+    scale: scale * times,
+  });
+  const canvas = document.createElement('canvas');
+  canvas.width = big.width;
+  canvas.height = big.height;
+  if (big.image) canvas.getContext('2d')!.putImageData(big.image, 0, 0);
+  return { picture: big, canvas };
+}
+
+function renderOffscreen(n: number, times: number): HTMLCanvasElement {
+  const { picture: big, canvas } = renderPicture(n, times);
+  drawPicture(canvas.getContext('2d')!, big);
+  return canvas;
+}
+
+/**
+ * The still picture on the overlay: drawn again once the view has held
+ * still a moment; while it moves, only the borders, unhidden, so the view
+ * can be turned at speed.
+ */
+function drawStill(n: number, now: number): void {
+  const { w, h, scale } = overlaySize();
+  if (vectorCanvas.width !== w || vectorCanvas.height !== h) {
+    vectorCanvas.width = w;
+    vectorCanvas.height = h;
+    pictureFor = '';
+  }
+  const ctx = vectorContext;
+  if (!films) {
+    ctx.clearRect(0, 0, w, h);
+    return;
+  }
+  const view = `${camera.yaw},${camera.pitch},${camera.distance},${w},${h},${JSON.stringify(still)},${filmsStep}`;
+  const moving = dragging || now - movedAt < STILL_AFTER;
+  if (moving) {
+    drawPreview(ctx, n, w, h, scale);
+    pictureFor = '';
+    return;
+  }
+  if (view === pictureFor && picture) return;
+  pictureFor = view;
+  const start = performance.now();
+  if (still.across === 'rings' && !filmsDistance) filmsDistance = distanceFromBorders(films);
+  picture = renderStill(films, filmsDistance, cameraFrame(camera, n), n, { ...still, width: w, height: h, scale });
+  drawPicture(ctx, picture);
+  pictureMs = performance.now() - start;
+}
+
+/** The borders alone, every one, as thin lines: quick enough to follow the pointer. */
+function drawPreview(ctx: CanvasRenderingContext2D, n: number, w: number, h: number, scale: number): void {
+  const { eye, right, up, forward } = cameraFrame(camera, n);
+  ctx.fillStyle = still.fill === 'paper' ? '#faf8f2' : '#0c0c10';
+  ctx.fillRect(0, 0, w, h);
+  ctx.strokeStyle = still.fill === 'paper' ? 'rgba(20, 20, 20, 0.6)' : 'rgba(230, 230, 255, 0.6)';
+  ctx.lineWidth = scale;
+  ctx.beginPath();
+  for (const border of films!.borders) {
+    border.points.forEach((p, k) => {
+      const d = [p[0] - eye[0], p[1] - eye[1], p[2] - eye[2]];
+      const depth = d[0] * forward[0] + d[1] * forward[1] + d[2] * forward[2];
+      const x = (((d[0] * right[0] + d[1] * right[1] + d[2] * right[2]) * FOCAL) / depth * h + w) / 2;
+      const y = (h - ((d[0] * up[0] + d[1] * up[1] + d[2] * up[2]) * FOCAL) / depth * h) / 2;
+      if (k === 0) ctx.moveTo(x, y);
+      else ctx.lineTo(x, y);
+    });
+  }
+  ctx.stroke();
+}
+
+function download(blob: Blob, name: string): void {
+  const a = document.createElement('a');
+  a.href = URL.createObjectURL(blob);
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(a.href), 1000);
 }
 
 /**
@@ -506,6 +670,12 @@ function onSelect(id: string, apply: (value: string) => void): HTMLSelectElement
   select.addEventListener('change', () => apply(select.value));
   apply(select.value);
   return select;
+}
+
+function onCheck(id: string, apply: (value: boolean) => void): void {
+  const input = byId<HTMLInputElement>(id);
+  input.addEventListener('change', () => apply(input.checked));
+  apply(input.checked);
 }
 
 function bindRange(id: string, digits: number, apply: (value: number) => void): void {

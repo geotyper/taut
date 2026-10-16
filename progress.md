@@ -662,6 +662,61 @@ thick, into a haze; the voxel view is the one to use. Pop mode in the open
 was run only at a high rate, where the foam spends most of its time growing
 back into the holes. The angles where films meet were not measured.
 
+## Added since: a still picture of the 3D foam, from a mesh
+
+Branch `foam3d-still`. The voxels coarsen the picture and the *Lines* look
+places its lines beside the films, not on them, so the user asked for exact
+lines, as the spline shells give in 2D, and a still picture drawn from them
+with artistic fills; a still, because doing it every frame was not expected
+to keep up.
+
+`src/foam3d/films.ts` meshes the labels by surface nets for many labels: a
+vertex in every 2x2x2 block holding more than one label, a quad round every
+edge between two cells of different labels, one patch of quads for each pair
+of labels. The films are not a manifold, three meeting along every Plateau
+border, so there are no half-edges, and no library of them (CGAL, or a port)
+was brought in: each film is a patch, and the borders are chains shared by
+three patches. A vertex is smoothed only towards neighbours whose blocks hold
+all its labels, and stays within 0.7 cells of its block's centre: films stay
+smooth, borders move only along themselves, and where four meet stays put.
+The borders are the shortest paths through the blocks of their three labels
+between two junctions, a junction being the blocks of four labels or more
+that touch.
+
+Checked in node on a Voronoi foam in a sphere, whose films are known exactly
+(the planes halfway between centres): at 96³ with 60 cells, film vertices lie
+0.05 cells from their plane on average (0.18 at the 95th percentile), the
+skin 0.15 from the sphere, border points 0.21 from their line (2.9 at worst,
+near junctions close together). 589 borders and 272 junctions, against about
+550 edges and 400 vertices estimated for such a foam with the sphere's skin
+left aside; 49 of the 526 triples have more than one border. The first try
+chained the links of each triple directly and left 240 loose ends: in voxels
+a border is a staircase, at places two blocks thick, and a junction several
+blocks. Meshing took 0.17 s at 96³, 0.4 s at 128³ with 200 cells and 0.85 s
+at 160³ with 600, the distances for rings as long again.
+
+`src/foam3d/still.ts` draws it on the CPU: a depth buffer of all the films,
+taken as opaque, with each film filled in the hue of the bubble on the
+camera's side (of the other where that is outside) and lit by its normals,
+smooth within a patch; the borders cut finer, smoothed and hidden where a
+film lies more than 0.9 cells in front; lines across the films as level
+lines of a value worked out triangle by triangle and joined into polylines:
+the distance from the borders (rings), the height, the outline where the
+smooth normals turn from the eye, and the cut through the films. The
+distance is a shortest path over the edges made straighter by sweeps of a
+flat front across the triangles. *Thicker in the shade* widens the lines
+across the films by the light at each point, as in an engraving. The picture
+is drawn again once the view has held still for 0.15 s; while it turns, only
+the borders, unhidden. It saves as PNG and SVG at twice the view's size.
+
+Looked at in screenshots: the glass sphere at 96³ with 60 bubbles in colour,
+ink with rings and with the engraving, with the near half cut away, lines
+behind the films on dark, and the open cluster with level lines; 160³ with
+300 bubbles cut, in rings: 790 000 triangles, meshed in 0.5 s and drawn in
+1.5 s. The SVG was checked to parse, in node, not opened in an editor. The
+rings are polygons with sharp corners, as the distance from a polygon's
+edge is; how it looks on a foam still growing was not watched.
+
 ## What could be improved
 
 ### Both

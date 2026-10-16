@@ -667,6 +667,33 @@ left empty: silver where three films meet, gold where four do.
 
 In a glass sphere the edges along the glass make an outer cage too.
 
+**Still: the films as a mesh, drawn as a picture** meshes the labels on the
+CPU (`src/foam3d/films.ts`) and draws a still from that mesh, with the films
+taken as opaque (`src/foam3d/still.ts`). The mesh comes from surface nets for
+many labels: a vertex in every 2×2×2 block that holds more than one label and
+a quad around every edge between two different labels. The quads form one
+patch per pair of bubbles. Each vertex is smoothed only toward neighbours
+whose blocks hold all of its labels, so films stay smooth and Plateau
+borders move only along their own line. The borders are chains of the
+mesh's own vertices, from one junction where four films meet to the next.
+The picture is redrawn once the view holds still. While the view turns, it
+shows the borders alone.
+
+- **Picture**: films in colour with ink lines, ink on paper, or light lines
+  on a dark ground.
+- **Lines across the films**: rings at equal distances from each film's
+  borders, or level lines. *Thicker in the shade* makes them wider where
+  the film is dark, as in an engraving. The spacing is set in cells.
+- **Lines behind the films too** draws every border as if the films were
+  glass.
+- **Cut the near half away** shows the cells inside, with the cut drawn
+  where it goes through the films.
+- **Save as PNG / SVG** at twice the view's size. In the SVG the lines are
+  paths and the coloured films are an embedded image.
+
+At 96³ with 60 bubbles meshing takes about 0.15 s and drawing about 0.1 to
+0.4 s. At 160³ with 300 bubbles it is about 0.5 s and 1.5 s.
+
 The page needs WebGL2 with float blending. On one machine it made about 30
 steps a second at 96³ with 60 bubbles and 10 at 160³, the finest
 resolution.

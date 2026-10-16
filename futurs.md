@@ -78,7 +78,14 @@ own.
 - **Line ends half in sight.** The soft ends made them less visible but did
   not remove them; joining the voxels into lines across a gap could help more.
 - **Export**: the films as a mesh (OBJ or STL) and the lines as a set of
-  polylines.
+  polylines. The still look now has the mesh; writing it out is short.
+- **Still picture, next steps** (branch `foam3d-still`):
+  - the mesh drawn on the GPU every frame, the lines alone on the CPU;
+  - rounder rings, from a smoothed distance, as for the 2D rings;
+  - hatching across the films along their curvature, and stipple;
+  - films partly see-through: lines behind one film, faded, by depth peeling;
+  - a cut along any plane, and a slab rather than a half;
+  - a soft shadow of the near films on the far ones, for depth.
 
 ## On every page
 
