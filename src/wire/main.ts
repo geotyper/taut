@@ -48,6 +48,8 @@ let drained = 0;
 let lastFrame = performance.now();
 /** The black film comes down no further than this share of the field. */
 const LOWEST_FRONT = 0.3;
+/** How much the swirl thickens and thins the soap films; see View.film. */
+const SWIRL = 0.6;
 let rate = 0;
 let rateSteps = 0;
 let rateSince = performance.now();
@@ -213,7 +215,9 @@ function tick(): void {
     const view: View = { opacity, oneColor: false, smoothness: 0.6 };
     if (colours === 'soap') {
       // As on the foam page: the film thins as one over the root of the time.
-      view.film = { mode: 'soap', time: drained, front: Math.max(LOWEST_FRONT, 1.05 / Math.sqrt(1 + drained * 0.03)) };
+      // A film on a frame swirls more than in a foam, so one lying flat,
+      // all at one height, still shows its colours.
+      view.film = { mode: 'soap', time: drained, front: Math.max(LOWEST_FRONT, 1.05 / Math.sqrt(1 + drained * 0.03)), swirl: SWIRL };
     }
     if (smooth) renderer.drawSmooth(null, wire.n, camera, view);
     else renderer.drawVoxels(null, wire.n, camera, view);

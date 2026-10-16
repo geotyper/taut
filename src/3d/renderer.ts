@@ -32,7 +32,7 @@ export interface View {
    * film is still thick enough for colour: a little over 1 when fresh, and
    * lower as the black film spreads down.
    */
-  film?: { mode: 'soap' | 'stress'; time: number; front: number };
+  film?: { mode: 'soap' | 'stress'; time: number; front: number; swirl?: number };
   /**
    * Voxels only: the edges alone, the films left out, silver where three
    * films meet and gold where four do. 'voxels' draws them as solid cubes;
@@ -74,6 +74,7 @@ uniform sampler3D uEdges;
 uniform int uFilm;
 uniform float uTime;
 uniform float uFront;
+uniform float uSwirl;
 
 out vec4 outColor;
 
@@ -162,7 +163,7 @@ vec3 filmColor(vec3 p, float facing, uint kind) {
     float height = clamp((p.y - sphereBottom) / (0.88 * uSize), 0.0, 1.0);
     float below = clamp((uFront - height) / uFront, 0.0, 1.0);
     float thickness = (1200.0 * pow(below, 1.2) + 120.0 * own * below)
-                    * (1.0 + 0.14 * s) * (1.0 + 0.5 * edges.x + 0.25 * edges.y)
+                    * (1.0 + uSwirl * s) * (1.0 + 0.5 * edges.x + 0.25 * edges.y)
     // The Plateau borders stay wet after the films have gone black, so the
     // skeleton of the foam still shows above the front, in greys and gold.
                     + 70.0 * edges.x + 30.0 * edges.y;
@@ -773,6 +774,8 @@ export class Renderer {
     gl.uniform1i(gl.getUniformLocation(program, 'uFilm'), !film ? 0 : film.mode === 'soap' ? 1 : 2);
     gl.uniform1f(gl.getUniformLocation(program, 'uTime'), film?.time ?? 0);
     gl.uniform1f(gl.getUniformLocation(program, 'uFront'), film?.front ?? 1);
+    // How much the swirl thickens and thins a film; the foam's films keep the first value.
+    gl.uniform1f(gl.getUniformLocation(program, 'uSwirl'), film?.swirl ?? 0.14);
     gl.uniform3fv(
       gl.getUniformLocation(program, 'uStoneColor'),
       view.oneColor ? MEMBRANE_COLOR : STONE_COLOR,

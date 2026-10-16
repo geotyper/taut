@@ -170,10 +170,13 @@ uniform int uLayer;
 layout(location = 0) out uint outVoxel;
 layout(location = 1) out float outPhase;
 layout(location = 2) out uint outTint;
+// The wire, for the soap colours: a film thickens into a meniscus along it.
+layout(location = 3) out float outEdge;
 
 void main() {
   ivec3 cell = ivec3(ivec2(gl_FragCoord.xy), uLayer);
   uint here = texelFetch(uLabel, cell, 0).r;
+  outEdge = here == WALL ? 0.5 : 0.0;
   if (here == WALL) {
     outVoxel = 2u;
     outPhase = 0.0;
@@ -372,6 +375,8 @@ export class Wire3 {
   private readonly relabelProgram: WebGLProgram;
   private readonly pairsProgram: WebGLProgram;
   private readonly spare: WebGLTexture;
+  /** The wire as the renderer's edges, with mip levels, for how near it is. */
+  private readonly edges: WebGLTexture;
   private readonly target: WebGLFramebuffer;
   private readonly countTarget: WebGLFramebuffer;
   private readonly countTexture: WebGLTexture;
@@ -412,6 +417,8 @@ export class Wire3 {
     this.omega = [volume(gl.RGBA32F), volume(gl.RGBA32F)];
     this.near = volume(gl.R8UI);
     this.spare = volume(gl.R8UI);
+    this.edges = createTexture(gl, gl.LINEAR_MIPMAP_LINEAR, gl.LINEAR);
+    gl.texStorage3D(gl.TEXTURE_3D, Math.floor(Math.log2(n)) + 1, gl.R8, n, n, n);
     this.countTexture = gl.createTexture()!;
     gl.bindTexture(gl.TEXTURE_2D, this.countTexture);
     gl.texStorage2D(gl.TEXTURE_2D, 1, gl.RGBA32F, LABELS, 1);
@@ -630,7 +637,7 @@ export class Wire3 {
       const program = this.showProgram;
       gl.useProgram(program);
       gl.bindFramebuffer(gl.FRAMEBUFFER, this.target);
-      gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1, gl.COLOR_ATTACHMENT2]);
+      gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1, gl.COLOR_ATTACHMENT2, gl.COLOR_ATTACHMENT3]);
       gl.viewport(0, 0, n, n);
       this.bind(program);
       const layer = gl.getUniformLocation(program, 'uLayer');
@@ -638,13 +645,18 @@ export class Wire3 {
         gl.framebufferTextureLayer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, targets.voxels, 0, z);
         gl.framebufferTextureLayer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, targets.phase, 0, z);
         gl.framebufferTextureLayer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT2, targets.tint, 0, z);
+        gl.framebufferTextureLayer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT3, this.edges, 0, z);
         gl.uniform1i(layer, z);
         gl.drawArrays(gl.TRIANGLES, 0, 3);
       }
       gl.framebufferTextureLayer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT1, null, 0, 0);
       gl.framebufferTextureLayer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT2, null, 0, 0);
+      gl.framebufferTextureLayer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT3, null, 0, 0);
       gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
       gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      gl.bindTexture(gl.TEXTURE_3D, this.edges);
+      gl.generateMipmap(gl.TEXTURE_3D);
+      this.renderer.setEdges(this.edges);
     }
     if (smooth) {
       gl.bindTexture(gl.TEXTURE_3D, targets.phase);
@@ -654,7 +666,8 @@ export class Wire3 {
 
   dispose(): void {
     const { gl } = this;
-    for (const texture of [this.current, this.next, ...this.omega, this.near, this.spare, this.countTexture]) gl.deleteTexture(texture);
+    this.renderer.setEdges(null);
+    for (const texture of [this.edges, this.current, this.next, ...this.omega, this.near, this.spare, this.countTexture]) gl.deleteTexture(texture);
     gl.deleteFramebuffer(this.target);
     gl.deleteFramebuffer(this.countTarget);
     for (const program of [

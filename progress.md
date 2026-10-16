@@ -793,6 +793,15 @@ film was left, on face 1, as the cuts say it should be. It was first taken
 for none at all, as the wire hid it from that side. Moving the rings keeps
 the films that have burst.
 
+Then the user saw a horizontal film of the cube in one flat colour beside a
+banded upright one. The soap colours set a film's thickness by its height
+alone, and a flat film is all at one height. The wire now marks the
+renderer's edge texture, so the films thicken along it as along the
+borders of the foam, and the swirl's share of the thickness is a view
+setting, 0.6 here and 0.14 as before on the foam page. Looked at in
+screenshots: a ring's disc in rings of colour, the top of a cube after
+four bursts banded too, and the foam page as before.
+
 Not done: the still look of the 3D foam does not mesh these films yet. Its
 mesh is built from labels, and here a film is a disagreement through a cut,
 so the mesh would also need the cuts.

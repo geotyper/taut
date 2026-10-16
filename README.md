@@ -743,7 +743,9 @@ frame is set.
 
 The wire is drawn as stone. Every film is coloured by the pair of labels on
 its two sides, or, under *Film colours*, in the interference colours of a
-soap film draining down, as on the foam page (*W* wets it again).
+soap film draining down, as on the foam page (*W* wets it again). A film
+thickens into a meniscus along the wire, and it swirls more than in the
+foam, so a film lying flat, all at one height, still shows bands and swirls.
 
 - **Breeze on the films**: gusts from a direction that turns slowly round
   and tilts up and down. A cell counts neighbours upwind a little more and
