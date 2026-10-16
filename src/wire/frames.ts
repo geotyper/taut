@@ -23,7 +23,7 @@
  * films that grow from the openings then meet along Plateau borders inside.
  */
 
-export type FrameKind = 'ring' | 'rings' | 'mobius' | 'tetra' | 'cube' | 'gyroid';
+export type FrameKind = 'ring' | 'upright' | 'rings' | 'mobius' | 'tetra' | 'cube' | 'gyroid' | 'free';
 
 export interface Face {
   /** Closed loops of wire, points in field cells. */
@@ -69,6 +69,17 @@ export function makeFrame(kind: FrameKind, n: number, gap: number): Frame {
       return at([radius * Math.cos(t), y, radius * Math.sin(t)]);
     });
   if (kind === 'gyroid') return { faces: [], inside: null, periodic: true };
+  // No wire and walls round the field: bubbles floating free in the air.
+  if (kind === 'free') return { faces: [], inside: null };
+  if (kind === 'upright') {
+    // A ring standing on edge, so its disc hangs upright and drains down.
+    const r = 0.3 * n;
+    const loop = Array.from({ length: 72 }, (_, k) => {
+      const t = (2 * Math.PI * k) / 72;
+      return at([r * Math.cos(t), r * Math.sin(t), 0]);
+    });
+    return { faces: [{ loops: [loop], chamber: 1 }], inside: null };
+  }
   if (kind === 'ring') return { faces: [{ loops: [circle(0.3 * n, 0)], chamber: 1 }], inside: null };
   if (kind === 'rings') {
     const r = 0.25 * n;
@@ -125,7 +136,7 @@ export function makeFrame(kind: FrameKind, n: number, gap: number): Frame {
  * label of the face it is nearest, so the films start from the middle.
  * 'bubble': the same, with a bubble of its own label in the middle.
  */
-export type FrameStart = 'cut' | 'catenoid' | 'chambers' | 'bubble' | 'gyroid' | 'random';
+export type FrameStart = 'cut' | 'catenoid' | 'chambers' | 'bubble' | 'gyroid' | 'random' | 'one' | 'two' | 'unequal';
 
 export const WALL = 0xffffffff;
 
@@ -138,6 +149,7 @@ export function bubbleLabel(frame: Frame): number {
 const BUBBLE_SIZE = 0.45;
 
 export function startLabels(frame: Frame, field: FrameField, n: number, start: FrameStart, gap: number, across = 1): Uint32Array {
+  if (start === 'one' || start === 'two' || start === 'unequal') return freeBubbles(n, start);
   if (start === 'gyroid' || start === 'random') return twoLabyrinths(n, start === 'gyroid' ? roughGyroid(n, across) : randomWaves(n, 0.5 * across, 2 * across));
   const labels = new Uint32Array(n * n * n);
   const c = n / 2;
@@ -170,6 +182,51 @@ export function startLabels(frame: Frame, field: FrameField, n: number, start: F
     }
   }
   return labels;
+}
+
+/**
+ * Bubbles floating in the air, labels 1 and 2: one ball, or two that
+ * overlap and start parted by the plane where their spheres cross.
+ */
+export function freeBubbles(n: number, start: 'one' | 'two' | 'unequal'): Uint32Array {
+  const c = n / 2;
+  const balls =
+    start === 'one'
+      ? [{ at: [c, c, c], r: 0.25 * n }]
+      : start === 'two'
+        ? [
+            { at: [c - 0.14 * n, c, c], r: 0.2 * n },
+            { at: [c + 0.14 * n, c, c], r: 0.2 * n },
+          ]
+        : [
+            { at: [c - 0.1 * n, c, c], r: 0.23 * n },
+            { at: [c + 0.2 * n, c, c], r: 0.15 * n },
+          ];
+  const labels = new Uint32Array(n * n * n);
+  for (let z = 0; z < n; z++) {
+    for (let y = 0; y < n; y++) {
+      for (let x = 0; x < n; x++) {
+        // The ball of least power, inside it: two balls part on the plane where they cross.
+        let best = 0;
+        let least = 0;
+        balls.forEach((b, k) => {
+          const power = (x + 0.5 - b.at[0]) ** 2 + (y + 0.5 - b.at[1]) ** 2 + (z + 0.5 - b.at[2]) ** 2 - b.r * b.r;
+          if (power < least) [best, least] = [k + 1, power];
+        });
+        labels[(z * n + y) * n + x] = best;
+      }
+    }
+  }
+  return labels;
+}
+
+/** The labels of the bubbles a start makes, each held to the volume it starts with. */
+export function heldBubbles(start: FrameStart, frame: Frame): number[] {
+  if (start === 'one') return [1];
+  if (start === 'two' || start === 'unequal') return [1, 2];
+  if (start === 'bubble') return [bubbleLabel(frame)];
+  if (start === 'gyroid' || start === 'random') return [1];
+  return [];
 }
 
 /**

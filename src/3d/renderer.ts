@@ -30,9 +30,10 @@ export interface View {
    * must then have mip levels. `time` in seconds drives their slow drift;
    * `front` is how far up, as a share of the sphere's height, the soap
    * film is still thick enough for colour: a little over 1 when fresh, and
-   * lower as the black film spreads down.
+   * lower as the black film spreads down. 'drained' takes the soap film's
+   * thickness from a computation instead (see Renderer.setThickness).
    */
-  film?: { mode: 'soap' | 'stress'; time: number; front: number; swirl?: number };
+  film?: { mode: 'soap' | 'stress' | 'drained'; time: number; front: number; swirl?: number };
   /**
    * Voxels only: the edges alone, the films left out, silver where three
    * films meet and gold where four do. 'voxels' draws them as solid cubes;
@@ -75,6 +76,8 @@ uniform int uFilm;
 uniform float uTime;
 uniform float uFront;
 uniform float uSwirl;
+// A film's thickness in µm, from a computation of its draining.
+uniform sampler3D uThickness;
 
 out vec4 outColor;
 
@@ -153,7 +156,7 @@ vec3 filmColor(vec3 p, float facing, uint kind) {
   float own = fract(float(kind) * 0.618034);
   vec2 edges = min(nearEdges(p), vec2(2.0));
   float s = swirl(p);
-  if (uFilm == 1) {
+  if (uFilm == 1 || uFilm == 3) {
     // Water drains down: a film is thinnest at the top of the sphere. As the
     // foam drains the black film spreads down from the top, while the bottom
     // stays wet, so the bands of colour spread over the height below the
@@ -167,6 +170,7 @@ vec3 filmColor(vec3 p, float facing, uint kind) {
     // The Plateau borders stay wet after the films have gone black, so the
     // skeleton of the foam still shows above the front, in greys and gold.
                     + 70.0 * edges.x + 30.0 * edges.y;
+    if (uFilm == 3) thickness = 1000.0 * textureLod(uThickness, p / uSize, 0.0).r;
     // Refracted into water, the light crosses the film at a slant.
     float sine = (1.0 - facing * facing) / (1.33 * 1.33);
     float path = 2.0 * 1.33 * thickness * sqrt(1.0 - sine);
@@ -186,7 +190,7 @@ vec3 filmColor(vec3 p, float facing, uint kind) {
 // How much of the light a film of this colour stops. A soap film shows only
 // what it reflects and lets the rest through: a black film hides nothing.
 float filmOpacity(vec3 tint) {
-  if (uFilm != 1) return uOpacity;
+  if (uFilm != 1 && uFilm != 3) return uOpacity;
   return uOpacity * clamp(1.5 * max(tint.r, max(tint.g, tint.b)), 0.0, 1.0);
 }
 
@@ -573,6 +577,7 @@ export class Renderer {
   /** Distances to the lines of a skeleton, for tubes round them. */
   private readonly lineTexture: WebGLTexture;
   private lineSize = 0;
+  private thickness: WebGLTexture | null = null;
   private lineReach = 1;
 
   constructor(canvas: HTMLCanvasElement) {
@@ -632,6 +637,15 @@ export class Renderer {
    */
   setEdges(edges: WebGLTexture | null): void {
     this.edges = edges;
+  }
+
+  /**
+   * The films' thickness for View.film 'drained': a 3D float texture of one
+   * channel over the field, in µm, read with filtering where the browser
+   * can filter floats.
+   */
+  setThickness(thickness: WebGLTexture | null): void {
+    this.thickness = thickness;
   }
 
   /**
@@ -760,6 +774,11 @@ export class Renderer {
 
     const { eye, right, up, forward } = cameraFrame(camera, n);
 
+    gl.activeTexture(gl.TEXTURE5);
+    gl.bindTexture(gl.TEXTURE_3D, this.thickness ?? this.blankEdges);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.uniform1i(gl.getUniformLocation(program, 'uThickness'), 5);
+
     gl.uniform1f(gl.getUniformLocation(program, 'uSize'), n);
     gl.uniform2f(gl.getUniformLocation(program, 'uResolution'), width, height);
     gl.uniform3fv(gl.getUniformLocation(program, 'uEye'), eye);
@@ -771,7 +790,7 @@ export class Renderer {
     gl.uniform1f(gl.getUniformLocation(program, 'uFilms'), view.light?.films ?? 0);
     gl.uniform1f(gl.getUniformLocation(program, 'uLines'), view.light?.lines ?? 0);
     const film = view.film;
-    gl.uniform1i(gl.getUniformLocation(program, 'uFilm'), !film ? 0 : film.mode === 'soap' ? 1 : 2);
+    gl.uniform1i(gl.getUniformLocation(program, 'uFilm'), !film ? 0 : film.mode === 'soap' ? 1 : film.mode === 'stress' ? 2 : 3);
     gl.uniform1f(gl.getUniformLocation(program, 'uTime'), film?.time ?? 0);
     gl.uniform1f(gl.getUniformLocation(program, 'uFront'), film?.front ?? 1);
     // How much the swirl thickens and thins a film; the foam's films keep the first value.

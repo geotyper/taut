@@ -1,5 +1,6 @@
 import { Renderer, type Camera, type View } from '../3d/renderer.ts';
-import { bubbleLabel, filmFaces, frameField, gyroid, makeFrame, startLabels, type Frame, type FrameKind, type FrameStart } from './frames.ts';
+import { Drainage } from './drain.ts';
+import { filmFaces, frameField, gyroid, heldBubbles, makeFrame, startLabels, type Frame, type FrameKind, type FrameStart } from './frames.ts';
 import { Wire3, type Wire3Params } from './wire3.ts';
 
 /** The cuts are looked for this far round a cell: the widest kernel, and one more. */
@@ -15,6 +16,7 @@ const params: Wire3Params = { radius: 3, noise: 0.15, breeze: 0 };
 
 let renderer: Renderer | null = null;
 let wire: Wire3 | null = null;
+let drainage: Drainage | null = null;
 let failure = '';
 try {
   renderer = new Renderer(canvas);
@@ -45,7 +47,11 @@ let bursting = false;
 let burstRate = 0.003;
 let burstsOwed = 0;
 let burstCount = 0;
-let colours: 'hues' | 'soap' = 'hues';
+let colours: 'hues' | 'soap' | 'drained' = 'hues';
+/** Draining by gravity: seconds drained for a second on the screen, and how thick a fresh film is, in µm. */
+let drainSpeed = 100;
+let fresh = 1;
+let measuredAt = 0;
 /** Seconds the films have drained, as on the foam page. */
 let drained = 0;
 let lastFrame = performance.now();
@@ -69,6 +75,8 @@ bindRange('bubble', 2, (v) => {
 });
 onCheck('pull', (v) => (pull = v));
 bindRange('across', 0, (v) => (across = v));
+bindRange('drain-speed', 0, (v) => (drainSpeed = v));
+bindRange('fresh', 1, (v) => (fresh = v));
 byId('across').addEventListener('change', () => restart());
 bindRange('breeze', 3, (v) => (params.breeze = v));
 onCheck('bursting', (v) => {
@@ -77,7 +85,12 @@ onCheck('bursting', (v) => {
 });
 bindRange('rate', 0, (v) => (burstRate = v / 1000));
 byId('burst').addEventListener('click', burstOne);
-onSelect('colours', (v) => (colours = v as typeof colours));
+onSelect('colours', (v) => {
+  // The draining starts from fresh films, as it has not followed them while it was off.
+  if (v === 'drained' && colours !== 'drained') drainage?.wet(fresh);
+  colours = v as typeof colours;
+  syncControls();
+});
 onSelect('surface', (v) => (smooth = v === 'smooth'));
 onSelect('frame', (v) => {
   choice = v;
@@ -104,7 +117,7 @@ window.addEventListener('keydown', (e) => {
   if (key === 'n') restart();
   else if (key === ' ') pauseButton.click();
   else if (key === 'b') burstOne();
-  else if (key === 'w') drained = 0;
+  else if (key === 'w') wet();
   else return;
   e.preventDefault();
 });
@@ -132,9 +145,13 @@ canvas.addEventListener(
 
 syncControls();
 requestAnimationFrame(tick);
+// For checks from the console or a test: the rule and the draining as they are.
+Object.assign(window, { wirePage: { wire: () => wire, drainage: () => drainage } });
 
 function build(): void {
   if (!renderer) return;
+  drainage?.dispose();
+  drainage = null;
   wire?.dispose();
   wire = null;
   try {
@@ -143,11 +160,18 @@ function build(): void {
     failure = String(error);
     return;
   }
+  // Without the draining the rest still runs; the stat says why it is missing.
+  try {
+    drainage = new Drainage(renderer.gl, wire);
+  } catch (error) {
+    failure = String(error);
+  }
   restart();
 }
 
 function kindOf(value: string): FrameKind {
   if (value === 'gyroid-random') return 'gyroid';
+  if (value === 'one' || value === 'two' || value === 'unequal') return 'free';
   return value === 'cube-bubble' ? 'cube' : (value as FrameKind);
 }
 
@@ -157,6 +181,7 @@ function startOf(value: string): FrameStart {
   if (value === 'cube-bubble') return 'bubble';
   if (value === 'gyroid') return 'gyroid';
   if (value === 'gyroid-random') return 'random';
+  if (value === 'one' || value === 'two' || value === 'unequal') return value;
   return 'cut';
 }
 
@@ -172,7 +197,7 @@ function restart(): void {
   if (frame.periodic) {
     // One labyrinth is held to exactly half the field, so the other is too,
     // and the film between them can only pull taut.
-    wire.setFrame(frame, field, REACH, labels, 1);
+    wire.setFrame(frame, field, REACH, labels, [1]);
     bubbleStart = (n * n * n) / 2;
     wire.holdBubble(1, bubbleStart);
     const g = gyroid(n, across);
@@ -180,15 +205,22 @@ function restart(): void {
     for (let i = 0; i < nodal.length; i++) nodal[i] = g((i % n) + 0.5, (Math.floor(i / n) % n) + 0.5, Math.floor(i / (n * n)) + 0.5) > 0 ? 1 : 0;
     gyroidFaces = filmFaces(nodal, n);
   } else {
-    wire.setFrame(frame, field, REACH, labels, start === 'bubble' ? bubbleLabel(frame) : -1);
-    bubbleStart = wire.bubbleTarget;
-    wire.holdBubble(bubbleShare, bubbleStart);
+    wire.setFrame(frame, field, REACH, labels, heldBubbles(start, frame));
+    bubbleStart = wire.bubble?.target ?? 0;
+    // Only the bubble in a cube has a slider; free bubbles keep the volume they start with.
+    if (start === 'bubble') wire.holdBubble(bubbleShare, bubbleStart);
   }
   fieldMs = performance.now() - begun;
   pulledAt = 0;
   brokeAt = null;
   burstCount = 0;
+  wet();
+}
+
+/** The films fresh again, in both soap looks. */
+function wet(): void {
   drained = 0;
+  drainage?.wet(fresh);
 }
 
 /** The rings moved to the gap set, the films kept as they are. */
@@ -196,7 +228,7 @@ function moveWire(): void {
   if (!wire || choice !== 'rings') return;
   const begun = performance.now();
   frame = makeFrame('rings', wire.n, gap);
-  wire.setFrame(frame, frameField(frame, wire.n, REACH, false), REACH, null, -1);
+  wire.setFrame(frame, frameField(frame, wire.n, REACH, false), REACH, null, []);
   fieldMs = performance.now() - begun;
 }
 
@@ -224,7 +256,15 @@ function tick(): void {
     // The inside of the tube is the only label 1: when it is gone, the film has broken.
     if (choice === 'rings' && brokeAt === null && burstCount === 0 && wire.steps > 8 && wire.volumes[1] === 0) brokeAt = gap;
     const now = performance.now();
-    if (!paused) drained += Math.min(0.1, (now - lastFrame) / 1000);
+    const seconds = Math.min(0.1, (now - lastFrame) / 1000);
+    if (!paused) drained += seconds;
+    if (drainage && colours === 'drained') {
+      if (!paused) drainage.drain(seconds * drainSpeed, fresh);
+      if (now - measuredAt > 500) {
+        measuredAt = now;
+        drainage.measure();
+      }
+    }
     lastFrame = now;
     if (now - rateSince > 1000) {
       rate = (rateSteps * 1000) / (now - rateSince);
@@ -238,18 +278,23 @@ function tick(): void {
       // A film on a frame swirls more than in a foam, so one lying flat,
       // all at one height, still shows its colours.
       view.film = { mode: 'soap', time: drained, front: Math.max(LOWEST_FRONT, 1.05 / Math.sqrt(1 + drained * 0.03)), swirl: SWIRL };
+    } else if (colours === 'drained' && drainage) {
+      view.film = { mode: 'drained', time: drained, front: 1 };
     }
+    renderer.setThickness(colours === 'drained' && drainage ? drainage.thickness : null);
     if (smooth) renderer.drawSmooth(null, wire.n, camera, view);
     else renderer.drawVoxels(null, wire.n, camera, view);
     const periodic = frame?.periodic === true;
     const bubble = periodic
       ? ` · film ${((100 * wire.filmFaces) / gyroidFaces).toFixed(1)}% of the nodal gyroid's · one labyrinth ${((100 * wire.volumes[1]) / wire.n ** 3).toFixed(1)}% of the field`
-      : wire.bubbleTarget > 0
-        ? ` · bubble ${Math.round(wire.bubbleVolume)} of ${Math.round(wire.bubbleTarget)} cells`
-        : '';
+      : [...wire.holds].map(([label, target]) => ` · bubble ${Math.round(wire!.volumes[label])} of ${Math.round(target)} cells`).join('');
     const broke = choice === 'rings' ? (brokeAt === null ? ' · a tube' : ` · broke into two discs at a gap of ${brokeAt.toFixed(2)} radii`) : '';
     const burst = burstCount > 0 ? ` · ${burstCount} films burst` : '';
-    stat.textContent = `step ${wire.steps}${bubble}${broke}${burst} · ${Math.round(rate)} steps/s · frame worked out in ${Math.round(fieldMs)} ms`;
+    const thin =
+      colours === 'drained' && drainage && drainage.filmCells > 0
+        ? ` · drained ${formatTime(drainage.time)}, films ${(drainage.liquid / drainage.filmCells).toFixed(2)} µm on average`
+        : '';
+    stat.textContent = `step ${wire.steps}${bubble}${broke}${burst}${thin} · ${Math.round(rate)} steps/s · frame worked out in ${Math.round(fieldMs)} ms${failure ? ` · ${failure}` : ''}`;
   } else {
     stat.textContent = `The wire frames need WebGL2 with float blending: ${failure}`;
   }
@@ -269,6 +314,13 @@ function syncControls(): void {
   byId('pick-pull').hidden = choice !== 'rings';
   byId('pick-bubble').hidden = choice !== 'cube-bubble';
   byId('pick-across').hidden = !choice.startsWith('gyroid');
+  byId('pick-drain').hidden = colours !== 'drained';
+}
+
+function formatTime(seconds: number): string {
+  if (seconds < 120) return `${seconds.toFixed(0)} s`;
+  if (seconds < 7200) return `${(seconds / 60).toFixed(1)} min`;
+  return `${(seconds / 3600).toFixed(1)} h`;
 }
 
 function onSelect(id: string, apply: (value: string) => void): HTMLSelectElement {

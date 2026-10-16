@@ -724,7 +724,8 @@ less than 2π along a short line that does not cross the cut, even near the
 wire. The angles and the cells near a cut are worked out on the GPU when a
 frame is set.
 
-- **A ring** gives a flat disc.
+- **A ring** gives a flat disc; **a ring standing upright** gives one that
+  hangs on edge, for the films drained by gravity below.
 - **Two rings** start with a tube between them, which narrows into a
   catenoid. *Pull the rings apart slowly* widens the gap step by step until
   the tube breaks into two discs, and the page shows the gap at which it
@@ -761,6 +762,56 @@ foam, so a film lying flat, all at one height, still shows bands and swirls.
   with 0 then holds no film. The films that are left pull taut into a new
   shape: a tetrahedron that loses two films keeps one flat film on a face,
   and a burst film on a ring is simply gone.
+
+### Free bubbles
+
+Three frames have no wire: walls round the field, and in the air *one
+bubble*, *two bubbles alike*, or *a large and a small bubble*, each held to
+the volume it starts with, as the bubble in the cube is. Two start as
+balls parted by the plane where their spheres cross. Bursting the film
+between them leaves one bubble with the volume of both; bursting an outer
+film lets the bubble go. The two alike end with a flat film between them;
+for a large and a small one the film bows into the large one, but at 96³
+less than Laplace's law asks: radius about 60 cells against 43, on a disc
+only 12 cells across, where the two differ by half a cell of sag.
+
+### Films drained by gravity
+
+*Soap film, drained by gravity* takes a film's thickness from a
+computation instead of from its height (`src/wire/drain.ts`). Liquid runs
+down inside a film: between two surfaces that do not slip, a film h thick
+carries q = ρ g sinθ h³ / (12 μ) down its slope, with water's ρ and μ and a
+field 4 cm wide. Each film cell, one layer of them as the renderer draws
+the films, sends liquid to the film cells among its 26 neighbours that lie
+down the slope from it, by how far each link goes along gravity projected
+on the film's plane; the plane comes from the labels two cells round. What
+one cell gives another takes, so the liquid is kept, and a level film does
+not drain at all. A little smoothing between neighbours stands in for
+capillary pressure. Plateau borders and the wire take the liquid that
+reaches them and give none back, and are drawn 3 µm thick, as a meniscus.
+When a film moves by a cell, a cell that leaves it hands its liquid to the
+cells that join it, and a cell that joins it starts from that and a share
+of its neighbours', so the moving films take their liquid along.
+
+*Seconds drained a second* sets how fast time runs: real films of a
+micrometre drain over minutes to hours in this law, faster in life, where
+the surfaces slip and the film churns at its borders. *Fresh films* sets
+the thickness the films start at, and *W* makes them fresh again.
+
+Checked against the law's own solution. On an upright film fed by nothing
+from above, h = √(x / (3 c t)) at x below the top, c = ρg/(12μ), until it
+meets the fresh thickness. On the upright ring at 96³, after 5350 s from
+1 µm, the computed film was within 3% of that from 8 to 22 cells below the
+top; thicker in the top few cells (0.32 µm against 0.13 at half a cell),
+where the smoothing feeds the very top, and rounder at the front, where
+the law has a corner. On one free bubble, with no border to take any, the
+liquid on the films stayed at 8040 µm·cells to the last digit shown for
+2.2 hours of draining, with the rule's noise moving the film about. The
+bubble is thinner at the top (0.53 µm after 2.2 h) and the liquid gathers
+at the bottom, 8 to 17 µm in the lowest row of cells. Round a latitude the
+thickness spreads by 10 to 20% from the lattice: the films' staircase
+carries the liquid a little differently by its slope, and at a micrometre,
+high in the orders of colour, that shows as patches rather than rings.
 
 ### The gyroid
 

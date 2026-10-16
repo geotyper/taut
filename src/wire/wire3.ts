@@ -3,13 +3,13 @@ import { fanTriangles, WALL, type Frame, type FrameField } from './frames.ts';
 
 /** Faces a frame may have: two RGBA textures of solid angles. */
 export const MOST_FACES = 8;
-/** Labels with a weight of their own: 0, the chambers and a trapped bubble. */
+/** Labels with a weight of their own: 0, the chambers and the bubbles held to a volume. */
 const LABELS = MOST_FACES + 2;
-/** How hard a trapped bubble short of its volume pushes, as in the foam. */
+/** How hard a bubble short of its volume pushes, as in the foam. */
 const PRESSURE_GAIN = 4;
 const PUSH_LIMIT = 2;
 const YIELD_LIMIT = 0.5;
-/** Without a bubble to hold, the volumes are counted only this often, for the page to watch. */
+/** Without bubbles to hold, the volumes are counted only this often, for the page to watch. */
 const COUNT_EVERY = 8;
 
 export interface Wire3Params {
@@ -29,7 +29,8 @@ export interface Wire3Params {
 const GUST_PERIOD = 300;
 const TURN_PERIOD = 1100;
 
-const COMMON = `#version 300 es
+/** The field's uniforms, its wrapping and how a cell reads a neighbour through the cuts; for passes elsewhere too. */
+export const COMMON = `#version 300 es
 precision highp float;
 precision highp int;
 precision highp sampler3D;
@@ -406,10 +407,7 @@ void main() {
 export class Wire3 {
   readonly n: number;
   steps = 0;
-  /** The trapped bubble's volume in cells, and what it is held to; 0 if none. */
-  bubbleVolume = 0;
-  bubbleTarget = 0;
-  /** Cells of each label up to the trapped bubble's, counted every few steps. */
+  /** Cells of each label, counted every few steps, or every step while bubbles are held. */
   readonly volumes = new Float64Array(LABELS);
   /** On a periodic field, the faces between cells of two labels, counted every few steps. */
   filmFaces = 0;
@@ -437,7 +435,8 @@ export class Wire3 {
   private next: WebGLTexture;
   private faces = 0;
   private chambers = new Uint32Array(MOST_FACES);
-  private bubble = -1;
+  /** The bubbles held to a volume: label to cells. */
+  private readonly held = new Map<number, number>();
   private seed = 1;
   private shown = -1;
   private wrap = false;
@@ -487,7 +486,7 @@ export class Wire3 {
    * the films are kept and only the wire moves, as when two rings are pulled
    * apart: cells the wire leaves become air, cells it enters wire.
    */
-  setFrame(frame: Frame, field: FrameField, reach: number, labels: Uint32Array | null, bubble: number): void {
+  setFrame(frame: Frame, field: FrameField, reach: number, labels: Uint32Array | null, held: number[]): void {
     const { gl, n } = this;
     if (frame.faces.length > MOST_FACES) throw new Error(`A frame may have ${MOST_FACES} faces at most`);
     this.faces = frame.faces.length;
@@ -510,9 +509,9 @@ export class Wire3 {
     gl.bindTexture(gl.TEXTURE_3D, this.current);
     gl.texSubImage3D(gl.TEXTURE_3D, 0, 0, 0, 0, n, n, n, gl.RED_INTEGER, gl.UNSIGNED_INT, start);
     if (labels) {
-      this.bubble = bubble;
+      this.held.clear();
       this.count();
-      this.bubbleTarget = bubble >= 0 ? this.bubbleVolume : 0;
+      for (const label of held) this.held.set(label, this.volumes[label]);
     }
     this.shown = -1;
   }
@@ -629,10 +628,11 @@ export class Wire3 {
     const keep = Math.min(a, b);
     const gone = Math.max(a, b);
     for (let k = 0; k < this.faces; k++) if (this.chambers[k] === gone) this.chambers[k] = keep;
-    if (gone === this.bubble) {
-      this.bubble = -1;
-      this.bubbleTarget = 0;
-      this.bubbleVolume = 0;
+    // Two bubbles become one with the volume of both; a bubble open to the air is gone.
+    const target = this.held.get(gone);
+    if (target !== undefined) {
+      this.held.delete(gone);
+      if (keep > 0) this.held.set(keep, (this.held.get(keep) ?? this.volumes[keep]) + target);
     }
     const { gl } = this;
     const program = this.relabelProgram;
@@ -643,9 +643,23 @@ export class Wire3 {
     this.shown = -1;
   }
 
-  /** The trapped bubble is held to this share of the volume it started with. */
+  /** The first bubble held, as the page shows it: its label, cells and what it is held to. */
+  get bubble(): { label: number; volume: number; target: number } | null {
+    const first = this.held.entries().next();
+    if (first.done) return null;
+    const [label, target] = first.value;
+    return { label, volume: this.volumes[label], target };
+  }
+
+  /** Every bubble held, label to the cells it is held to. */
+  get holds(): ReadonlyMap<number, number> {
+    return this.held;
+  }
+
+  /** The first bubble held is held to this share of `start` cells. */
   holdBubble(share: number, start: number): void {
-    if (this.bubble >= 0) this.bubbleTarget = start * share;
+    const first = this.bubble;
+    if (first) this.held.set(first.label, start * share);
   }
 
   step(p: Wire3Params, steps: number): void {
@@ -663,7 +677,7 @@ export class Wire3 {
       gl.uniform1ui(gl.getUniformLocation(program, 'uSeed'), this.seed++);
       this.pass(program);
       this.steps++;
-      if (this.bubble >= 0 || this.steps % COUNT_EVERY === 0) this.count();
+      if (this.held.size > 0 || this.steps % COUNT_EVERY === 0) this.count();
     }
   }
 
@@ -740,7 +754,6 @@ export class Wire3 {
     }
   }
 
-  /** One for air and every chamber; the trapped bubble pushes or gives way as it is short of its volume or over it. */
   /** The breeze now: gusting to and fro along a direction that turns round, and tilts up and down. */
   private wind(breeze: number): number[] {
     if (breeze <= 0) return [0, 0, 0];
@@ -752,11 +765,13 @@ export class Wire3 {
     return d.map((v) => breeze * gust * v);
   }
 
+  /** One for air and every chamber; a bubble held pushes or gives way as it is short of its volume or over it. */
   private weights(): Float32Array {
     const w = new Float32Array(LABELS).fill(1);
-    if (this.bubble >= 0 && this.bubbleTarget > 0) {
-      const lack = (PRESSURE_GAIN * (this.bubbleTarget - this.bubbleVolume)) / this.bubbleTarget;
-      w[Math.min(this.bubble, LABELS - 1)] = 1 + Math.max(-YIELD_LIMIT, Math.min(PUSH_LIMIT, lack));
+    for (const [label, target] of this.held) {
+      if (target <= 0) continue;
+      const lack = (PRESSURE_GAIN * (target - this.volumes[label])) / target;
+      w[Math.min(label, LABELS - 1)] = 1 + Math.max(-YIELD_LIMIT, Math.min(PUSH_LIMIT, lack));
     }
     return w;
   }
@@ -779,7 +794,6 @@ export class Wire3 {
     gl.readPixels(0, 0, LABELS, 1, gl.RGBA, gl.FLOAT, this.counted);
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     for (let l = 0; l < LABELS; l++) this.volumes[l] = this.counted[l * 4];
-    this.bubbleVolume = this.bubble >= 0 ? this.volumes[Math.min(this.bubble, LABELS - 1)] : 0;
     if (this.wrap && this.steps % COUNT_EVERY === 0) this.countFaces();
   }
 
@@ -821,7 +835,8 @@ export class Wire3 {
     [this.current, this.next] = [this.next, this.current];
   }
 
-  private bind(program: WebGLProgram): void {
+  /** The labels, the solid angles and the cuts, bound for a pass on this field. */
+  bind(program: WebGLProgram): void {
     const { gl } = this;
     const textures: [string, WebGLTexture][] = [
       ['uLabel', this.current],

@@ -30,11 +30,15 @@
           <span>Frame</span>
           <select id="frame">
             <option value="ring">A ring: a flat disc</option>
+            <option value="upright">A ring standing upright</option>
             <option value="rings">Two rings: a catenoid</option>
             <option value="mobius">The edge of a Möbius strip</option>
             <option value="tetra">A tetrahedron: six films to the middle</option>
             <option value="cube">A cube: thirteen films</option>
             <option value="cube-bubble">A cube with a bubble trapped inside</option>
+            <option value="one">No wire: one bubble</option>
+            <option value="two">No wire: two bubbles alike</option>
+            <option value="unequal">No wire: a large and a small bubble</option>
             <option value="gyroid">No wire: a rough gyroid</option>
             <option value="gyroid-random">No wire: two phases at random</option>
           </select>
@@ -106,8 +110,19 @@
           <select id="colours">
             <option value="hues">A hue for every film</option>
             <option value="soap">Soap film, draining down</option>
+            <option value="drained">Soap film, drained by gravity</option>
           </select>
         </label>
+        <div id="pick-drain">
+          <label>
+            <span>Seconds drained a second <output id="drain-speed-out"></output></span>
+            <input id="drain-speed" type="range" min="10" max="2000" step="10" value="100" />
+          </label>
+          <label>
+            <span>Fresh films, µm thick <output id="fresh-out"></output></span>
+            <input id="fresh" type="range" min="0.3" max="3" step="0.1" value="1" />
+          </label>
+        </div>
         <label>
           <span>Film opacity <output id="opacity-out"></output></span>
           <input id="opacity" type="range" min="0.03" max="1" step="0.01" value="0.35" />

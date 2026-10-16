@@ -841,6 +841,73 @@ Looked at in screenshots at 96³: one period after 500 steps, in a hue and in
 soap colours. The smooth surface draws the films with gold streaks there, as
 it does on the tetrahedron, so that was there before.
 
+## Added since: films drained by gravity, and free bubbles
+
+Asked for by the user, after the soap colours were found to be drawn from
+the height alone: work the thickness out, simply, from gravity. A new
+branch, `film-thickness`.
+
+`src/wire/drain.ts` keeps a thickness in µm on every cell, in an R32F
+texture, and every frame drains it for the seconds set, in steps short
+enough that a film twice fresh moves a quarter of a cell at most. A step is
+three passes: the film mask (and the film's normal, from the labels two
+cells round), how much each film cell can give (no more than 0.3 of its
+liquid), and the update. The renderer's soap colours read the texture in
+place of their height formula, with the slant and the black film as
+before.
+
+On the way:
+
+- The first flux took the drop in height along a link as the weight, and a
+  cell on an upright film gives to three below of weights 1, ½ and ½, two
+  in all: twice the law's flux. Halved. The page also showed nothing at
+  first: `dot` of two `ivec3` does not compile in GLSL ES, and the error
+  was swallowed with the draining's construction; the stat now says why
+  the draining is missing.
+- On one free bubble the liquid fell by 18% in 124 steps. With the rule's
+  noise off it held to the last digit, so it was the films moving: the
+  liquid gathers in the bottom row, 8 to 12 µm, and a cell there that left
+  the film took it all. Cells that leave a film now hand it on, and cells
+  that join one start from nothing.
+- Then the liquid grew by 3.5%: a cell joining a growing film with nothing
+  handed to it took the mean of its neighbours. It now takes a quarter of
+  the liquid of each neighbour that stays on the film instead.
+- It still grew by 1% at the start, from the smoothing of a cell that had
+  just joined, reckoned from its old value while it started from nothing,
+  and clipped at zero. Such cells are left out of the smoothing for their
+  first step. The 1.3% the films were thicker by after that is right: the
+  starting ball has 8040 film cells, the bubble then settles to its volume
+  at 7933, and the liquid stays.
+- On the bubble the thickness round a latitude spread by 10 to 20%, in a
+  pattern of the lattice. Weighting a link by gravity projected on the
+  film's plane, from the normal, instead of by the drop in height, kept the
+  upright film's match and hardly changed the spread; nor did three times
+  the smoothing, which only blurred the upright film's profile, so it went
+  back. The thickness came out a little lower where the cells lie densest
+  on the film, by slope (correlation −0.04 to −0.56 by latitude), but that
+  does not account for all of it. Not solved.
+
+Free bubbles: a frame with no wire, walls round the field, and labels 1
+and 2 started as balls parted by the plane where their spheres cross. The
+trapped bubble's hold on a volume is now a map of labels, so two bubbles
+each keep their own; bursting the film between them makes one bubble with
+the volume of both, and bursting a bubble's outer film lets it go.
+
+The double bubble was checked against Laplace's law: the film between a
+large and a small bubble should have 1/r = 1/r_small − 1/r_large. Spheres
+fitted by least squares to the faces between labels, 96³, kernel radius 3:
+the outer films came out at r = 22.0 and 14.6 cells and held there, and the
+film between them curved slowly from flat to r = 58 by step 500 and about
+60 from step 800 to 1800, where Laplace asks for 43. It bows the right way,
+into the large bubble, but 40% too little. The middle film is a disc about
+12 cells in radius, so the two radii differ in its sagitta by half a cell,
+1.2 against 1.7; and a film that flat is held by the lattice, as on the
+cube. At times the fit found no sphere at all, when the noise made it
+flatter still. A finer field would tell whether the rule gets the law.
+
+Timing in headless Chrome at 96³, two bubbles: 10 steps a second in hues,
+8 with the draining at 100 seconds a second.
+
 ## What could be improved
 
 ### Both
