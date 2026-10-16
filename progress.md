@@ -713,7 +713,20 @@ Looked at in screenshots: the glass sphere at 96³ with 60 bubbles in colour,
 ink with rings and with the engraving, with the near half cut away, lines
 behind the films on dark, and the open cluster with level lines; 160³ with
 300 bubbles cut, in rings: 790 000 triangles, meshed in 0.5 s and drawn in
-1.5 s. The SVG was checked to parse, in node, not opened in an editor. The
+1.5 s.
+
+Then, on a look by the user, who found the inner structure hard to see:
+open cells, without the films against the outside, and cuts by any plane
+or to a slab. A cut keeps the points whose signed distance from a plane
+through the centre lies in a range; that distance is worked out per vertex
+and carried to each pixel by the barycentric weights, so a film is cut
+along a straight line. The lines of the cut are the level lines of that
+distance at the range's ends. The first plane kept the near half instead,
+as its normal faced the camera; what lies the way the normal points is now
+cut away. Looked at in screenshots at 96³: open cells, a plane, a slab in
+ink, a plane with open cells, and a tilted plane with rings.
+
+The SVG was checked to parse, in node, not opened in an editor. The
 rings are polygons with sharp corners, as the distance from a polygon's
 edge is; how it looks on a foam still growing was not watched.
 

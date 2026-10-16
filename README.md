@@ -686,8 +686,13 @@ shows the borders alone.
   the film is dark, as in an engraving. The spacing is set in cells.
 - **Lines behind the films too** draws every border as if the films were
   glass.
-- **Cut the near half away** shows the cells inside, with the cut drawn
-  where it goes through the films.
+- **Open cells** leaves out the films against the outside. The outer
+  cells are then open cups, like a honeycomb, and the films behind them show.
+- **Cut**: the near half away, square to the view; everything beyond a
+  plane; or everything except a slab between two parallel planes. The plane
+  is set by how far it is turned and tilted and by its distance from the
+  centre, in radii of the sphere. A line is drawn wherever the cut goes
+  through a film. A cut combines with open cells.
 - **Save as PNG / SVG** at twice the view's size. In the SVG the lines are
   paths and the coloured films are an embedded image.
 

@@ -74,7 +74,10 @@ const still: Omit<StillOptions, 'width' | 'height' | 'scale'> = {
   spacing: 2.5,
   lineWidth: 1.5,
   xray: false,
-  cut: false,
+  cut: 'none',
+  plane: { turn: 30, tilt: 20, offset: 0 },
+  slab: 16,
+  open: false,
 };
 const camera: Camera = { yaw: 0.7, pitch: 0.4, distance: 1.45 };
 const params: Foam3Params = { radius: 3, noise: 0.1, keepVolume: true };
@@ -179,7 +182,16 @@ bindRange('still-spacing', 1, (v) => (still.spacing = v));
 bindRange('still-width', 2, (v) => (still.lineWidth = v));
 onCheck('still-light', (v) => (still.byLight = v));
 onCheck('still-xray', (v) => (still.xray = v));
-onCheck('still-cut', (v) => (still.cut = v));
+onCheck('still-open', (v) => (still.open = v));
+onSelect('still-cut', (v) => {
+  still.cut = v as StillOptions['cut'];
+  byId('pick-plane').hidden = still.cut !== 'plane' && still.cut !== 'slab';
+  byId('pick-slab').hidden = still.cut !== 'slab';
+});
+bindRange('plane-turn', 0, (v) => (still.plane.turn = v));
+bindRange('plane-tilt', 0, (v) => (still.plane.tilt = v));
+bindRange('plane-offset', 2, (v) => (still.plane.offset = v));
+bindRange('slab', 0, (v) => (still.slab = v));
 byId('still-again').addEventListener('click', () => (filmsStep = -1));
 byId('still-png').addEventListener('click', () => {
   if (!foam || !films) return;

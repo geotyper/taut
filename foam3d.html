@@ -137,9 +137,36 @@
             <span>Lines behind the films too</span>
           </label>
           <label class="check">
-            <input id="still-cut" type="checkbox" />
-            <span>Cut the near half away</span>
+            <input id="still-open" type="checkbox" />
+            <span>Open cells: no films against the outside, like a honeycomb</span>
           </label>
+          <label>
+            <span>Cut</span>
+            <select id="still-cut">
+              <option value="none">None</option>
+              <option value="near">The near half away</option>
+              <option value="plane">By a plane</option>
+              <option value="slab">A slab between two planes</option>
+            </select>
+          </label>
+          <div id="pick-plane" hidden>
+            <label>
+              <span>Plane turned, degrees <output id="plane-turn-out"></output></span>
+              <input id="plane-turn" type="range" min="0" max="360" step="5" value="30" />
+            </label>
+            <label>
+              <span>Plane tilted, degrees <output id="plane-tilt-out"></output></span>
+              <input id="plane-tilt" type="range" min="-90" max="90" step="5" value="20" />
+            </label>
+            <label>
+              <span>Plane from the centre, in radii <output id="plane-offset-out"></output></span>
+              <input id="plane-offset" type="range" min="-1" max="1" step="0.02" value="0" />
+            </label>
+            <label id="pick-slab">
+              <span>Slab thickness, cells <output id="slab-out"></output></span>
+              <input id="slab" type="range" min="2" max="60" step="1" value="16" />
+            </label>
+          </div>
           <div class="buttons">
             <button id="still-again">Mesh the foam again</button>
             <button id="still-png">Save as PNG</button>

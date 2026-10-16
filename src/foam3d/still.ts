@@ -27,9 +27,21 @@ export interface StillOptions {
   lineWidth: number;
   /** Draw the lines behind the films too, the films not filled. */
   xray: boolean;
-  /** Cut the near half away, at the centre of the field. */
-  cut: boolean;
+  /**
+   * What is cut away: nothing; the near half, at the centre of the field and
+   * square to the view; all on one side of a plane; or all but a slab
+   * between two planes.
+   */
+  cut: StillCut;
+  /** The plane of a cut: its normal turned round the vertical and tilted up, in degrees, and its offset from the centre in sphere radii. */
+  plane: { turn: number; tilt: number; offset: number };
+  /** How thick the slab is, in cells. */
+  slab: number;
+  /** Leave out the films against the outside, so the outer cells are open, like a honeycomb. */
+  open: boolean;
 }
+
+export type StillCut = 'none' | 'near' | 'plane' | 'slab';
 
 export interface ViewFrame {
   eye: number[];
@@ -69,8 +81,29 @@ export function renderStill(
 ): Picture {
   const { width: w, height: h } = options;
   const { eye, right, up, forward } = frame;
-  const cutAt = options.cut ? dot(sub([n / 2, n / 2, n / 2], eye), forward) : 0;
-  const near = Math.max(0.5, cutAt);
+  // What is kept of a cut: the points whose signed distance from the
+  // plane through the centre lies between lo and hi.
+  const centre = [n / 2, n / 2, n / 2];
+  let normal = forward;
+  let lo = -Infinity;
+  let hi = Infinity;
+  if (options.cut === 'near') lo = 0;
+  else if (options.cut === 'plane' || options.cut === 'slab') {
+    const turn = (options.plane.turn * Math.PI) / 180;
+    const tilt = (options.plane.tilt * Math.PI) / 180;
+    normal = [Math.cos(tilt) * Math.sin(turn), Math.sin(tilt), Math.cos(tilt) * Math.cos(turn)];
+    // The sphere's radius, as the foam is scattered in.
+    const offset = options.plane.offset * 0.45 * n;
+    // What lies beyond the plane, the way its normal points, is cut away.
+    if (options.cut === 'plane') hi = offset;
+    else [lo, hi] = [offset - options.slab / 2, offset + options.slab / 2];
+  }
+  const sideOf = (p: ArrayLike<number>) =>
+    (p[0] - centre[0]) * normal[0] + (p[1] - centre[1]) * normal[1] + (p[2] - centre[2]) * normal[2];
+  // A little slack, so the lines of the cut, right on its planes, are kept.
+  const kept = (side: number) => side >= lo - 1e-3 && side <= hi + 1e-3;
+  const skin = (t: number) => films.patches[films.patchOf[t]].a === OUTSIDE;
+  const shown = (t: number) => !(options.open && skin(t));
   const project = (p: ArrayLike<number>): number[] => {
     const d = [p[0] - eye[0], p[1] - eye[1], p[2] - eye[2]];
     const depth = dot(d, forward);
@@ -89,6 +122,8 @@ export function renderStill(
     screen[v * 3 + 1] = s[1];
     screen[v * 3 + 2] = s[2];
   }
+  const sides = new Float32Array(count);
+  for (let v = 0; v < count; v++) sides[v] = sideOf([pos[v * 3], pos[v * 3 + 1], pos[v * 3 + 2]]);
   const normals = cornerNormals(films);
   // The light comes from above, to the left and a little from the viewer.
   const light = normalize(add(add(scale(up, 0.65), scale(right, -0.45)), scale(forward, -0.6)));
@@ -108,7 +143,9 @@ export function renderStill(
       const zb = screen[b * 3 + 2];
       const zc = screen[c * 3 + 2];
       if (za <= 0.5 || zb <= 0.5 || zc <= 0.5) continue;
-      if (za < near && zb < near && zc < near) continue;
+      if (!shown(t)) continue;
+      const [ea, eb, ec] = [sides[a], sides[b], sides[c]];
+      if ((ea < lo && eb < lo && ec < lo) || (ea > hi && eb > hi && ec > hi)) continue;
       const patch = films.patches[films.patchOf[t]];
       // The colour of the bubble on the camera's side, or of the other if
       // that side is outside.
@@ -134,7 +171,7 @@ export function renderStill(
         screen[c * 3], screen[c * 3 + 1], zc,
         w, h,
         (i, z, la, lb, lc) => {
-          if (z < cutAt || z >= depth[i]) return;
+          if (z >= depth[i] || !kept(la * ea + lb * eb + lc * ec)) return;
           depth[i] = z;
           if (!image) return;
           const shade = la * sa + lb * sb + lc * sc;
@@ -149,8 +186,8 @@ export function renderStill(
   // Whether a point at this depth is in sight: in front of the films there,
   // give or take the slack; looked for round the pixel too, so a line on the
   // outline of a film is not cut.
-  const seen = (x: number, y: number, z: number): boolean => {
-    if (z < cutAt || z <= 0.5) return false;
+  const seen = (x: number, y: number, z: number, p: number[]): boolean => {
+    if (z <= 0.5 || !kept(sideOf(p))) return false;
     if (options.xray) return true;
     const px = Math.floor(x);
     const py = Math.floor(y);
@@ -172,10 +209,12 @@ export function renderStill(
   // Lines across the films first, so the borders lie over them.
   if (options.across !== 'none') {
     const value = options.across === 'rings' && distance ? distance : heights(films);
-    const levels = isolines(films, (t, k) => value[tris[t * 3 + k]], {
-      spacing: options.spacing,
-      skipZero: options.across === 'rings',
-    });
+    const levels = isolines(
+      films,
+      (t, k) => value[tris[t * 3 + k]],
+      { spacing: options.spacing, skipZero: options.across === 'rings' },
+      shown,
+    );
     for (const line of levels) {
       const shaded = line.points.map((p, k) => {
         const nn = line.normals[k];
@@ -210,23 +249,21 @@ export function renderStill(
       const d = [eye[0] - pos[v * 3], eye[1] - pos[v * 3 + 1], eye[2] - pos[v * 3 + 2]];
       return (normals[o] * d[0] + normals[o + 1] * d[1] + normals[o + 2] * d[2]) / Math.hypot(d[0], d[1], d[2]);
     };
-    for (const line of isolines(films, facing, { only: 0 })) {
+    for (const line of isolines(films, facing, { only: 0 }, shown)) {
       for (const run of visibleRuns(smoothLine(line.points), project, seen, null)) {
         strokes.push({ points: run.points, width: options.lineWidth * options.scale, colour: ink });
       }
     }
   }
-  if (options.cut && !options.xray) {
-    // Where the cut goes through the films: in the plane of the cut, so in
-    // front of everything left.
-    const depthAt = (t: number, k: number): number => {
-      const v = tris[t * 3 + k];
-      return dot(sub([pos[v * 3], pos[v * 3 + 1], pos[v * 3 + 2]], eye), forward);
-    };
-    const onCut = (x: number, y: number, z: number) => z > 0.5 && x >= 0 && y >= 0 && x < w && y < h;
-    for (const line of isolines(films, depthAt, { only: cutAt })) {
-      for (const run of visibleRuns(line.points, project, onCut, null)) {
-        strokes.push({ points: run.points, width: options.lineWidth * options.scale, colour: ink });
+  if (options.cut !== 'none' && !options.xray) {
+    // Where the cut goes through the films, on each of its planes.
+    const sideAt = (t: number, k: number): number => sides[tris[t * 3 + k]];
+    for (const level of [lo, hi]) {
+      if (!Number.isFinite(level)) continue;
+      for (const line of isolines(films, sideAt, { only: level }, shown)) {
+        for (const run of visibleRuns(line.points, project, seen, null)) {
+          strokes.push({ points: run.points, width: options.lineWidth * options.scale, colour: ink });
+        }
       }
     }
   }
@@ -234,7 +271,7 @@ export function renderStill(
   const dots: Picture['dots'] = [];
   for (const corner of films.corners) {
     const [x, y, z] = project(corner);
-    if (!seen(x, y, z)) continue;
+    if (!seen(x, y, z, corner)) continue;
     dots.push({ x, y, r: options.lineWidth * options.scale * 0.9, colour: ink });
   }
 
@@ -350,7 +387,7 @@ function svgPath(pts: number[][]): string {
 function visibleRuns(
   points: number[][],
   project: (p: number[]) => number[],
-  seen: (x: number, y: number, z: number) => boolean,
+  seen: (x: number, y: number, z: number, p: number[]) => boolean,
   widths: number[] | null,
 ): { points: number[][]; widths: number[] | null }[] {
   const runs: { points: number[][]; widths: number[] | null }[] = [];
@@ -370,15 +407,16 @@ function visibleRuns(
       const steps = Math.min(32, Math.floor(gap / 2));
       for (let j = 1; j <= steps; j++) {
         const t = j / (steps + 1);
-        const q = project(lerp(points[k - 1], points[k], t));
-        if (!seen(q[0], q[1], q[2])) {
+        const between = lerp(points[k - 1], points[k], t);
+        const q = project(between);
+        if (!seen(q[0], q[1], q[2], between)) {
           close();
           break;
         }
       }
     }
     before = s;
-    if (s[2] <= 0.5 || !seen(s[0], s[1], s[2])) {
+    if (s[2] <= 0.5 || !seen(s[0], s[1], s[2], points[k])) {
       close();
       continue;
     }

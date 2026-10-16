@@ -84,7 +84,6 @@ own.
   - rounder rings, from a smoothed distance, as for the 2D rings;
   - hatching across the films along their curvature, and stipple;
   - films partly see-through: lines behind one film, faded, by depth peeling;
-  - a cut along any plane, and a slab rather than a half;
   - a soft shadow of the near films on the far ones, for depth.
 
 ## On every page
