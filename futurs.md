@@ -26,6 +26,12 @@ Still to do:
 - **More frames**: a twisted wire with more half twists (a trefoil edge),
   a prism, an octahedron, a helix between two rings.
 - **Moving the wire with the mouse**, not only pulling the rings apart.
+- **A breeze without a threshold.** Films move only once the wind outweighs
+  the count a flat film gets from its own side. A rule that counts a cell's
+  own layer by half might move them smoothly, and might also let the cube
+  find its square.
+- **Bursting by a click** on the film under the pointer, and bursting where
+  a draining film has turned black.
 
 ## 2D foam
 

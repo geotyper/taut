@@ -742,7 +742,23 @@ frame is set.
   small cube in the middle.
 
 The wire is drawn as stone. Every film is coloured by the pair of labels on
-its two sides.
+its two sides, or, under *Film colours*, in the interference colours of a
+soap film draining down, as on the foam page (*W* wets it again).
+
+- **Breeze on the films**: gusts from a direction that turns slowly round
+  and tilts up and down. A cell counts neighbours upwind a little more and
+  neighbours downwind a little less, so a film is pushed downwind and bulges
+  against its own tension. It compares labels as the cell sees them through
+  the cuts, so the cuts stay invisible. Below about 0.16 the films do not
+  move at all: in this rule a flat film holds still until its count is
+  outweighed. Around 0.2 they bulge into domes and roll from side to side;
+  at 0.25 a ring blows out a long sock.
+- **Burst a film** (*B*), or **Films burst now and then** at a set rate: a
+  film chosen at random goes, its two sides become one label, and every cut
+  that swapped the one swaps the other. A face whose cut comes to swap 0
+  with 0 then holds no film. The films that are left pull taut into a new
+  shape: a tetrahedron that loses two films keeps one flat film on a face,
+  and a burst film on a ring is simply gone.
 
 ## Running
 

@@ -15,7 +15,19 @@ const COUNT_EVERY = 8;
 export interface Wire3Params {
   radius: number;
   noise: number;
+  /**
+   * A breeze, in gusts from a slowly turning direction: a cell counts its
+   * neighbours upwind a little more and those downwind a little less, so a
+   * film is pushed downwind and bulges against its own tension. It only
+   * compares labels as the cell sees them, through the cuts, so the cuts
+   * stay unseen. The most a neighbour one cell away gains or loses.
+   */
+  breeze: number;
 }
+
+/** Steps a gust takes to come and go, and the breeze's direction to turn once. */
+const GUST_PERIOD = 300;
+const TURN_PERIOD = 1100;
 
 const COMMON = `#version 300 es
 precision highp float;
@@ -63,6 +75,7 @@ uniform int uLayer;
 uniform int uRadius;
 uniform float uJitter;
 uniform float uWeight[${LABELS}];
+uniform vec3 uWind;
 uniform uint uSeed;
 out uint outLabel;
 
@@ -124,9 +137,11 @@ void main() {
         // The wire is not counted, as the glass of the foam is not.
         if (other == WALL) continue;
         other = through(other, at, near, h0, h1);
+        // Upwind, against the breeze, a neighbour counts more.
+        float weight = 1.0 - dot(vec3(dx, dy, dz), uWind);
         for (int k = 0; k < kinds; k++) {
           if (seen[k] == other) {
-            count[k] += 1.0;
+            count[k] += weight;
             break;
           }
         }
@@ -269,6 +284,43 @@ void main() {
   outBits = bits;
 }`;
 
+// One label becomes another everywhere: a film bursts and its two sides are one.
+const RELABEL = `#version 300 es
+precision highp int;
+precision highp usampler3D;
+uniform usampler3D uLabel;
+uniform int uLayer;
+uniform uint uFrom;
+uniform uint uTo;
+out uint outLabel;
+void main() {
+  uint here = texelFetch(uLabel, ivec3(ivec2(gl_FragCoord.xy), uLayer), 0).r;
+  outLabel = here == uFrom ? uTo : here;
+}`;
+
+// The pair of labels across a film at this cell, as in SHOW, plus one; 0 for none.
+const PAIRS = `${COMMON}
+uniform int uLayer;
+out uint outPair;
+void main() {
+  ivec3 cell = ivec3(ivec2(gl_FragCoord.xy), uLayer);
+  uint here = texelFetch(uLabel, cell, 0).r;
+  outPair = 0u;
+  if (here == WALL) return;
+  uint near = texelFetch(uNear, cell, 0).r;
+  vec4 h0 = texelFetch(uOmega0, cell, 0);
+  vec4 h1 = uFaces > 4 ? texelFetch(uOmega1, cell, 0) : vec4(0.0);
+  for (int a = 0; a < 3; a++) {
+    ivec3 at = cell;
+    at[a] += 1;
+    if (!inField(at)) continue;
+    uint other = texelFetch(uLabel, at, 0).r;
+    if (other == WALL) continue;
+    other = through(other, at, near, h0, h1);
+    if (other != here) outPair = min(here, other) * 65536u + max(here, other) + 1u;
+  }
+}`;
+
 // A point per cell onto the texel of its label, for the trapped bubble's volume.
 const COUNT_VERTEX = `#version 300 es
 precision highp int;
@@ -317,6 +369,8 @@ export class Wire3 {
   private readonly anglesProgram: WebGLProgram;
   private readonly cutsProgram: WebGLProgram;
   private readonly spreadProgram: WebGLProgram;
+  private readonly relabelProgram: WebGLProgram;
+  private readonly pairsProgram: WebGLProgram;
   private readonly spare: WebGLTexture;
   private readonly target: WebGLFramebuffer;
   private readonly countTarget: WebGLFramebuffer;
@@ -346,6 +400,8 @@ export class Wire3 {
     this.anglesProgram = createProgram(gl, ANGLES);
     this.cutsProgram = createProgram(gl, CUTS);
     this.spreadProgram = createProgram(gl, SPREAD);
+    this.relabelProgram = createProgram(gl, RELABEL);
+    this.pairsProgram = createProgram(gl, PAIRS);
     const volume = (format: number) => {
       const texture = createTexture(gl, gl.NEAREST, gl.NEAREST);
       gl.texStorage3D(gl.TEXTURE_3D, 1, format, n, n, n);
@@ -375,8 +431,11 @@ export class Wire3 {
     const { gl, n } = this;
     if (frame.faces.length > MOST_FACES) throw new Error(`A frame may have ${MOST_FACES} faces at most`);
     this.faces = frame.faces.length;
-    this.chambers.fill(0);
-    frame.faces.forEach((f, k) => (this.chambers[k] = f.chamber));
+    // When only the wire moves, the films that burst stay burst.
+    if (labels) {
+      this.chambers.fill(0);
+      frame.faces.forEach((f, k) => (this.chambers[k] = f.chamber));
+    }
     const count = n * n * n;
     this.workOutCuts(frame, reach);
     let start = labels;
@@ -466,6 +525,62 @@ export class Wire3 {
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
   }
 
+  /**
+   * A film at random, as the two labels on its sides: looked for in a few
+   * layers read back at random, a film the likelier the more of it there is.
+   */
+  findFilm(): [number, number] | null {
+    const { gl, n } = this;
+    const program = this.pairsProgram;
+    gl.useProgram(program);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.target);
+    gl.drawBuffers([gl.COLOR_ATTACHMENT0]);
+    gl.viewport(0, 0, n, n);
+    this.bind(program);
+    const layer = gl.getUniformLocation(program, 'uLayer');
+    const row = new Uint32Array(n * n * 4);
+    const found: number[] = [];
+    for (let attempt = 0; attempt < 8 && found.length === 0; attempt++) {
+      for (let k = 0; k < 4; k++) {
+        const z = Math.floor(Math.random() * n);
+        gl.framebufferTextureLayer(gl.FRAMEBUFFER, gl.COLOR_ATTACHMENT0, this.next, 0, z);
+        gl.uniform1i(layer, z);
+        gl.drawArrays(gl.TRIANGLES, 0, 3);
+        gl.readPixels(0, 0, n, n, gl.RGBA_INTEGER, gl.UNSIGNED_INT, row);
+        for (let i = 0; i < n * n; i++) if (row[i * 4] > 0) found.push(row[i * 4] - 1);
+      }
+    }
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    if (found.length === 0) return null;
+    const pair = found[Math.floor(Math.random() * found.length)];
+    return [Math.floor(pair / 65536), pair % 65536];
+  }
+
+  /**
+   * The film between labels a and b bursts: its two sides become one, the
+   * higher label taking the lower, and every cut that swapped the higher
+   * swaps the lower now. A cut that comes to swap 0 with 0 swaps nothing:
+   * the films on that face are gone, as when the film on a ring bursts.
+   * The films left pull taut into a new shape.
+   */
+  burst(a: number, b: number): void {
+    const keep = Math.min(a, b);
+    const gone = Math.max(a, b);
+    for (let k = 0; k < this.faces; k++) if (this.chambers[k] === gone) this.chambers[k] = keep;
+    if (gone === this.bubble) {
+      this.bubble = -1;
+      this.bubbleTarget = 0;
+      this.bubbleVolume = 0;
+    }
+    const { gl } = this;
+    const program = this.relabelProgram;
+    gl.useProgram(program);
+    gl.uniform1ui(gl.getUniformLocation(program, 'uFrom'), gone);
+    gl.uniform1ui(gl.getUniformLocation(program, 'uTo'), keep);
+    this.pass(program);
+    this.shown = -1;
+  }
+
   /** The trapped bubble is held to this share of the volume it started with. */
   holdBubble(share: number, start: number): void {
     if (this.bubble >= 0) this.bubbleTarget = start * share;
@@ -482,6 +597,7 @@ export class Wire3 {
     for (let s = 0; s < steps; s++) {
       gl.useProgram(program);
       gl.uniform1fv(gl.getUniformLocation(program, 'uWeight'), this.weights());
+      gl.uniform3fv(gl.getUniformLocation(program, 'uWind'), this.wind(p.breeze));
       gl.uniform1ui(gl.getUniformLocation(program, 'uSeed'), this.seed++);
       this.pass(program);
       this.steps++;
@@ -541,12 +657,32 @@ export class Wire3 {
     for (const texture of [this.current, this.next, ...this.omega, this.near, this.spare, this.countTexture]) gl.deleteTexture(texture);
     gl.deleteFramebuffer(this.target);
     gl.deleteFramebuffer(this.countTarget);
-    for (const program of [this.stepProgram, this.showProgram, this.countProgram, this.anglesProgram, this.cutsProgram, this.spreadProgram]) {
+    for (const program of [
+      this.stepProgram,
+      this.showProgram,
+      this.countProgram,
+      this.anglesProgram,
+      this.cutsProgram,
+      this.spreadProgram,
+      this.relabelProgram,
+      this.pairsProgram,
+    ]) {
       gl.deleteProgram(program);
     }
   }
 
   /** One for air and every chamber; the trapped bubble pushes or gives way as it is short of its volume or over it. */
+  /** The breeze now: gusting to and fro along a direction that turns round, and tilts up and down. */
+  private wind(breeze: number): number[] {
+    if (breeze <= 0) return [0, 0, 0];
+    const gust = Math.sin((2 * Math.PI * this.steps) / GUST_PERIOD);
+    const turn = (2 * Math.PI * this.steps) / TURN_PERIOD;
+    // Round the vertical, and up and down as far as nearly straight up, out of step.
+    const tilt = 1.2 * Math.sin(turn * 0.61 + 1);
+    const d = [Math.cos(turn) * Math.cos(tilt), Math.sin(tilt), Math.sin(turn) * Math.cos(tilt)];
+    return d.map((v) => breeze * gust * v);
+  }
+
   private weights(): Float32Array {
     const w = new Float32Array(LABELS).fill(1);
     if (this.bubble >= 0 && this.bubbleTarget > 0) {

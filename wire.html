@@ -24,7 +24,7 @@
           least area the wire allows. Drag to orbit, scroll to zoom.
           <a href="/foam3d.html">3D foam</a>
         </p>
-        <p class="hint">Keys: <kbd>N</kbd> start again, <kbd>Space</kbd> pause.</p>
+        <p class="hint">Keys: <kbd>N</kbd> start again, <kbd>B</kbd> burst a film, <kbd>W</kbd> wet the films again, <kbd>Space</kbd> pause.</p>
 
         <label>
           <span>Frame</span>
@@ -49,6 +49,22 @@
           <span>Bubble, share of its start <output id="bubble-out"></output></span>
           <input id="bubble" type="range" min="0.05" max="1.5" step="0.05" value="0.5" />
         </label>
+
+        <label>
+          <span>Breeze on the films <output id="breeze-out"></output></span>
+          <input id="breeze" type="range" min="0" max="0.4" step="0.01" value="0" />
+        </label>
+        <label class="check">
+          <input id="bursting" type="checkbox" />
+          <span>Films burst now and then</span>
+        </label>
+        <label id="pick-rate">
+          <span>Bursts per 1000 steps <output id="rate-out"></output></span>
+          <input id="rate" type="range" min="1" max="20" step="1" value="3" />
+        </label>
+        <div class="buttons">
+          <button id="burst">Burst a film</button>
+        </div>
 
         <label>
           <span>Resolution</span>
@@ -77,6 +93,13 @@
           <select id="surface">
             <option value="voxels">Voxels</option>
             <option value="smooth">Smooth</option>
+          </select>
+        </label>
+        <label>
+          <span>Film colours</span>
+          <select id="colours">
+            <option value="hues">A hue for every film</option>
+            <option value="soap">Soap film, draining down</option>
           </select>
         </label>
         <label>

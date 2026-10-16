@@ -769,6 +769,30 @@ apart at 0.02 radii every 40 steps, the tube broke at 1.64 at 64³ and had
 not broken at 1.8 at 96³: near the limit the neck closes slowly and falls
 behind the pull.
 
+Then, on a look by the user, who found the films of the tetrahedron and the
+cube too flat and lifeless, and asked for bursting too. The tetrahedron's
+six films are flat in theory as well, and the cube's are only a little
+curved; a film bends when something pushes on it. A first breeze changed
+the weights of the chambers in turn. Their volumes swung by about a quarter
+at 64³, but the chambers are all one air, and on a ring such a pressure
+pushes the film away from its cut, which would make the cut show. So the
+breeze became a wind: a neighbour upwind counts more by the dot product of
+its offset with the wind. It did nothing up to 0.1. The count shows why: a
+cell next to a flat film has 108 cells of the ball on its own side against
+71, so the film moves only once a neighbour one cell away gains more than
+about 0.16. At 0.25 a ring blew a long sock upwards and then a dome
+downwards; at 0.2 the tetrahedron's films bulged out past the frame and the
+cube's faces bowed. Looked at in screenshots at 64³. The same pinning
+probably keeps the cube's twelve films from finding the thirteenth.
+
+Bursting merges the two labels of a film chosen from a few layers read back
+on the GPU, and makes every cut that swapped the higher label swap the
+lower. In the tetrahedron at 64³ the chambers went from 1, 2, 3, 4 to
+1, 2, 2, 4 and then 1, 2, 2, 2, and the inside became chamber 2: one flat
+film was left, on face 1, as the cuts say it should be. It was first taken
+for none at all, as the wire hid it from that side. Moving the rings keeps
+the films that have burst.
+
 Not done: the still look of the 3D foam does not mesh these films yet. Its
 mesh is built from labels, and here a film is a disagreement through a cut,
 so the mesh would also need the cuts.

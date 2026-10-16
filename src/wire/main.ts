@@ -11,7 +11,7 @@ const PULL_EVERY = 40;
 const canvas = byId<HTMLCanvasElement>('field-3d');
 const stat = byId('stat');
 const camera: Camera = { yaw: 0.6, pitch: 0.35, distance: 1.3 };
-const params: Wire3Params = { radius: 3, noise: 0.15 };
+const params: Wire3Params = { radius: 3, noise: 0.15, breeze: 0 };
 
 let renderer: Renderer | null = null;
 let wire: Wire3 | null = null;
@@ -37,6 +37,17 @@ let fieldMs = 0;
 let pulledAt = 0;
 /** The gap at which the tube between two rings last broke into two discs. */
 let brokeAt: number | null = null;
+/** Films burst on their own, this many a step on average, and those owed. */
+let bursting = false;
+let burstRate = 0.003;
+let burstsOwed = 0;
+let burstCount = 0;
+let colours: 'hues' | 'soap' = 'hues';
+/** Seconds the films have drained, as on the foam page. */
+let drained = 0;
+let lastFrame = performance.now();
+/** The black film comes down no further than this share of the field. */
+const LOWEST_FRONT = 0.3;
 let rate = 0;
 let rateSteps = 0;
 let rateSince = performance.now();
@@ -52,6 +63,14 @@ bindRange('bubble', 2, (v) => {
   wire?.holdBubble(bubbleShare, bubbleStart);
 });
 onCheck('pull', (v) => (pull = v));
+bindRange('breeze', 3, (v) => (params.breeze = v));
+onCheck('bursting', (v) => {
+  bursting = v;
+  byId('pick-rate').hidden = !v;
+});
+bindRange('rate', 0, (v) => (burstRate = v / 1000));
+byId('burst').addEventListener('click', burstOne);
+onSelect('colours', (v) => (colours = v as typeof colours));
 onSelect('surface', (v) => (smooth = v === 'smooth'));
 onSelect('frame', (v) => {
   choice = v;
@@ -77,6 +96,8 @@ window.addEventListener('keydown', (e) => {
   const key = e.key.toLowerCase();
   if (key === 'n') restart();
   else if (key === ' ') pauseButton.click();
+  else if (key === 'b') burstOne();
+  else if (key === 'w') drained = 0;
   else return;
   e.preventDefault();
 });
@@ -144,6 +165,8 @@ function restart(): void {
   fieldMs = performance.now() - begun;
   pulledAt = 0;
   brokeAt = null;
+  burstCount = 0;
+  drained = 0;
 }
 
 /** The rings moved to the gap set, the films kept as they are. */
@@ -160,6 +183,13 @@ function tick(): void {
     if (!paused) {
       wire.step(params, stepsPerFrame);
       rateSteps += stepsPerFrame;
+      if (bursting) {
+        burstsOwed += stepsPerFrame * burstRate;
+        while (burstsOwed >= 1) {
+          burstsOwed--;
+          burstOne();
+        }
+      }
       if (pull && choice === 'rings' && wire.steps - pulledAt >= PULL_EVERY) {
         pulledAt = wire.steps;
         const input = byId<HTMLInputElement>('gap');
@@ -170,8 +200,10 @@ function tick(): void {
       }
     }
     // The inside of the tube is the only label 1: when it is gone, the film has broken.
-    if (choice === 'rings' && brokeAt === null && wire.steps > 8 && wire.volumes[1] === 0) brokeAt = gap;
+    if (choice === 'rings' && brokeAt === null && burstCount === 0 && wire.steps > 8 && wire.volumes[1] === 0) brokeAt = gap;
     const now = performance.now();
+    if (!paused) drained += Math.min(0.1, (now - lastFrame) / 1000);
+    lastFrame = now;
     if (now - rateSince > 1000) {
       rate = (rateSteps * 1000) / (now - rateSince);
       rateSteps = 0;
@@ -179,15 +211,28 @@ function tick(): void {
     }
     wire.show(smooth);
     const view: View = { opacity, oneColor: false, smoothness: 0.6 };
+    if (colours === 'soap') {
+      // As on the foam page: the film thins as one over the root of the time.
+      view.film = { mode: 'soap', time: drained, front: Math.max(LOWEST_FRONT, 1.05 / Math.sqrt(1 + drained * 0.03)) };
+    }
     if (smooth) renderer.drawSmooth(null, wire.n, camera, view);
     else renderer.drawVoxels(null, wire.n, camera, view);
     const bubble = wire.bubbleTarget > 0 ? ` · bubble ${Math.round(wire.bubbleVolume)} of ${Math.round(wire.bubbleTarget)} cells` : '';
     const broke = choice === 'rings' ? (brokeAt === null ? ' · a tube' : ` · broke into two discs at a gap of ${brokeAt.toFixed(2)} radii`) : '';
-    stat.textContent = `step ${wire.steps}${bubble}${broke} · ${Math.round(rate)} steps/s · frame worked out in ${Math.round(fieldMs)} ms`;
+    const burst = burstCount > 0 ? ` · ${burstCount} films burst` : '';
+    stat.textContent = `step ${wire.steps}${bubble}${broke}${burst} · ${Math.round(rate)} steps/s · frame worked out in ${Math.round(fieldMs)} ms`;
   } else {
     stat.textContent = `The wire frames need WebGL2 with float blending: ${failure}`;
   }
   requestAnimationFrame(tick);
+}
+
+/** A film at random bursts, and the rest pull taut into a new shape. */
+function burstOne(): void {
+  const film = wire?.findFilm();
+  if (!wire || !film) return;
+  wire.burst(film[0], film[1]);
+  burstCount++;
 }
 
 function syncControls(): void {
