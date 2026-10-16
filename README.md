@@ -762,6 +762,38 @@ foam, so a film lying flat, all at one height, still shows bands and swirls.
   shape: a tetrahedron that loses two films keeps one flat film on a face,
   and a burst film on a ring is simply gone.
 
+### The gyroid
+
+Two frames have no wire at all. The field wraps round on every side, as one
+cell of a crystal, and has two labels: two labyrinths, one of them held to
+exactly half the field the way the trapped bubble is held, so the other is
+too. With no cuts the film is an ordinary border between them, and it can
+only pull taut.
+
+- **A rough gyroid** starts from the gyroid's nodal approximation,
+  sin x cos y + sin y cos z + sin z cos x > 0, with bumps of a few waves no
+  longer than its period added. *Gyroid periods across* sets how many
+  periods the field holds.
+- **Two phases at random** starts from a sum of random waves of about the
+  same length, as an oil and water mixture parts.
+
+The page shows the film's area as the lattice counts it, the faces between
+cells of the two labels, against the same count for the nodal gyroid. The
+lattice counts about 1.56 faces for a unit of the gyroid's true area
+(3.09 L² in a cell of side L), so the share compares like shapes only: two
+flat films across the field would count 41% at one period and 21% at two.
+
+At one period, 64³ or 96³, noise 0.15, the rough gyroid smooths out to
+99.6–100.1% of the nodal one and stays there for 1000 steps, with its two
+labyrinths and its look. At noise 0.4 it holds for about 700 steps and then
+gives way, to 78% by step 1040 and still falling: in a cube of half and
+half two flat films have less area, so here the gyroid is only a local
+minimum, and enough noise knocks it out. At two periods it gives way at
+noise 0.15 even with a period of 64 cells, which held at one period, and
+ends at 33–41% after 1000 steps, coarser but not yet flat films; without
+noise it stays put, but then so does every film the lattice pins. Two
+phases at random coarsen the same way and do not find the gyroid.
+
 ## Running
 
 ```sh

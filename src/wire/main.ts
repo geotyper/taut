@@ -1,5 +1,5 @@
 import { Renderer, type Camera, type View } from '../3d/renderer.ts';
-import { bubbleLabel, frameField, makeFrame, startLabels, type Frame, type FrameKind, type FrameStart } from './frames.ts';
+import { bubbleLabel, filmFaces, frameField, gyroid, makeFrame, startLabels, type Frame, type FrameKind, type FrameStart } from './frames.ts';
 import { Wire3, type Wire3Params } from './wire3.ts';
 
 /** The cuts are looked for this far round a cell: the widest kernel, and one more. */
@@ -28,6 +28,9 @@ let gap = 0.8;
 let pull = false;
 let bubbleShare = 0.5;
 let bubbleStart = 0;
+/** Periods of the gyroid across the field, and the faces of its nodal approximation there. */
+let across = 1;
+let gyroidFaces = 0;
 let stepsPerFrame = 2;
 let opacity = 0.35;
 let smooth = false;
@@ -65,6 +68,8 @@ bindRange('bubble', 2, (v) => {
   wire?.holdBubble(bubbleShare, bubbleStart);
 });
 onCheck('pull', (v) => (pull = v));
+bindRange('across', 0, (v) => (across = v));
+byId('across').addEventListener('change', () => restart());
 bindRange('breeze', 3, (v) => (params.breeze = v));
 onCheck('bursting', (v) => {
   bursting = v;
@@ -142,6 +147,7 @@ function build(): void {
 }
 
 function kindOf(value: string): FrameKind {
+  if (value === 'gyroid-random') return 'gyroid';
   return value === 'cube-bubble' ? 'cube' : (value as FrameKind);
 }
 
@@ -149,6 +155,8 @@ function startOf(value: string): FrameStart {
   if (value === 'rings') return 'catenoid';
   if (value === 'tetra' || value === 'cube') return 'chambers';
   if (value === 'cube-bubble') return 'bubble';
+  if (value === 'gyroid') return 'gyroid';
+  if (value === 'gyroid-random') return 'random';
   return 'cut';
 }
 
@@ -160,10 +168,22 @@ function restart(): void {
   frame = makeFrame(kindOf(choice), n, gap);
   const field = frameField(frame, n, REACH, false);
   const start = startOf(choice);
-  const labels = startLabels(frame, field, n, start, gap);
-  wire.setFrame(frame, field, REACH, labels, start === 'bubble' ? bubbleLabel(frame) : -1);
-  bubbleStart = wire.bubbleTarget;
-  wire.holdBubble(bubbleShare, bubbleStart);
+  const labels = startLabels(frame, field, n, start, gap, across);
+  if (frame.periodic) {
+    // One labyrinth is held to exactly half the field, so the other is too,
+    // and the film between them can only pull taut.
+    wire.setFrame(frame, field, REACH, labels, 1);
+    bubbleStart = (n * n * n) / 2;
+    wire.holdBubble(1, bubbleStart);
+    const g = gyroid(n, across);
+    const nodal = new Uint32Array(n * n * n);
+    for (let i = 0; i < nodal.length; i++) nodal[i] = g((i % n) + 0.5, (Math.floor(i / n) % n) + 0.5, Math.floor(i / (n * n)) + 0.5) > 0 ? 1 : 0;
+    gyroidFaces = filmFaces(nodal, n);
+  } else {
+    wire.setFrame(frame, field, REACH, labels, start === 'bubble' ? bubbleLabel(frame) : -1);
+    bubbleStart = wire.bubbleTarget;
+    wire.holdBubble(bubbleShare, bubbleStart);
+  }
   fieldMs = performance.now() - begun;
   pulledAt = 0;
   brokeAt = null;
@@ -221,7 +241,12 @@ function tick(): void {
     }
     if (smooth) renderer.drawSmooth(null, wire.n, camera, view);
     else renderer.drawVoxels(null, wire.n, camera, view);
-    const bubble = wire.bubbleTarget > 0 ? ` · bubble ${Math.round(wire.bubbleVolume)} of ${Math.round(wire.bubbleTarget)} cells` : '';
+    const periodic = frame?.periodic === true;
+    const bubble = periodic
+      ? ` · film ${((100 * wire.filmFaces) / gyroidFaces).toFixed(1)}% of the nodal gyroid's · one labyrinth ${((100 * wire.volumes[1]) / wire.n ** 3).toFixed(1)}% of the field`
+      : wire.bubbleTarget > 0
+        ? ` · bubble ${Math.round(wire.bubbleVolume)} of ${Math.round(wire.bubbleTarget)} cells`
+        : '';
     const broke = choice === 'rings' ? (brokeAt === null ? ' · a tube' : ` · broke into two discs at a gap of ${brokeAt.toFixed(2)} radii`) : '';
     const burst = burstCount > 0 ? ` · ${burstCount} films burst` : '';
     stat.textContent = `step ${wire.steps}${bubble}${broke}${burst} · ${Math.round(rate)} steps/s · frame worked out in ${Math.round(fieldMs)} ms`;
@@ -243,6 +268,7 @@ function syncControls(): void {
   byId('pick-gap').hidden = choice !== 'rings';
   byId('pick-pull').hidden = choice !== 'rings';
   byId('pick-bubble').hidden = choice !== 'cube-bubble';
+  byId('pick-across').hidden = !choice.startsWith('gyroid');
 }
 
 function onSelect(id: string, apply: (value: string) => void): HTMLSelectElement {

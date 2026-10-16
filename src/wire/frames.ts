@@ -23,7 +23,7 @@
  * films that grow from the openings then meet along Plateau borders inside.
  */
 
-export type FrameKind = 'ring' | 'rings' | 'mobius' | 'tetra' | 'cube';
+export type FrameKind = 'ring' | 'rings' | 'mobius' | 'tetra' | 'cube' | 'gyroid';
 
 export interface Face {
   /** Closed loops of wire, points in field cells. */
@@ -36,6 +36,11 @@ export interface Frame {
   faces: Face[];
   /** Cells inside a closed frame, where a trapped bubble may start. */
   inside: ((p: number[]) => boolean) | null;
+  /**
+   * No wire, and the field wraps round on every side, as one cell of a
+   * crystal: the gyroid, a film that splits space into two labyrinths.
+   */
+  periodic?: boolean;
 }
 
 export interface FrameField {
@@ -63,6 +68,7 @@ export function makeFrame(kind: FrameKind, n: number, gap: number): Frame {
       const t = (2 * Math.PI * k) / segments;
       return at([radius * Math.cos(t), y, radius * Math.sin(t)]);
     });
+  if (kind === 'gyroid') return { faces: [], inside: null, periodic: true };
   if (kind === 'ring') return { faces: [{ loops: [circle(0.3 * n, 0)], chamber: 1 }], inside: null };
   if (kind === 'rings') {
     const r = 0.25 * n;
@@ -119,7 +125,7 @@ export function makeFrame(kind: FrameKind, n: number, gap: number): Frame {
  * label of the face it is nearest, so the films start from the middle.
  * 'bubble': the same, with a bubble of its own label in the middle.
  */
-export type FrameStart = 'cut' | 'catenoid' | 'chambers' | 'bubble';
+export type FrameStart = 'cut' | 'catenoid' | 'chambers' | 'bubble' | 'gyroid' | 'random';
 
 export const WALL = 0xffffffff;
 
@@ -131,7 +137,8 @@ export function bubbleLabel(frame: Frame): number {
 /** The trapped bubble starts this share of a cube's size across. */
 const BUBBLE_SIZE = 0.45;
 
-export function startLabels(frame: Frame, field: FrameField, n: number, start: FrameStart, gap: number): Uint32Array {
+export function startLabels(frame: Frame, field: FrameField, n: number, start: FrameStart, gap: number, across = 1): Uint32Array {
+  if (start === 'gyroid' || start === 'random') return twoLabyrinths(n, start === 'gyroid' ? roughGyroid(n, across) : randomWaves(n, 0.5 * across, 2 * across));
   const labels = new Uint32Array(n * n * n);
   const c = n / 2;
   const planes = frame.faces.map((f) => planeOf(f.loops[0], [c, c, c]));
@@ -163,6 +170,84 @@ export function startLabels(frame: Frame, field: FrameField, n: number, start: F
     }
   }
   return labels;
+}
+
+/**
+ * A function on a periodic field of n cells: label 1 where it is positive,
+ * 0 elsewhere.
+ */
+function twoLabyrinths(n: number, f: (x: number, y: number, z: number) => number): Uint32Array {
+  const labels = new Uint32Array(n * n * n);
+  for (let z = 0; z < n; z++) {
+    for (let y = 0; y < n; y++) {
+      for (let x = 0; x < n; x++) labels[(z * n + y) * n + x] = f(x + 0.5, y + 0.5, z + 0.5) > 0 ? 1 : 0;
+    }
+  }
+  return labels;
+}
+
+/**
+ * The gyroid's nodal approximation, sin x cos y + sin y cos z + sin z cos x,
+ * with `across` periods over the field. Its zero set halves the volume and
+ * lies close to Schoen's minimal surface, though it is not quite minimal.
+ */
+export function gyroid(n: number, across: number): (x: number, y: number, z: number) => number {
+  const k = (2 * Math.PI * across) / n;
+  return (x, y, z) => {
+    const [a, b, c] = [x * k, y * k, z * k];
+    return Math.sin(a) * Math.cos(b) + Math.sin(b) * Math.cos(c) + Math.sin(c) * Math.cos(a);
+  };
+}
+
+/**
+ * The gyroid with bumps on it, so the rule has something to pull taut: a
+ * few waves that fit the field, none longer than the gyroid's period, so
+ * that they do not already lean towards a coarser shape.
+ */
+function roughGyroid(n: number, across: number): (x: number, y: number, z: number) => number {
+  const g = gyroid(n, across);
+  const bumps = randomWaves(n, across, 2 * across, 6);
+  return (x, y, z) => g(x, y, z) + 0.6 * bumps(x, y, z);
+}
+
+/**
+ * A sum of waves at random, each fitting the field a whole number of times,
+ * from `least` to `most` times: two phases mixed as at random, as when an
+ * oil and water mixture parts. About 1 on the root mean square.
+ */
+function randomWaves(n: number, least: number, most: number, count = 40): (x: number, y: number, z: number) => number {
+  const waves: { k: number[]; phase: number }[] = [];
+  while (waves.length < count) {
+    const k = [0, 1, 2].map(() => Math.round((Math.random() * 2 - 1) * most));
+    const length = Math.hypot(k[0], k[1], k[2]);
+    if (length < least || length > most) continue;
+    waves.push({ k: k.map((v) => (2 * Math.PI * v) / n), phase: 2 * Math.PI * Math.random() });
+  }
+  const scale = Math.sqrt(2 / count);
+  return (x, y, z) => {
+    let sum = 0;
+    for (const { k, phase } of waves) sum += Math.cos(k[0] * x + k[1] * y + k[2] * z + phase);
+    return sum * scale;
+  };
+}
+
+/**
+ * The faces between cells of different labels on a periodic field, the
+ * film's area as the lattice counts it.
+ */
+export function filmFaces(labels: Uint32Array, n: number): number {
+  let faces = 0;
+  for (let z = 0; z < n; z++) {
+    for (let y = 0; y < n; y++) {
+      for (let x = 0; x < n; x++) {
+        const here = labels[(z * n + y) * n + x];
+        if (here !== labels[(z * n + y) * n + ((x + 1) % n)]) faces++;
+        if (here !== labels[(z * n + ((y + 1) % n)) * n + x]) faces++;
+        if (here !== labels[(((z + 1) % n) * n + y) * n + x]) faces++;
+      }
+    }
+  }
+  return faces;
 }
 
 /** The signed distance from a polygon's plane, positive away from a point inside. */

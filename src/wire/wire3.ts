@@ -41,12 +41,23 @@ uniform usampler3D uNear;
 uniform int uSize;
 uniform int uFaces;
 uniform uint uChamber[${MOST_FACES}];
+// 1 when the field wraps round on every side, as for the gyroid.
+uniform int uWrap;
 
 const uint WALL = ${WALL}u;
 const float FOUR_PI = 12.566370614359172;
 
 bool inField(ivec3 c) {
   return all(greaterThanEqual(c, ivec3(0))) && all(lessThan(c, ivec3(uSize)));
+}
+
+// A neighbour in the field, wrapped round when the field is periodic.
+bool fieldCell(inout ivec3 c) {
+  if (uWrap == 1) {
+    c = (c + uSize) % uSize;
+    return true;
+  }
+  return inField(c);
 }
 
 // The label a cell sees at a neighbour: swapped with 0 by every cut crossed
@@ -110,7 +121,7 @@ void main() {
     for (int dy = -1; dy <= 1; dy++) {
       for (int dx = -1; dx <= 1; dx++) {
         ivec3 at = cell + ivec3(dx, dy, dz);
-        if (!inField(at)) continue;
+        if (!fieldCell(at)) continue;
         uint other = texelFetch(uLabel, at, 0).r;
         if (other == WALL) continue;
         other = through(other, at, near, h0, h1);
@@ -132,7 +143,7 @@ void main() {
       for (int dx = -uRadius; dx <= uRadius; dx++) {
         if (dx * dx + dy * dy + dz * dz > reach) continue;
         ivec3 at = cell + ivec3(dx, dy, dz);
-        if (!inField(at)) continue;
+        if (!fieldCell(at)) continue;
         uint other = texelFetch(uLabel, at, 0).r;
         // The wire is not counted, as the glass of the foam is not.
         if (other == WALL) continue;
@@ -191,7 +202,7 @@ void main() {
   for (int a = 0; a < 3; a++) {
     ivec3 at = cell;
     at[a] += 1;
-    if (!inField(at)) continue;
+    if (!fieldCell(at)) continue;
     uint other = texelFetch(uLabel, at, 0).r;
     if (other == WALL) continue;
     other = through(other, at, near, h0, h1);
@@ -252,7 +263,7 @@ void main() {
     for (int s = -1; s <= 1; s += 2) {
       ivec3 at = cell;
       at[a] += s;
-      if (!inField(at)) continue;
+      if (!fieldCell(at)) continue;
       vec4 a0 = texelFetch(uOmega0, at, 0);
       vec4 a1 = texelFetch(uOmega1, at, 0);
       for (int k = 0; k < ${MOST_FACES}; k++) {
@@ -316,7 +327,7 @@ void main() {
   for (int a = 0; a < 3; a++) {
     ivec3 at = cell;
     at[a] += 1;
-    if (!inField(at)) continue;
+    if (!fieldCell(at)) continue;
     uint other = texelFetch(uLabel, at, 0).r;
     if (other == WALL) continue;
     other = through(other, at, near, h0, h1);
@@ -342,6 +353,43 @@ void main() {
   gl_Position = vec4((float(label) + 0.5) / ${LABELS}.0 * 2.0 - 1.0, 0.0, 0.0, 1.0);
 }`;
 
+// A point per cell with a film on any of its three faces up, onto texel 0,
+// weighted by how many: the film's area as the lattice counts it.
+const FACES_VERTEX = `#version 300 es
+precision highp int;
+precision highp usampler3D;
+uniform usampler3D uLabel;
+uniform int uSize;
+uniform int uWrap;
+flat out float vFaces;
+void main() {
+  int n = uSize;
+  ivec3 c = ivec3(gl_VertexID % n, (gl_VertexID / n) % n, gl_VertexID / (n * n));
+  uint here = texelFetch(uLabel, c, 0).r;
+  int faces = 0;
+  for (int a = 0; a < 3; a++) {
+    ivec3 at = c;
+    at[a] += 1;
+    if (at[a] >= n) {
+      if (uWrap == 0) continue;
+      at[a] = 0;
+    }
+    uint other = texelFetch(uLabel, at, 0).r;
+    if (here != ${WALL}u && other != ${WALL}u && other != here) faces++;
+  }
+  gl_PointSize = 1.0;
+  vFaces = float(faces);
+  gl_Position = faces == 0 ? vec4(2.0, 2.0, 0.0, 1.0) : vec4(1.0 / ${LABELS}.0 - 1.0, 0.0, 0.0, 1.0);
+}`;
+
+const FACES_FRAGMENT = `#version 300 es
+precision highp float;
+flat in float vFaces;
+out vec4 outCount;
+void main() {
+  outCount = vec4(vFaces);
+}`;
+
 const COUNT_FRAGMENT = `#version 300 es
 precision highp float;
 out vec4 outCount;
@@ -363,12 +411,15 @@ export class Wire3 {
   bubbleTarget = 0;
   /** Cells of each label up to the trapped bubble's, counted every few steps. */
   readonly volumes = new Float64Array(LABELS);
+  /** On a periodic field, the faces between cells of two labels, counted every few steps. */
+  filmFaces = 0;
 
   private readonly gl: WebGL2RenderingContext;
   private readonly renderer: Renderer;
   private readonly stepProgram: WebGLProgram;
   private readonly showProgram: WebGLProgram;
   private readonly countProgram: WebGLProgram;
+  private readonly facesProgram: WebGLProgram;
   private readonly anglesProgram: WebGLProgram;
   private readonly cutsProgram: WebGLProgram;
   private readonly spreadProgram: WebGLProgram;
@@ -389,6 +440,7 @@ export class Wire3 {
   private bubble = -1;
   private seed = 1;
   private shown = -1;
+  private wrap = false;
   private readonly counted = new Float32Array(LABELS * 4);
 
   constructor(renderer: Renderer, n: number) {
@@ -402,6 +454,7 @@ export class Wire3 {
     this.stepProgram = createProgram(gl, STEP);
     this.showProgram = createProgram(gl, SHOW);
     this.countProgram = link(gl, COUNT_VERTEX, COUNT_FRAGMENT);
+    this.facesProgram = link(gl, FACES_VERTEX, FACES_FRAGMENT);
     this.anglesProgram = createProgram(gl, ANGLES);
     this.cutsProgram = createProgram(gl, CUTS);
     this.spreadProgram = createProgram(gl, SPREAD);
@@ -438,6 +491,7 @@ export class Wire3 {
     const { gl, n } = this;
     if (frame.faces.length > MOST_FACES) throw new Error(`A frame may have ${MOST_FACES} faces at most`);
     this.faces = frame.faces.length;
+    this.wrap = frame.periodic === true;
     // When only the wire moves, the films that burst stay burst.
     if (labels) {
       this.chambers.fill(0);
@@ -470,7 +524,8 @@ export class Wire3 {
    */
   private workOutCuts(frame: Frame, reach: number): void {
     const { gl, n } = this;
-    const triangles = fanTriangles(frame);
+    // A frame without wire, the gyroid's, still gets a texture, of one texel.
+    const triangles = frame.faces.length > 0 ? fanTriangles(frame) : new Float32Array(4);
     const texture = gl.createTexture()!;
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, texture);
@@ -483,7 +538,7 @@ export class Wire3 {
     let program = this.anglesProgram;
     gl.useProgram(program);
     gl.uniform1i(gl.getUniformLocation(program, 'uTriangles'), 0);
-    gl.uniform1i(gl.getUniformLocation(program, 'uTriangleCount'), triangles.length / 12);
+    gl.uniform1i(gl.getUniformLocation(program, 'uTriangleCount'), Math.floor(triangles.length / 12));
     gl.drawBuffers([gl.COLOR_ATTACHMENT0, gl.COLOR_ATTACHMENT1]);
     let layer = gl.getUniformLocation(program, 'uLayer');
     for (let z = 0; z < n; z++) {
@@ -674,6 +729,7 @@ export class Wire3 {
       this.stepProgram,
       this.showProgram,
       this.countProgram,
+      this.facesProgram,
       this.anglesProgram,
       this.cutsProgram,
       this.spreadProgram,
@@ -724,6 +780,29 @@ export class Wire3 {
     gl.bindFramebuffer(gl.FRAMEBUFFER, null);
     for (let l = 0; l < LABELS; l++) this.volumes[l] = this.counted[l * 4];
     this.bubbleVolume = this.bubble >= 0 ? this.volumes[Math.min(this.bubble, LABELS - 1)] : 0;
+    if (this.wrap && this.steps % COUNT_EVERY === 0) this.countFaces();
+  }
+
+  private countFaces(): void {
+    const { gl, n } = this;
+    gl.bindFramebuffer(gl.FRAMEBUFFER, this.countTarget);
+    gl.viewport(0, 0, LABELS, 1);
+    gl.clearColor(0, 0, 0, 0);
+    gl.clear(gl.COLOR_BUFFER_BIT);
+    gl.enable(gl.BLEND);
+    gl.blendFunc(gl.ONE, gl.ONE);
+    const program = this.facesProgram;
+    gl.useProgram(program);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_3D, this.current);
+    gl.uniform1i(gl.getUniformLocation(program, 'uLabel'), 0);
+    gl.uniform1i(gl.getUniformLocation(program, 'uSize'), n);
+    gl.uniform1i(gl.getUniformLocation(program, 'uWrap'), 1);
+    gl.drawArrays(gl.POINTS, 0, n * n * n);
+    gl.disable(gl.BLEND);
+    gl.readPixels(0, 0, LABELS, 1, gl.RGBA, gl.FLOAT, this.counted);
+    gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+    this.filmFaces = this.counted[0];
   }
 
   private pass(program: WebGLProgram): void {
@@ -758,6 +837,7 @@ export class Wire3 {
     gl.uniform1i(gl.getUniformLocation(program, 'uSize'), this.n);
     gl.uniform1i(gl.getUniformLocation(program, 'uFaces'), this.faces);
     gl.uniform1uiv(gl.getUniformLocation(program, 'uChamber'), this.chambers);
+    gl.uniform1i(gl.getUniformLocation(program, 'uWrap'), this.wrap ? 1 : 0);
   }
 }
 

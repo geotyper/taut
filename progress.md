@@ -806,6 +806,41 @@ Not done: the still look of the 3D foam does not mesh these films yet. Its
 mesh is built from labels, and here a film is a disagreement through a cut,
 so the mesh would also need the cuts.
 
+## Added since: the gyroid on the wire page
+
+Asked for by the user. A frame without wire on a periodic field: `uWrap`
+wraps every neighbour the step, the films and the burst picker read, and
+labels 0 and 1 are the two labyrinths, label 1 held to half the field by
+the trapped bubble's weight. The film's faces are counted on the GPU every
+8 steps, a point per cell weighted by its faces up, and compared with the
+nodal gyroid's faces counted on the CPU at the start.
+
+The first rough start added waves as long as the field, and at two periods
+they leaned the film towards a coarser shape from the start; the bumps are
+now no longer than one period. Measured in headless Chrome, 1000 to 1150
+steps each, kernel radius 3:
+
+| field | periods | noise | film, share of the nodal gyroid's |
+| --- | --- | --- | --- |
+| 96³ | 1 | 0.15 | 105% → 100.1% by step 450 |
+| 64³ | 1 | 0.15 | 100.0% → 99.6% |
+| 64³ | 1 | 0.4 | 104.8%, then 96% at 770, 78% at 1040 |
+| 64³ | 2 | 0.15 | 38%, from step 250 on |
+| 64³ | 2 | 0 | 33% |
+| 128³ | 2 | 0.15 | 98% → 41%, still falling |
+| 128³ | 2 | 0 | 99.9%, not moving |
+
+The 128³ runs settle the doubt from 64³: a period of 64 cells is enough to
+hold the gyroid in one cell, so its giving way at two periods is not the
+lattice being too coarse for the channels. Whether two periods make the
+gyroid unstable outright or only lower the barrier the noise has to cross
+was not told apart. Two phases at random (96³, two periods) fell to 38% by
+step 380 and looked like a box-sized sheet with a hole, not a gyroid.
+
+Looked at in screenshots at 96³: one period after 500 steps, in a hue and in
+soap colours. The smooth surface draws the films with gold streaks there, as
+it does on the tetrahedron, so that was there before.
+
 ## What could be improved
 
 ### Both
