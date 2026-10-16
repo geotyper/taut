@@ -793,18 +793,25 @@ When a film moves by a cell, a cell that leaves it hands its liquid to the
 cells that join it, and a cell that joins it starts from that and a share
 of its neighbours', so the moving films take their liquid along.
 
-*Seconds drained a second* sets how fast time runs: real films of a
-micrometre drain over minutes to hours in this law, faster in life, where
-the surfaces slip and the film churns at its borders. *Fresh films* sets
-the thickness the films start at, and *W* makes them fresh again.
+*Time sped up* sets how fast time runs, from ×10 to ×30000: films of a
+micrometre take hours in this law to thin at the top into the bright low
+orders, faster in life, where the surfaces slip and the film churns at its
+borders. Fresh, at a micrometre, a film is high in the orders of colour,
+in pale pinks and greens, as a fresh bubble is; the strong colours come as
+it thins. *Fresh films* sets the thickness they start at, *Evaporation*
+takes nanometres a minute off every film to the air, and *W* makes them
+fresh again. At ×1000 a double bubble shows blues and yellows at the top
+after about 5 hours drained, and at ×10000 after 15 hours its top is the
+silvery grey of the first order with the colours banded at the bottom.
 
 Checked against the law's own solution. On an upright film fed by nothing
 from above, h = √(x / (3 c t)) at x below the top, c = ρg/(12μ), until it
 meets the fresh thickness. On the upright ring at 96³, after 5350 s from
-1 µm, the computed film was within 3% of that from 8 to 22 cells below the
-top; thicker in the top few cells (0.32 µm against 0.13 at half a cell),
-where the smoothing feeds the very top, and rounder at the front, where
-the law has a corner. On one free bubble, with no border to take any, the
+1 µm and without evaporation, the computed film was within 6% of that from
+5 to 20 cells below the top; thicker in the top few cells (0.4 µm against
+0.29 at 2.5 cells), where the smoothing feeds the very top, and rounder at
+the front, where the law has a corner. With a third of the smoothing it
+was within 3%, but the films then broke up at the scale of a cell (below). On one free bubble, with no border to take any, the
 liquid on the films stayed at 8040 µm·cells to the last digit shown for
 2.2 hours of draining, with the rule's noise moving the film about. The
 bubble is thinner at the top (0.53 µm after 2.2 h) and the liquid gathers
@@ -812,6 +819,13 @@ at the bottom, 8 to 17 µm in the lowest row of cells. Round a latitude the
 thickness spreads by 10 to 20% from the lattice: the films' staircase
 carries the liquid a little differently by its slope, and at a micrometre,
 high in the orders of colour, that shows as patches rather than rings.
+
+The rule's noise shows in the thickness too. A cell of film that leaves it
+for a step hands its liquid to its neighbours, and one that joins takes it
+back, so with noise the films are speckled from cell to cell, and the
+picture, reading the thickness with filtering, draws fringes inside a
+cell where it changes fast. Stronger smoothing damps it; spots like drops
+are still left at noise 0.07, and without noise there are none.
 
 ### The gyroid
 

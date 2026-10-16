@@ -41,7 +41,7 @@ const VISCOSITY = 1e-3;
 /** The thickness of a Plateau border's meniscus as drawn, in µm. */
 const BORDER = 3;
 /** Smoothing between neighbours, a share of the difference per step and unit of weight. */
-const SMOOTHING = 0.02;
+const SMOOTHING = 0.06;
 /** A film cell gives this share of its liquid to the cells beside it that have just joined the film. */
 const TO_NEW = 0.25;
 /** No cell gives away more than this share of its liquid in one step. */
@@ -49,13 +49,6 @@ const MOST_GIVEN = 0.3;
 /** Within a step, a film of this many times the start thickness moves at most this share of a cell. */
 const COURANT = 0.25;
 const MOST_STEPS = 16;
-
-export interface DrainParams {
-  /** Seconds of draining for a second on the screen. */
-  speed: number;
-  /** How thick the films are when fresh, in µm. */
-  fresh: number;
-}
 
 // Which cells are film: 0 none, 1 film, 2 film at a Plateau border or the
 // wire. And for a film cell the film's normal, from the cells two round it
@@ -131,6 +124,8 @@ uniform usampler3D uOld;
 uniform sampler3D uThick;
 uniform sampler3D uNormal;
 uniform float uRate;
+// µm a film loses to the air in this step.
+uniform float uEvaporate;
 
 uint maskAt(inout ivec3 at) {
   if (!fieldCell(at)) return 0u;
@@ -277,7 +272,7 @@ void main() {
   // A new film cell starts from what it is handed. Off the films, the mean
   // of the film beside, for the picture to read.
   float start = fresh ? 0.0 : h;
-  outThick = mask == 1u ? max(start + handed + change, 0.0) : films > 0.0 ? sum / films : h;
+  outThick = mask == 1u ? max(start + handed + change - uEvaporate, 0.0) : films > 0.0 ? sum / films : h;
 }`;
 
 // A point per film cell onto texel 0, weighted by its thickness, and onto texel 1, to count them.
@@ -384,10 +379,10 @@ export class Drainage {
   }
 
   /**
-   * Drain for `seconds`, in as many steps as keep a film a little thicker
+   * Drain for `seconds`, the films losing `evaporation` µm/s to the air, in as many steps as keep a film a little thicker
    * than fresh from moving more than a share of a cell in one.
    */
-  drain(seconds: number, fresh: number): void {
+  drain(seconds: number, fresh: number, evaporation: number): void {
     const cell = FIELD_WIDTH / this.n;
     // dh/dt in µm/s for h in µm: ρg/(12μ) h³ / cell, with h³ in m³ and dh in µm.
     const rate = ((WEIGHT / (12 * VISCOSITY)) * 1e-12) / cell;
@@ -396,7 +391,7 @@ export class Drainage {
     const longest = COURANT / (rate * thick * thick);
     const steps = Math.min(MOST_STEPS, Math.max(1, Math.ceil(seconds / longest)));
     const dt = seconds / steps;
-    for (let k = 0; k < steps; k++) this.step(rate * dt);
+    for (let k = 0; k < steps; k++) this.step(rate * dt, evaporation * dt);
     this.time += seconds;
   }
 
@@ -469,7 +464,7 @@ export class Drainage {
     this.pass(this.maskProgram, this.mask, () => {}, this.normal);
   }
 
-  private step(rate: number): void {
+  private step(rate: number, evaporate: number): void {
     this.findFilms();
     this.pass(this.limitProgram, this.share, (program) => {
       this.bindOwn(program, this.thick);
@@ -483,6 +478,7 @@ export class Drainage {
       gl.uniform1i(gl.getUniformLocation(program, 'uShare'), 6);
       gl.activeTexture(gl.TEXTURE0);
       gl.uniform1f(gl.getUniformLocation(program, 'uRate'), rate);
+      gl.uniform1f(gl.getUniformLocation(program, 'uEvaporate'), evaporate);
     });
     [this.thick, this.spare] = [this.spare, this.thick];
   }

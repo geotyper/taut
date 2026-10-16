@@ -48,9 +48,14 @@ let burstRate = 0.003;
 let burstsOwed = 0;
 let burstCount = 0;
 let colours: 'hues' | 'soap' | 'drained' = 'hues';
-/** Draining by gravity: seconds drained for a second on the screen, and how thick a fresh film is, in µm. */
-let drainSpeed = 100;
-let fresh = 1;
+/**
+ * Draining by gravity: seconds drained for a second on the screen, how
+ * thick a fresh film is, in µm, and how fast the films evaporate, in nm a
+ * minute.
+ */
+let drainSpeed = 1000;
+let fresh = 0.8;
+let evaporation = 0.3;
 let measuredAt = 0;
 /** Seconds the films have drained, as on the foam page. */
 let drained = 0;
@@ -75,7 +80,11 @@ bindRange('bubble', 2, (v) => {
 });
 onCheck('pull', (v) => (pull = v));
 bindRange('across', 0, (v) => (across = v));
-bindRange('drain-speed', 0, (v) => (drainSpeed = v));
+// The speed on a slider of its logarithm, the stat showing the factor.
+bindRange('drain-speed', 1, (v) => (drainSpeed = 10 ** v));
+byId('drain-speed').addEventListener('input', () => (byId('drain-speed-out').textContent = `×${Math.round(drainSpeed)}`));
+byId('drain-speed-out').textContent = `×${Math.round(drainSpeed)}`;
+bindRange('evaporation', 1, (v) => (evaporation = v));
 bindRange('fresh', 1, (v) => (fresh = v));
 byId('across').addEventListener('change', () => restart());
 bindRange('breeze', 3, (v) => (params.breeze = v));
@@ -259,7 +268,7 @@ function tick(): void {
     const seconds = Math.min(0.1, (now - lastFrame) / 1000);
     if (!paused) drained += seconds;
     if (drainage && colours === 'drained') {
-      if (!paused) drainage.drain(seconds * drainSpeed, fresh);
+      if (!paused) drainage.drain(seconds * drainSpeed, fresh, evaporation / 60000);
       if (now - measuredAt > 500) {
         measuredAt = now;
         drainage.measure();

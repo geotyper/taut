@@ -887,6 +887,22 @@ On the way:
   on the film, by slope (correlation −0.04 to −0.56 by latitude), but that
   does not account for all of it. Not solved.
 
+Then the user looked: next to the height formula's bright colours the
+drained films were nearly colourless, pale pinks and greens, and with noise
+they broke into spots like drops, with fringes much finer than a cell. The
+first is right for a film of a micrometre, high in the orders, which in
+this law takes hours to thin at the top; at 100 seconds a second the stat
+said 0.99 µm after 8.8 minutes. Time now runs on a logarithmic slider up to
+×30000, by default ×1000, fresh films start at 0.8 µm, and evaporation
+takes 0.3 nm a minute off every film by default. The second is the noise:
+cells flicking off and on the film hand liquid to and fro, the thickness
+jumps from cell to cell, and the filtered read draws a whole fringe inside
+one cell. The smoothing went from 0.02 to 0.06, which damps that, at the
+cost of the upright film's match (within 6% instead of 3%). Looked at in
+screenshots at 96³ with noise 0.07: the double bubble in blues, yellows and
+magentas after 5.3 h at ×1000, with a few spots left, and after 15.6 h at
+×10000 silvery grey at the top with colour bands at the bottom.
+
 Free bubbles: a frame with no wire, walls round the field, and labels 1
 and 2 started as balls parted by the plane where their spheres cross. The
 trapped bubble's hold on a volume is now a map of labels, so two bubbles
