@@ -3,6 +3,8 @@
 A rubber band on a cellular automaton: the outside phase floods in from the
 field borders as a wave and pulls taut around the stones.
 
+Run it in the browser: https://geotyper.github.io/taut/ (cells: https://geotyper.github.io/taut/cells.html).
+
 ![Two fields with the same stones: the wide kernel on the left, the classic automaton on the right](screenshots/2d-two-automata.png)
 
 The field is binary ("outside" / "inside"), the band is the boundary between
