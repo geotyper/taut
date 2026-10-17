@@ -775,6 +775,34 @@ for a large and a small one the film bows into the large one, but at 96³
 less than Laplace's law asks: radius about 60 cells against 43, on a disc
 only 12 cells across, where the two differ by half a cell of sag.
 
+### Bubbles that move: blown up, on a table, on a film
+
+Each bubble held has a slider for the share of its start it is held to, so
+it can be blown up to two and a half times or let down; with *The bubble
+breathes* the first one swings 60% either way, once in 1600 steps, and a
+bubble beside it gives way or leans back. Two more frames have a wet
+table: its cells are fixed and not counted, as the wire is, so a film
+meets it at a right angle and a bubble on it is half a ball, alone or two
+side by side. *A ring: a half bubble on its film* starts half a ball
+sitting on the disc in a ring, with the disc for its floor.
+
+These frames start with a kernel of radius 5, as with 3 a nearly flat film
+is pinned by the lattice. Of two bubbles alike at 96³, with the outer film
+of one burst, the other kept its flat side, 31 cells across where a ball
+would be 37, unchanged for 550 steps; at radius 4 too, unless the noise was
+0.3. With radius 5 it rounded up in about 300 steps. On the table the
+same: the second half ball, left with a flat side, went from 30 cells
+across to 37 in 250 steps, a half ball of its volume being 37. On the ring
+the half ball turned into a lens, its two caps alike: 9 cells above the
+film and 9 below, round a rim of radius 15. Plateau's 120 degrees between
+the film and the two caps ask for caps meeting the film at 60 degrees,
+each 0.577 of the rim's radius high: 8.7. A breathing bubble kept within
+6% of what it is held to all the way round, short of it by about that
+much, as all bubbles are with the wide kernel; the pressure holding them
+gives way a little to the stronger pull of the films. The wide kernel
+costs speed: about 10 steps a second in headless Chrome at 96³. The
+table is drawn only in the voxel view.
+
 ### Films drained by gravity
 
 *Soap film, drained by gravity* takes a film's thickness from a

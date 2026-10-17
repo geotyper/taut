@@ -23,7 +23,7 @@
  * films that grow from the openings then meet along Plateau borders inside.
  */
 
-export type FrameKind = 'ring' | 'upright' | 'rings' | 'mobius' | 'tetra' | 'cube' | 'gyroid' | 'free';
+export type FrameKind = 'ring' | 'upright' | 'rings' | 'mobius' | 'tetra' | 'cube' | 'gyroid' | 'free' | 'table';
 
 export interface Face {
   /** Closed loops of wire, points in field cells. */
@@ -41,6 +41,12 @@ export interface Frame {
    * crystal: the gyroid, a film that splits space into two labyrinths.
    */
   periodic?: boolean;
+  /**
+   * A wet table: the cells below this height are liquid, fixed and not
+   * counted, as the wire is, so a film meets it at a right angle and a
+   * bubble on it is a half ball.
+   */
+  floor?: number;
 }
 
 export interface FrameField {
@@ -71,6 +77,7 @@ export function makeFrame(kind: FrameKind, n: number, gap: number): Frame {
   if (kind === 'gyroid') return { faces: [], inside: null, periodic: true };
   // No wire and walls round the field: bubbles floating free in the air.
   if (kind === 'free') return { faces: [], inside: null };
+  if (kind === 'table') return { faces: [], inside: null, floor: tableHeight(n) };
   if (kind === 'upright') {
     // A ring standing on edge, so its disc hangs upright and drains down.
     const r = 0.3 * n;
@@ -136,7 +143,12 @@ export function makeFrame(kind: FrameKind, n: number, gap: number): Frame {
  * label of the face it is nearest, so the films start from the middle.
  * 'bubble': the same, with a bubble of its own label in the middle.
  */
-export type FrameStart = 'cut' | 'catenoid' | 'chambers' | 'bubble' | 'gyroid' | 'random' | 'one' | 'two' | 'unequal';
+export type FrameStart = 'cut' | 'catenoid' | 'chambers' | 'bubble' | 'gyroid' | 'random' | 'one' | 'two' | 'unequal' | 'dome' | 'domes' | 'ring-dome';
+
+/** The top of the wet table, in cells: low in the field, with room above for the bubbles. */
+export function tableHeight(n: number): number {
+  return Math.round(0.12 * n);
+}
 
 export const WALL = 0xffffffff;
 
@@ -145,11 +157,14 @@ export function bubbleLabel(frame: Frame): number {
   return frame.faces.length + 1;
 }
 
+/** The half ball on the ring's film: its radius, as a share of the field. */
+const DOME_SIZE = 0.16;
+
 /** The trapped bubble starts this share of a cube's size across. */
 const BUBBLE_SIZE = 0.45;
 
 export function startLabels(frame: Frame, field: FrameField, n: number, start: FrameStart, gap: number, across = 1): Uint32Array {
-  if (start === 'one' || start === 'two' || start === 'unequal') return freeBubbles(n, start);
+  if (start === 'one' || start === 'two' || start === 'unequal' || start === 'dome' || start === 'domes') return freeBubbles(n, start, frame.floor);
   if (start === 'gyroid' || start === 'random') return twoLabyrinths(n, start === 'gyroid' ? roughGyroid(n, across) : randomWaves(n, 0.5 * across, 2 * across));
   const labels = new Uint32Array(n * n * n);
   const c = n / 2;
@@ -163,7 +178,10 @@ export function startLabels(frame: Frame, field: FrameField, n: number, start: F
           labels[i] = WALL;
           continue;
         }
-        if (start === 'catenoid') {
+        if (start === 'ring-dome') {
+          // Half a ball sitting on the film in the ring, with the film for its floor.
+          if (p[1] > c && Math.hypot(p[0] - c, p[1] - c, p[2] - c) < DOME_SIZE * n) labels[i] = bubbleLabel(frame);
+        } else if (start === 'catenoid') {
           const r = 0.25 * n;
           if (Math.hypot(p[0] - c, p[2] - c) < r && Math.abs(p[1] - c) < (gap * r) / 2) labels[i] = 1;
         } else if ((start === 'chambers' || start === 'bubble') && frame.inside?.(p)) {
@@ -186,9 +204,11 @@ export function startLabels(frame: Frame, field: FrameField, n: number, start: F
 
 /**
  * Bubbles floating in the air, labels 1 and 2: one ball, or two that
- * overlap and start parted by the plane where their spheres cross.
+ * overlap and start parted by the plane where their spheres cross. On a
+ * table, the balls are centred on its top, so the bubbles start as half
+ * balls sitting on it, and the cells below are the table's.
  */
-export function freeBubbles(n: number, start: 'one' | 'two' | 'unequal'): Uint32Array {
+export function freeBubbles(n: number, start: 'one' | 'two' | 'unequal' | 'dome' | 'domes', floor = 0): Uint32Array {
   const c = n / 2;
   const balls =
     start === 'one'
@@ -198,14 +218,25 @@ export function freeBubbles(n: number, start: 'one' | 'two' | 'unequal'): Uint32
             { at: [c - 0.14 * n, c, c], r: 0.2 * n },
             { at: [c + 0.14 * n, c, c], r: 0.2 * n },
           ]
-        : [
-            { at: [c - 0.1 * n, c, c], r: 0.23 * n },
-            { at: [c + 0.2 * n, c, c], r: 0.15 * n },
-          ];
+        : start === 'dome'
+          ? [{ at: [c, floor, c], r: 0.3 * n }]
+          : start === 'domes'
+            ? [
+                { at: [c - 0.17 * n, floor, c], r: 0.26 * n },
+                { at: [c + 0.2 * n, floor, c], r: 0.2 * n },
+              ]
+            : [
+                { at: [c - 0.1 * n, c, c], r: 0.23 * n },
+                { at: [c + 0.2 * n, c, c], r: 0.15 * n },
+              ];
   const labels = new Uint32Array(n * n * n);
   for (let z = 0; z < n; z++) {
     for (let y = 0; y < n; y++) {
       for (let x = 0; x < n; x++) {
+        if (y < floor) {
+          labels[(z * n + y) * n + x] = WALL;
+          continue;
+        }
         // The ball of least power, inside it: two balls part on the plane where they cross.
         let best = 0;
         let least = 0;
@@ -222,9 +253,9 @@ export function freeBubbles(n: number, start: 'one' | 'two' | 'unequal'): Uint32
 
 /** The labels of the bubbles a start makes, each held to the volume it starts with. */
 export function heldBubbles(start: FrameStart, frame: Frame): number[] {
-  if (start === 'one') return [1];
-  if (start === 'two' || start === 'unequal') return [1, 2];
-  if (start === 'bubble') return [bubbleLabel(frame)];
+  if (start === 'one' || start === 'dome') return [1];
+  if (start === 'two' || start === 'unequal' || start === 'domes') return [1, 2];
+  if (start === 'bubble' || start === 'ring-dome') return [bubbleLabel(frame)];
   if (start === 'gyroid' || start === 'random') return [1];
   return [];
 }
@@ -347,6 +378,11 @@ export function frameField(frame: Frame, n: number, reach: number, angles = true
         }
       }
     }
+  }
+
+  // The table is fixed as the wire is.
+  if (frame.floor) {
+    for (let z = 0; z < n; z++) for (let y = 0; y < frame.floor; y++) wire.fill(1, (z * n + y) * n, (z * n + y + 1) * n);
   }
 
   // The page works the angles out on the GPU (Wire3.setFrame).

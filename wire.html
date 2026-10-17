@@ -39,6 +39,9 @@
             <option value="one">No wire: one bubble</option>
             <option value="two">No wire: two bubbles alike</option>
             <option value="unequal">No wire: a large and a small bubble</option>
+            <option value="dome">A wet table: a bubble on it, a half ball</option>
+            <option value="domes">A wet table: two bubbles side by side</option>
+            <option value="ring-dome">A ring: a half bubble on its film</option>
             <option value="gyroid">No wire: a rough gyroid</option>
             <option value="gyroid-random">No wire: two phases at random</option>
           </select>
@@ -57,7 +60,15 @@
         </label>
         <label id="pick-bubble">
           <span>Bubble, share of its start <output id="bubble-out"></output></span>
-          <input id="bubble" type="range" min="0.05" max="1.5" step="0.05" value="0.5" />
+          <input id="bubble" type="range" min="0.05" max="2.5" step="0.05" value="1" />
+        </label>
+        <label id="pick-bubble2">
+          <span>Second bubble, share of its start <output id="bubble2-out"></output></span>
+          <input id="bubble2" type="range" min="0.05" max="2.5" step="0.05" value="1" />
+        </label>
+        <label class="check" id="pick-breathe">
+          <input id="breathe" type="checkbox" />
+          <span>The bubble breathes: blown up and let down in turn</span>
         </label>
 
         <label>

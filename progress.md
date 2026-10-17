@@ -924,6 +924,42 @@ flatter still. A finer field would tell whether the rule gets the law.
 Timing in headless Chrome at 96³, two bubbles: 10 steps a second in hues,
 8 with the draining at 100 seconds a second.
 
+## Added since: bubbles that move
+
+Asked for by the user: watch a bubble grow and shrink, and a membrane with
+a smaller half bubble on it, alive; on the page two bubbles looked joined
+rigidly, and when one burst the other stood with its flat side cut off,
+as if on a frame. A new branch, `living-bubbles`.
+
+The flat side was the lattice. Two bubbles alike at 96³, kernel radius 3,
+noise 0.15, the outer film of one burst at step 184: the other kept x from
+48 to 78, 31 cells, for 550 steps, where a ball of its volume is 37. At
+radius 4 the same with noise 0.15, and it rounded up with noise 0.3; at
+radius 5 it rounded up with noise 0.15 (36 cells by step 500). The rule's
+motion goes as the kernel's radius squared over the film's radius of
+curvature, and a film of radius about 19 cells with a kernel of 3 moves
+under a step's cell. The bubble frames now start at radius 5.
+
+- Every bubble held gets a slider, and the first can breathe. `Wire3.hold`
+  sets what a bubble is held to by its label; the page holds every bubble
+  to its share of its start each frame.
+- The wet table: `Frame.floor`, cells below it fixed as wire, so a film
+  meets it at a right angle (the rule does not count wire). Bubbles on it
+  start as balls centred on its top. The left half ball of two burst: the
+  other went from 30 cells across to 37 in 250 steps, a half ball of its
+  volume being 37, and its top settled 19 cells up against 18.5.
+- The half bubble on the ring: label 2 above the disc, through which the
+  cut swaps only 0 and 1, so inside the bubble there is no film. It turned
+  into a lens in about 150 steps, 9 cells above and below, rim radius 15;
+  for 120 degrees at the rim each cap is 0.577 of the rim's radius high,
+  8.7.
+- Breathing, two bubbles alike: the first went from 31179 to 42158 cells
+  and back to 13247 within 6% of its target the whole way.
+
+With the wide kernel every bubble settles about 5% short of its volume
+(7050 of 7596 on the ring, 30600 of 32078 on the table). Timing in headless
+Chrome at 96³: 8 to 10 steps a second.
+
 ## What could be improved
 
 ### Both

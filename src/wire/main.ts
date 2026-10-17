@@ -28,8 +28,21 @@ let size = Number(byId<HTMLSelectElement>('size').value);
 let choice = byId<HTMLSelectElement>('frame').value;
 let gap = 0.8;
 let pull = false;
-let bubbleShare = 0.5;
-let bubbleStart = 0;
+/** Each bubble held is held to this share of the cells it started with: blown up or let down. */
+const shares = [1, 1];
+/** The bubbles held, in order, with the cells each started with. */
+let bubbles: { label: number; start: number }[] = [];
+/** The first bubble breathes: blown up and let down in turn, this far either way, once in so many steps. */
+let breathing = false;
+const BREATH = 0.6;
+const BREATH_PERIOD = 1600;
+/**
+ * Frames with bubbles that should move as a whole, round up and lean on
+ * each other. On the lattice a nearly flat film is pinned: a film between
+ * two bubbles, left when one bursts, stays flat with the kernel of radius 3,
+ * and rounds up with 5. These frames start with the wider kernel.
+ */
+const WIDE_KERNEL = new Set(['one', 'two', 'unequal', 'dome', 'domes', 'ring-dome']);
 /** Periods of the gyroid across the field, and the faces of its nodal approximation there. */
 let across = 1;
 let gyroidFaces = 0;
@@ -74,10 +87,9 @@ bindRange('speed', 0, (v) => (stepsPerFrame = v));
 bindRange('opacity', 2, (v) => (opacity = v));
 bindRange('gap', 2, (v) => (gap = v));
 byId('gap').addEventListener('change', () => moveWire());
-bindRange('bubble', 2, (v) => {
-  bubbleShare = v;
-  wire?.holdBubble(bubbleShare, bubbleStart);
-});
+bindRange('bubble', 2, (v) => (shares[0] = v));
+bindRange('bubble2', 2, (v) => (shares[1] = v));
+onCheck('breathe', (v) => (breathing = v));
 onCheck('pull', (v) => (pull = v));
 bindRange('across', 0, (v) => (across = v));
 // The speed on a slider of its logarithm, the stat showing the factor.
@@ -103,6 +115,10 @@ onSelect('colours', (v) => {
 onSelect('surface', (v) => (smooth = v === 'smooth'));
 onSelect('frame', (v) => {
   choice = v;
+  // The trapped bubble starts held to half its size, as the cube's films are then easy to see; the rest to their own.
+  setRange('bubble', v === 'cube-bubble' ? 0.5 : 1);
+  setRange('bubble2', 1);
+  setRange('radius', WIDE_KERNEL.has(v) ? 5 : 3);
   syncControls();
   restart();
 });
@@ -181,6 +197,8 @@ function build(): void {
 function kindOf(value: string): FrameKind {
   if (value === 'gyroid-random') return 'gyroid';
   if (value === 'one' || value === 'two' || value === 'unequal') return 'free';
+  if (value === 'dome' || value === 'domes') return 'table';
+  if (value === 'ring-dome') return 'ring';
   return value === 'cube-bubble' ? 'cube' : (value as FrameKind);
 }
 
@@ -190,7 +208,7 @@ function startOf(value: string): FrameStart {
   if (value === 'cube-bubble') return 'bubble';
   if (value === 'gyroid') return 'gyroid';
   if (value === 'gyroid-random') return 'random';
-  if (value === 'one' || value === 'two' || value === 'unequal') return value;
+  if (value === 'one' || value === 'two' || value === 'unequal' || value === 'dome' || value === 'domes' || value === 'ring-dome') return value;
   return 'cut';
 }
 
@@ -207,17 +225,16 @@ function restart(): void {
     // One labyrinth is held to exactly half the field, so the other is too,
     // and the film between them can only pull taut.
     wire.setFrame(frame, field, REACH, labels, [1]);
-    bubbleStart = (n * n * n) / 2;
-    wire.holdBubble(1, bubbleStart);
+    wire.hold(1, (n * n * n) / 2);
+    bubbles = [];
     const g = gyroid(n, across);
     const nodal = new Uint32Array(n * n * n);
     for (let i = 0; i < nodal.length; i++) nodal[i] = g((i % n) + 0.5, (Math.floor(i / n) % n) + 0.5, Math.floor(i / (n * n)) + 0.5) > 0 ? 1 : 0;
     gyroidFaces = filmFaces(nodal, n);
   } else {
     wire.setFrame(frame, field, REACH, labels, heldBubbles(start, frame));
-    bubbleStart = wire.bubble?.target ?? 0;
-    // Only the bubble in a cube has a slider; free bubbles keep the volume they start with.
-    if (start === 'bubble') wire.holdBubble(bubbleShare, bubbleStart);
+    bubbles = [...wire.holds].map(([label, cells]) => ({ label, start: cells }));
+    holdBubbles();
   }
   fieldMs = performance.now() - begun;
   pulledAt = 0;
@@ -244,6 +261,7 @@ function moveWire(): void {
 function tick(): void {
   if (wire && renderer) {
     if (!paused) {
+      holdBubbles();
       wire.step(params, stepsPerFrame);
       rateSteps += stepsPerFrame;
       if (bursting) {
@@ -310,6 +328,15 @@ function tick(): void {
   requestAnimationFrame(tick);
 }
 
+/** Every bubble held to its share of its start, the first breathing in and out if it does. */
+function holdBubbles(): void {
+  if (!wire) return;
+  bubbles.forEach((b, k) => {
+    const breath = k === 0 && breathing ? 1 + BREATH * Math.sin((2 * Math.PI * wire!.steps) / BREATH_PERIOD) : 1;
+    wire!.hold(b.label, b.start * shares[k] * breath);
+  });
+}
+
 /** A film at random bursts, and the rest pull taut into a new shape. */
 function burstOne(): void {
   const film = wire?.findFilm();
@@ -321,7 +348,11 @@ function burstOne(): void {
 function syncControls(): void {
   byId('pick-gap').hidden = choice !== 'rings';
   byId('pick-pull').hidden = choice !== 'rings';
-  byId('pick-bubble').hidden = choice !== 'cube-bubble';
+  const held = choice === 'cube-bubble' || choice === 'ring-dome' || WIDE_KERNEL.has(choice);
+  const two = choice === 'two' || choice === 'unequal' || choice === 'domes';
+  byId('pick-bubble').hidden = !held;
+  byId('pick-bubble2').hidden = !two;
+  byId('pick-breathe').hidden = !held;
   byId('pick-across').hidden = !choice.startsWith('gyroid');
   byId('pick-drain').hidden = colours !== 'drained';
 }
@@ -355,6 +386,13 @@ function bindRange(id: string, digits: number, apply: (value: number) => void): 
   };
   input.addEventListener('input', update);
   update();
+}
+
+/** A slider moved from the page, its output and what it sets following. */
+function setRange(id: string, value: number): void {
+  const input = byId<HTMLInputElement>(id);
+  input.value = String(value);
+  input.dispatchEvent(new Event('input'));
 }
 
 function byId<T extends HTMLElement = HTMLElement>(id: string): T {

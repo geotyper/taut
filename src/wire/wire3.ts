@@ -643,23 +643,14 @@ export class Wire3 {
     this.shown = -1;
   }
 
-  /** The first bubble held, as the page shows it: its label, cells and what it is held to. */
-  get bubble(): { label: number; volume: number; target: number } | null {
-    const first = this.held.entries().next();
-    if (first.done) return null;
-    const [label, target] = first.value;
-    return { label, volume: this.volumes[label], target };
-  }
-
   /** Every bubble held, label to the cells it is held to. */
   get holds(): ReadonlyMap<number, number> {
     return this.held;
   }
 
-  /** The first bubble held is held to this share of `start` cells. */
-  holdBubble(share: number, start: number): void {
-    const first = this.bubble;
-    if (first) this.held.set(first.label, start * share);
+  /** A bubble still held is held to this many cells from now on: blown up, or let down. */
+  hold(label: number, cells: number): void {
+    if (this.held.has(label)) this.held.set(label, cells);
   }
 
   step(p: Wire3Params, steps: number): void {
