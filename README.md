@@ -918,7 +918,9 @@ junctions are 10.8° rms off 120°.
 
 *A tissue from one cell* grows in the open: every cell's area doubles in
 the steps set, and a cell divides at twice the area it was born with, give
-or take 15%. Growth stops when the colony nears the field's edge. Coloured
+or take 15%. A cell stops growing when it nears the field's edge or is squeezed by its
+neighbours below 85% of its area (contact inhibition); the rest grow on until
+the cells together hold to 97% of the field. Coloured
 by clone, daughters take after their mother, so the cells of one early
 cell show as a patch. Proliferating epithelia have about 29% pentagons,
 47% hexagons and 20% heptagons (Gibson and others, 2006, the fly's wing

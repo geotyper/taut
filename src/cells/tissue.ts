@@ -19,6 +19,16 @@ const ROUND = 1.05;
 const TINT_PART = 0.2;
 /** A growing cell divides at twice the area it was born with, give or take this share. */
 const DIVIDE_SPREAD = 0.15;
+/**
+ * A cell pressed by its neighbours to less than this share of the area it
+ * holds to stops growing until it has room again: contact inhibition.
+ */
+const SQUEEZED = 0.85;
+/**
+ * The cells together hold to no more than this share of the field inside
+ * the margin: past it there is no room, they would only crush each other.
+ */
+const ROOM = 0.97;
 
 export interface TissueParams {
   /** Radius of the disc a pixel counts labels in, in pixels. */
@@ -198,15 +208,20 @@ export class Tissue {
 
   /**
    * Every cell grows: the area it holds to doubles in this many steps. A
-   * cell that has grown to what it divides at divides. Cells stop growing
-   * when the colony comes within `margin` pixels of the field's edge.
+   * cell that has grown to what it divides at divides. A cell stops
+   * growing while it is within `margin` pixels of the field's edge, or
+   * squeezed by its neighbours; the rest of the colony grows on, until
+   * the field is full.
    */
   grow(doubling: number, plane: Plane, margin: number): void {
-    if (this.reaches(margin)) return;
+    let held = 0;
+    for (let l = 1; l <= this.labels; l++) if (this.area[l] > 0) held += this.target[l];
+    if (held >= ROOM * (this.w - 2 * margin) * (this.h - 2 * margin)) return;
+    const edge = this.atEdge(margin);
     const factor = 2 ** (1 / doubling);
     const due: number[] = [];
     for (let l = 1; l <= this.labels; l++) {
-      if (!(this.area[l] > 0)) continue;
+      if (!(this.area[l] > 0) || edge[l] || this.area[l] < SQUEEZED * this.target[l]) continue;
       this.target[l] *= factor;
       if (this.target[l] >= this.divideAt[l]) due.push(l);
     }
@@ -360,21 +375,19 @@ export class Tissue {
     return most;
   }
 
-  /** Whether the colony has come within `margin` pixels of the field's edge. */
-  reaches(margin: number): boolean {
+  /** Which cells have come within `margin` pixels of the field's edge. */
+  atEdge(margin: number): Uint8Array {
     const { w, h, label } = this;
-    const near = (x: number, y: number) => {
-      const l = label[y * w + x];
-      return l !== MEDIUM && l !== WALL;
-    };
+    const near = new Uint8Array(this.labels + 1);
     for (let y = 0; y < h; y++) {
       const edge = y < margin || y >= h - margin;
       for (let x = 0; x < w; x++) {
         if (!edge && x === margin) x = w - margin;
-        if (near(x, y)) return true;
+        const l = label[y * w + x];
+        if (l !== MEDIUM && l !== WALL) near[l] = 1;
       }
     }
-    return false;
+    return near;
   }
 
   /** One for the medium; a cell weighted by how far it is off the area it holds to. */
