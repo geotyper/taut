@@ -87,6 +87,67 @@ Still to do:
   - films partly see-through: lines behind one film, faded, by depth peeling;
   - a soft shadow of the near films on the far ones, for depth.
 
+## Growth, and uses elsewhere
+
+Ideas from looking back over the rule as it now stands: labels taking the
+majority in a ball, bubbles held to a volume by a weight, the cuts that make
+wire, the periodic field, the draining. Each has a check that gives a number.
+
+- **Cells dividing in a shell.** The foam's glass sphere with a held
+  bubble that, once it has grown to twice its volume, splits in two by a
+  plane through its middle, as the two free bubbles start. Two cells, then
+  four, then eight: the cleavage of an early embryo. Early embryos come
+  close to the least-area packings of foam in their shell: four cells, for
+  instance, sit as a tetrahedron and not as a flat cross. Checked against
+  photographs of *C. elegans* or sea-urchin embryos, and against the
+  least-area packings of n balls in a sphere.
+- **A tension for every pair of labels.** A matrix σᵢⱼ in place of one
+  tension for every film, as a neighbour's weight by the pair. That gives
+  wetting, with contact angles to check against Young's law, and cell
+  sorting as in Steinberg's differential adhesion: two kinds of cell mixed
+  at random part into a core and a shell, as the tissues of an embryo do.
+  Cheap, and the cells dividing above would gain from it.
+- **Tension by direction: crystals.** The breeze already weights a
+  neighbour by its direction; the same for a tension that depends on how a
+  film lies should give a bubble facets, to be compared with Wulff's
+  construction.
+- **Grain growth in metals.** The rule is the one used for coarsening
+  polycrystals. In 2D von Neumann–Mullins gives the exact rate, dA/dt ∝
+  (n − 6) for a grain of n sides (listed under 2D foam as a check); in 3D
+  the mean size should grow as √t. A strict test of the rule itself.
+- **Foam collapsing.** The draining joined to bursting: a film bursts when
+  it thins below about 10 nm instead of at random, so a foam ages from the
+  top down, in avalanches.
+- **Kelvin or Weaire–Phelan from a random start.** As under 3D foam, but on
+  the periodic field the gyroid uses, with eight bubbles held to equal
+  volumes in a cube that wraps round. The film area cannot tell the two
+  apart: they differ by 0.3%, the lattice counts the area 1.56 times over.
+  Their faces can: every Kelvin cell has 14, Weaire–Phelan's 12 and 14.
+- **A computer for Steiner trees.** The pins under wire frames make the
+  films find the shortest network joining points, a problem that is hard in
+  general and has long been put to soap films as an analogue computer. To
+  compare with exact Steiner trees for 5 to 10 points, and count how often
+  the rule settles in a network longer than the best.
+- **Segmenting a picture.** A term in the count for how close a pixel is to
+  its label's mean turns the rule into Chan–Vese or MBO segmentation: a
+  photograph parted into regions with smooth borders, live on the GPU. The
+  same rule on a graph in place of the lattice is MBO clustering of data,
+  as in Bertozzi's work.
+- **Form finding for architecture.** Frei Otto shaped tents and roofs,
+  among them the Munich Olympic stadium, from soap films on wire. With the
+  frames there already, writing the film out as STL or OBJ (see Export,
+  under 3D foam) gives a least-area surface from a frame drawn on the page,
+  for printing or for CAD. The gyroid the same way, as infill for 3D
+  printing or a lattice for implants.
+- **A foam that flows.** Walls of the field moving to shear the foam
+  (listed under 2D foam), in 3D as well: T1 events and stick-slip, and a
+  curve of stress against shear for a fluid with a yield stress.
+
+To start with: cells dividing in a shell, as growth proper and an extension
+of the foam page; the tension matrix, cheap and opening wetting and sorting
+at once; and the Steiner trees, as the most unexpected, showing the rule
+works something out and does not only draw.
+
 ## On every page
 
 - **Recording a clip**: a key that records the canvas to a file with
