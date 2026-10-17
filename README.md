@@ -889,6 +889,43 @@ ends at 33–41% after 1000 steps, coarser but not yet flat films; without
 noise it stays put, but then so does every film the lattice pins. Two
 phases at random coarsen the same way and do not find the gyroid.
 
+## Cells that divide
+
+`cells.html` (`src/cells/`) takes the 2D foam's rule for cells: every
+pixel takes the label with the most pixels in a disc round it, each cell
+weighted by how far it is off the area it holds to, so the films between
+cells pull taut, three meet at 120° and every cell keeps its area. A cell
+can also divide: a straight line through its centre of area gives the
+pixels on one side a label of their own, and both halves hold to half the
+area. The line runs across the cell's long axis, as most cells divide
+(Hertwig's rule), or in a direction at random; a cell rounder than 1.05,
+long axis over short, has no long axis to go by and divides at random. On
+the CPU, at 384² with a kernel of radius 4: 360 steps a second with four
+cells, 85 with 265.
+
+*An egg in its shell* starts as one cell filling a round shell, which
+divides with all its daughters at once every so many steps, as an egg
+cleaves, nothing growing. The two halves of the egg divide across their
+long axes and so start as a cross; the four-way junction is not stable,
+and it opened into two three-way junctions joined by a short film, the
+least-perimeter way of cutting a disc into four equal parts. Done on the
+lattice's axes, the cross stayed for 14000 steps, held by the lattice, and
+that is why a round cell divides at random. After five rounds, 32 cells:
+the 16 inside closed round by films have 5.88 sides on average, and the
+junctions are 10.8° rms off 120°.
+
+*A tissue from one cell* grows in the open: every cell's area doubles in
+the steps set, and a cell divides at twice the area it was born with, give
+or take 15%. Growth stops when the colony nears the field's edge. Coloured
+by clone, daughters take after their mother, so the cells of one early
+cell show as a patch. Proliferating epithelia have about 29% pentagons,
+47% hexagons and 20% heptagons (Gibson and others, 2006, the fly's wing
+disc). Here, with Hertwig's rule, at 225 cells while still growing, 161
+of them closed round: 30%, 42% and 21%; once growth had stopped and the
+films had relaxed, 23%, 53% and 24%. Dividing at random, at 253 cells: 22%,
+58%, 14%. One run of each, with samples of under 250 cells, so a few per
+cent either way are noise.
+
 ## Running
 
 ```sh

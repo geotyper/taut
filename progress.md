@@ -970,6 +970,34 @@ within a field size of the middle, and a double click brings it back. One
 handler, `src/3d/orbit.ts`, for the 3D, foam and wire pages; the foam
 page's still look keys on the moved point too, so it is drawn again.
 
+## Added since: cells that divide
+
+Asked for by the user, from the ideas: cells dividing, in 2D first, faster
+and easier to see than in 3D. A new branch, `cells`, and a new page,
+`cells.html`.
+
+`src/cells/tissue.ts` is the foam's rule with the parts a cell needs: an
+area to hold to per label, a shell of WALL pixels that are not counted,
+growth of the area held to, and division by a line through the centre of
+area, across the long axis from the second moments or at random. The film
+tracing and the charts of sides and angles come from the foam page.
+
+- The first egg divided along the lattice: a round cell's moments are
+  nearly equal and atan2 of almost nothing gave 0. Its halves then
+  divided across that, and the cross of four films along the axes stayed
+  for 14000 steps. A cell rounder than 1.05 now divides at random; the
+  next egg's cross opened into two three-way junctions with a short film
+  between them within 200 steps, and stayed so for 10000.
+- Daughters first took their mother's colour with a drift of 0.04 round
+  the hues, and the four cells of an egg were all one green. Daughters now
+  part by 0.2 / (1 + generation), so the first clones are far apart in
+  hue and late ones close.
+- Sides, Hertwig's rule, colony growing: 29% pentagons, 47% hexagons, 24%
+  heptagons at 70 cells (45 closed), 30%, 42%, 21% at 225 (161), against
+  about 29%, 47%, 20% in the fly's wing disc. Growth stopped at 265 cells,
+  and relaxing took it to 23%, 53%, 24%. At random: 22%, 58%, 14% at 253.
+  One seeded run each.
+
 ## What could be improved
 
 ### Both

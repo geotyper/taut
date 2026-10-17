@@ -93,7 +93,9 @@ Ideas from looking back over the rule as it now stands: labels taking the
 majority in a ball, bubbles held to a volume by a weight, the cuts that make
 wire, the periodic field, the draining. Each has a check that gives a number.
 
-- **Cells dividing in a shell.** The foam's glass sphere with a held
+- **Cells dividing in a shell.** Begun in 2D on `cells.html` (branch
+  `cells`): an egg cleaving in a round shell, and a tissue growing from one
+  cell. In 3D: the foam's glass sphere with a held
   bubble that, once it has grown to twice its volume, splits in two by a
   plane through its middle, as the two free bubbles start. Two cells, then
   four, then eight: the cleavage of an early embryo. Early embryos come
