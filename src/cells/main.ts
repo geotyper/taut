@@ -41,6 +41,7 @@ let every = 300;
 let rounds = 5;
 let doubling = 600;
 let cellSize = 18;
+let fill = false;
 let colours: 'clone' | 'fate' | 'sides' | 'generation' = 'clone';
 let stepsPerFrame = 2;
 let paused = false;
@@ -80,6 +81,8 @@ onSelect('field-size', (v) => {
   pixels = new Uint32Array(image.data.buffer);
   restart();
 });
+const fillToggle = byId<HTMLInputElement>('fill');
+fillToggle.addEventListener('change', () => (fill = fillToggle.checked));
 const measureToggle = byId<HTMLInputElement>('measure');
 measureToggle.addEventListener('change', () => {
   measuring = measureToggle.checked;
@@ -143,7 +146,7 @@ function frame(): void {
         if (++sinceDivision >= every && roundsDone < rounds) divideAll();
       } else {
         // Newborn cells hold to the area of a disc as wide as set, and grow to twice it.
-        tissue.grow(doubling, plane, MARGIN);
+        tissue.grow(doubling, plane, MARGIN, fill);
       }
       tissue.step(params);
       if (performance.now() - began > BUDGET) break;

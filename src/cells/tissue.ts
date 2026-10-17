@@ -77,6 +77,8 @@ export class Tissue {
   cells = 0;
   /** Divisions so far. */
   divisions = 0;
+  /** Whether a tissue grown to fill the field has filled it. */
+  full = false;
 
   private next: Uint16Array;
   private labels = 0;
@@ -211,13 +213,20 @@ export class Tissue {
    * cell that has grown to what it divides at divides. A cell stops
    * growing while it is within `margin` pixels of the field's edge, or
    * squeezed by its neighbours; the rest of the colony grows on, until
-   * the field is full.
+   * the field is full. With `fill`, the cells grow up to the field's edge
+   * and into its corners, until no medium is left.
    */
-  grow(doubling: number, plane: Plane, margin: number): void {
+  grow(doubling: number, plane: Plane, margin: number, fill = false): void {
     let held = 0;
     for (let l = 1; l <= this.labels; l++) if (this.area[l] > 0) held += this.target[l];
-    if (held >= ROOM * (this.w - 2 * margin) * (this.h - 2 * margin)) return;
-    const edge = this.atEdge(margin);
+    if (fill && this.area[MEDIUM] === 0) {
+      // Full: once, every cell settles for the area it has, so none crushes another.
+      if (!this.full) for (let l = 1; l <= this.labels; l++) if (this.area[l] > 0) this.target[l] = this.area[l];
+      this.full = true;
+      return;
+    }
+    if (!fill && held >= ROOM * (this.w - 2 * margin) * (this.h - 2 * margin)) return;
+    const edge = this.atEdge(fill ? 0 : margin);
     const factor = 2 ** (1 / doubling);
     const due: number[] = [];
     for (let l = 1; l <= this.labels; l++) {
@@ -415,6 +424,7 @@ export class Tissue {
   private reset(): void {
     this.labels = 0;
     this.steps = 0;
+    this.full = false;
     this.divisions = 0;
     this.area = new Float64Array(64);
     this.target = new Float64Array(64);
