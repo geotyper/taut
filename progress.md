@@ -960,6 +960,16 @@ With the wide kernel every bubble settles about 5% short of its volume
 (7050 of 7596 on the ring, 30600 of 32078 on the table). Timing in headless
 Chrome at 96³: 8 to 10 steps a second.
 
+## Added since: moving the view
+
+Asked for by the user: the camera only turned round the middle of the
+field, so a scene off to one side could not be framed. The camera now
+orbits a point that a drag with the right button, or with Shift, moves
+across the view, following the pointer at the depth looked at; it stays
+within a field size of the middle, and a double click brings it back. One
+handler, `src/3d/orbit.ts`, for the 3D, foam and wire pages; the foam
+page's still look keys on the moved point too, so it is drawn again.
+
 ## What could be improved
 
 ### Both

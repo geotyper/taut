@@ -1,6 +1,7 @@
 import { Clusters3 } from './clusters3.ts';
 import { Clusters3Gpu } from './clusters3gpu.ts';
 import { Renderer, type Camera, type View } from './renderer.ts';
+import { orbit } from './orbit.ts';
 import { Sim3, type LineKernel, type Params3, type StartShape3 } from './sim3.ts';
 import { scatterStones, type StoneOptions } from './stones.ts';
 
@@ -206,27 +207,8 @@ window.addEventListener('keydown', (e) => {
   action();
 });
 
-// Orbit with the pointer, zoom with the wheel.
-let dragging = false;
-canvas.addEventListener('pointerdown', (e) => {
-  canvas.setPointerCapture(e.pointerId);
-  dragging = true;
-});
-canvas.addEventListener('pointermove', (e) => {
-  if (!dragging) return;
-  camera.yaw -= e.movementX * 0.008;
-  camera.pitch = Math.max(-1.5, Math.min(1.5, camera.pitch + e.movementY * 0.008));
-});
-canvas.addEventListener('pointerup', () => (dragging = false));
-canvas.addEventListener('pointercancel', () => (dragging = false));
-canvas.addEventListener(
-  'wheel',
-  (e) => {
-    e.preventDefault();
-    camera.distance = Math.max(0.6, Math.min(4, camera.distance * Math.exp(e.deltaY * 0.001)));
-  },
-  { passive: false },
-);
+// Orbit with the pointer, move the view with the right button or Shift, zoom with the wheel.
+orbit(canvas, camera);
 
 syncControls();
 rebuild(sim.n);

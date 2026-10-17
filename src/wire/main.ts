@@ -1,4 +1,5 @@
 import { Renderer, type Camera, type View } from '../3d/renderer.ts';
+import { orbit } from '../3d/orbit.ts';
 import { Drainage } from './drain.ts';
 import { filmFaces, frameField, gyroid, heldBubbles, makeFrame, startLabels, type Frame, type FrameKind, type FrameStart } from './frames.ts';
 import { Wire3, type Wire3Params } from './wire3.ts';
@@ -147,26 +148,7 @@ window.addEventListener('keydown', (e) => {
   e.preventDefault();
 });
 
-let dragging = false;
-canvas.addEventListener('pointerdown', (e) => {
-  canvas.setPointerCapture(e.pointerId);
-  dragging = true;
-});
-canvas.addEventListener('pointermove', (e) => {
-  if (!dragging) return;
-  camera.yaw -= e.movementX * 0.008;
-  camera.pitch = Math.max(-1.5, Math.min(1.5, camera.pitch + e.movementY * 0.008));
-});
-canvas.addEventListener('pointerup', () => (dragging = false));
-canvas.addEventListener('pointercancel', () => (dragging = false));
-canvas.addEventListener(
-  'wheel',
-  (e) => {
-    e.preventDefault();
-    camera.distance = Math.max(0.6, Math.min(4, camera.distance * Math.exp(e.deltaY * 0.001)));
-  },
-  { passive: false },
-);
+orbit(canvas, camera);
 
 syncControls();
 requestAnimationFrame(tick);

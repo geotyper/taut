@@ -1,4 +1,5 @@
 import { cameraFrame, FOCAL, Renderer, type Camera, type View } from '../3d/renderer.ts';
+import { orbit } from '../3d/orbit.ts';
 import { Foam3, type Enclosure, type Foam3Params } from './foam3.ts';
 import {
   extractContours,
@@ -235,29 +236,7 @@ window.addEventListener('keydown', (e) => {
   e.preventDefault();
 });
 
-// Orbit with the pointer, zoom with the wheel.
-let dragging = false;
-canvas.addEventListener('pointerdown', (e) => {
-  canvas.setPointerCapture(e.pointerId);
-  dragging = true;
-});
-canvas.addEventListener('pointermove', (e) => {
-  if (!dragging) return;
-  movedAt = performance.now();
-  camera.yaw -= e.movementX * 0.008;
-  camera.pitch = Math.max(-1.5, Math.min(1.5, camera.pitch + e.movementY * 0.008));
-});
-canvas.addEventListener('pointerup', () => (dragging = false));
-canvas.addEventListener('pointercancel', () => (dragging = false));
-canvas.addEventListener(
-  'wheel',
-  (e) => {
-    e.preventDefault();
-    movedAt = performance.now();
-    camera.distance = Math.max(0.6, Math.min(4, camera.distance * Math.exp(e.deltaY * 0.001)));
-  },
-  { passive: false },
-);
+const pointer = orbit(canvas, camera, () => (movedAt = performance.now()));
 
 // The resolution list above has already built the first field.
 requestAnimationFrame(frame);
@@ -300,7 +279,7 @@ function frame(): void {
     if (look === 'still') {
       renderer.clear();
       // Meshing is slow; while the foam moves it is done again only now and then.
-      if (foam.steps !== filmsStep && now - filmsAt > Math.max(1000, 6 * filmsMs) && !dragging) {
+      if (foam.steps !== filmsStep && now - filmsAt > Math.max(1000, 6 * filmsMs) && !pointer.dragging) {
         filmsStep = foam.steps;
         films = buildFilms(foam.readLabels(), foam.n);
         filmsDistance = null;
@@ -454,8 +433,8 @@ function drawStill(n: number, now: number): void {
     ctx.clearRect(0, 0, w, h);
     return;
   }
-  const view = `${camera.yaw},${camera.pitch},${camera.distance},${w},${h},${JSON.stringify(still)},${filmsStep}`;
-  const moving = dragging || now - movedAt < STILL_AFTER;
+  const view = `${camera.yaw},${camera.pitch},${camera.distance},${camera.pan},${w},${h},${JSON.stringify(still)},${filmsStep}`;
+  const moving = pointer.dragging || now - movedAt < STILL_AFTER;
   if (moving) {
     drawPreview(ctx, n, w, h, scale);
     pictureFor = '';
@@ -519,7 +498,7 @@ function drawSkeleton(n: number): void {
   const middle = camera.distance * n;
   // Which parts of the lines are in sight, worked out again only when the
   // view or the lines change.
-  const view = `${camera.yaw},${camera.pitch},${camera.distance},${through},${hiding}`;
+  const view = `${camera.yaw},${camera.pitch},${camera.distance},${camera.pan},${through},${hiding}`;
   if (view !== partsFor) {
     partsFor = view;
     parts = [];

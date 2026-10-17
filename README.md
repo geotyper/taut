@@ -77,7 +77,9 @@ once, and the rule is the same everywhere and local. Three caveats:
 - Inflation under negative pressure and the smooth surface are computed from
   the automaton's state for display and never fed back into it.
 
-Drag to orbit, scroll to zoom. View options:
+Drag to orbit, drag with the right button or Shift to move the view, scroll
+to zoom, double-click to bring the view back to the middle; the same on the
+foam and wire pages (`src/3d/orbit.ts`). View options:
 
 - **Surface** — the raw voxels as cubes (the default), or smooth. The smooth surface is the
   same binary field read through a coarser mip level of its 3D texture, so the

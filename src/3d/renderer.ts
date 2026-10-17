@@ -1,9 +1,11 @@
-/** Orbit camera around the centre of the field. Angles in radians. */
+/** Orbit camera around a point, the centre of the field unless moved. Angles in radians. */
 export interface Camera {
   yaw: number;
   pitch: number;
-  /** Distance from the centre, in field sizes. */
+  /** Distance from the point looked at, in field sizes. */
   distance: number;
+  /** The point looked at, from the centre of the field, in field sizes; the centre if left out. */
+  pan?: number[];
 }
 
 /** How the membrane and stones are drawn. */
@@ -847,7 +849,7 @@ export function createTexture(
 
 /**
  * Where the eye is in field cells and which way it looks: the columns of the
- * camera matrix, right, up and forward, looking at the centre of the field.
+ * camera matrix, right, up and forward, looking at the point it orbits.
  * A point p shows at (dot(p - eye, right), dot(p - eye, up)) * FOCAL /
  * dot(p - eye, forward), in half-heights of the view from its centre, up
  * being up.
@@ -866,7 +868,8 @@ export function cameraFrame(
     right[0] * forward[1] - right[1] * forward[0],
   ];
   const reach = camera.distance * n;
-  const eye = off.map((c) => n / 2 + c * reach);
+  const pan = camera.pan ?? [0, 0, 0];
+  const eye = off.map((c, i) => n / 2 + pan[i] * n + c * reach);
   return { eye, right, up, forward };
 }
 
