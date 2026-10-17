@@ -25,7 +25,21 @@ export interface TissueParams {
   radius: number;
   /** Random part of every count, as a share of the disc. */
   noise: number;
+  /**
+   * How many times the tension of a film is when an outer cell is on
+   * either side of it: one, and the outer cells are as the inner.
+   */
+  stiffer: number;
 }
+
+/**
+ * What a cell is to become, as an early embryo's cells are told apart by
+ * where they are (the inside-outside model): a cell born on the shell, or on
+ * the medium, is outer, one born with cells all round is inner. Inner cells
+ * have only inner daughters; an outer cell's daughters are told apart again.
+ */
+export const INNER = 1;
+export const OUTER = 2;
 
 /** Where a cell divides. */
 export type Plane = 'long' | 'random';
@@ -63,6 +77,8 @@ export class Tissue {
   private divideAt = new Float64Array(2);
   /** Divisions from the egg or the first cell. */
   private generation = new Uint8Array(2);
+  /** INNER or OUTER, by label; 0 for the medium. */
+  private fate = new Uint8Array(2);
   /** A colour per cell, inherited with a little drift, so a clone shows as a patch. */
   private tint = new Float32Array(2);
   private disc = new Int8Array(0);
@@ -88,6 +104,7 @@ export class Tissue {
     this.measure();
     this.target[mine] = this.area[mine];
     this.divideAt[mine] = Infinity;
+    this.fate[mine] = OUTER;
   }
 
   /** One cell of this radius in the middle of the medium, to grow from. */
@@ -103,6 +120,7 @@ export class Tissue {
     this.measure();
     this.target[mine] = this.area[mine];
     this.divideAt[mine] = this.spread(2 * this.area[mine]);
+    this.fate[mine] = OUTER;
   }
 
   step(p: TissueParams): void {
@@ -111,6 +129,9 @@ export class Tissue {
     const disc = this.disc;
     const jitter = p.noise * (disc.length / 2);
     const weight = this.weights(p);
+    const fate = this.fate;
+    // Every film costs one, and more with an outer cell on it: a pixel takes the label of least cost (Esedoglu and Otto).
+    const extra = p.stiffer - 1;
     const seen = new Uint16Array(9);
     const count = new Float64Array(9);
     for (let y = 0; y < h; y++) {
@@ -156,7 +177,11 @@ export class Tissue {
         let best = here;
         let bestScore = -Infinity;
         for (let k = 0; k < kinds; k++) {
-          const score = count[k] * weight[seen[k]] + jitter * (Math.random() - 0.5);
+          let score = count[k] * weight[seen[k]] + jitter * (Math.random() - 0.5);
+          if (extra !== 0) {
+            const outer = fate[seen[k]] === OUTER;
+            for (let j = 0; j < kinds; j++) if (j !== k && (outer || fate[seen[j]] === OUTER)) score -= extra * count[j];
+          }
           if (score > bestScore) {
             bestScore = score;
             best = seen[k];
@@ -256,6 +281,7 @@ export class Tissue {
       this.generation[l]++;
       this.tint[l] -= part;
       daughter[l] = child;
+      this.fate[child] = this.fate[l];
       this.target[l] = half;
       this.target[child] = half;
       // In a shell nothing grows, so nothing divides of itself.
@@ -274,6 +300,39 @@ export class Tissue {
       }
     }
     this.measure();
+    // The daughters of an outer cell: outer if they touch the shell or the medium, inner if not.
+    const parted = new Uint8Array(this.labels + 1);
+    for (let l = 1; l < n; l++) {
+      if (!daughter[l] || this.fate[l] !== OUTER) continue;
+      parted[l] = 1;
+      parted[daughter[l]] = 1;
+    }
+    const open = new Uint8Array(this.labels + 1);
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const l = label[y * w + x];
+        if (l === WALL || !parted[l] || open[l]) continue;
+        const by = (nx: number, ny: number) => nx >= 0 && nx < w && ny >= 0 && ny < h && (label[ny * w + nx] === WALL || label[ny * w + nx] === MEDIUM);
+        if (by(x - 1, y) || by(x + 1, y) || by(x, y - 1) || by(x, y + 1)) open[l] = 1;
+      }
+    }
+    for (let l = 1; l <= this.labels; l++) if (parted[l]) this.fate[l] = open[l] ? OUTER : INNER;
+  }
+
+  fateOf(l: number): number {
+    return this.fate[l] ?? 0;
+  }
+
+  /** Cells of either fate. */
+  get fates(): { inner: number; outer: number } {
+    let inner = 0;
+    let outer = 0;
+    for (let l = 1; l <= this.labels; l++) {
+      if (!(this.area[l] > 0)) continue;
+      if (this.fate[l] === INNER) inner++;
+      else outer++;
+    }
+    return { inner, outer };
   }
 
   generationOf(l: number): number {
@@ -348,6 +407,7 @@ export class Tissue {
     this.target = new Float64Array(64);
     this.divideAt = new Float64Array(64);
     this.generation = new Uint8Array(64);
+    this.fate = new Uint8Array(64);
     this.tint = new Float32Array(64);
   }
 
@@ -363,6 +423,7 @@ export class Tissue {
       this.target = grow(this.target, (n) => new Float64Array(n));
       this.divideAt = grow(this.divideAt, (n) => new Float64Array(n));
       this.generation = grow(this.generation, (n) => new Uint8Array(n));
+      this.fate = grow(this.fate, (n) => new Uint8Array(n));
       this.tint = grow(this.tint, (n) => new Float32Array(n));
     }
     this.generation[mine] = generation;

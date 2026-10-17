@@ -998,6 +998,24 @@ tracing and the charts of sides and angles come from the foam page.
   and relaxing took it to 23%, 53%, 24%. At random: 22%, 58%, 14% at 253.
   One seeded run each.
 
+## Added since: outer and inner cells
+
+Asked for by the user: the egg to eleven divisions and a 768 field, and a
+colour by what a cell is to become rather than by generation, which in the
+egg is the same for every cell (kept, as it shows well in a growing
+tissue), with the outer cells sturdier.
+
+- Fates by the inside-outside model, decided at every division of an outer
+  cell by whether a daughter touches the shell or the medium.
+- A film's tension by the cells on it: `stiffer` times for a film with an
+  outer cell on either side. The score of a label is its weighted count
+  less (stiffer − 1) times the count of every other label across such a
+  film, which is least cost with a tension matrix, and the rule as it was
+  at one.
+- Seven rounds, 384²: outer cells tangential over radial 1.10 at one, 1.35
+  at two; inner 1.02 and 0.99. Eleven rounds at 768²: 2048 cells, none
+  lost, 152 outer, 16 steps a second, 56 at 32 cells.
+
 ## What could be improved
 
 ### Both

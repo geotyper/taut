@@ -1,6 +1,6 @@
 import { traceFilms, WALL } from '../foam/lines.ts';
 import { drawMeasures, measureFilms, Seepage, type Measures } from '../foam/measure.ts';
-import { MEDIUM, Tissue, type Plane, type TissueParams } from './tissue.ts';
+import { MEDIUM, OUTER, Tissue, type Plane, type TissueParams } from './tissue.ts';
 
 /** The egg's shell, as a share of half the field. */
 const SHELL = 0.9;
@@ -29,7 +29,7 @@ const canvas = byId<HTMLCanvasElement>('field');
 const ctx = canvas.getContext('2d')!;
 const stat = byId('stat');
 const plot = byId<HTMLCanvasElement>('measure-plot');
-const params: TissueParams = { radius: 4, noise: 0.1 };
+const params: TissueParams = { radius: 4, noise: 0.1, stiffer: 1 };
 
 let size = 384;
 let tissue = new Tissue(size, size);
@@ -41,7 +41,7 @@ let every = 300;
 let rounds = 5;
 let doubling = 600;
 let cellSize = 18;
-let colours: 'clone' | 'sides' | 'generation' = 'clone';
+let colours: 'clone' | 'fate' | 'sides' | 'generation' = 'clone';
 let stepsPerFrame = 2;
 let paused = false;
 let measuring = false;
@@ -57,6 +57,7 @@ const seepage = new Seepage();
 
 bindRange('radius', 0, (v) => (params.radius = v));
 bindRange('noise', 2, (v) => (params.noise = v));
+bindRange('stiffer', 1, (v) => (params.stiffer = v));
 bindRange('speed', 0, (v) => (stepsPerFrame = v));
 bindRange('every', 0, (v) => (every = v));
 bindRange('rounds', 0, (v) => (rounds = v));
@@ -187,13 +188,19 @@ function colour(l: number, sides: Map<number, number> | undefined): number {
     const n = sides?.get(l);
     return n === undefined ? OPEN : SIDE_COLOURS[Math.max(0, Math.min(SIDE_COLOURS.length - 1, n - 3))];
   }
+  if (colours === 'fate') {
+    // Outer warm, inner cold, each clone a little lighter or darker.
+    const shade = 0.38 + 0.2 * ((((tissue.tintOf(l) * 7) % 1) + 1) % 1);
+    return tissue.fateOf(l) === OUTER ? hsl(28, 0.75, shade) : hsl(205, 0.6, shade);
+  }
   if (colours === 'generation') return hsl((tissue.generationOf(l) * 47) % 360, 0.5, 0.45);
   const t = tissue.tintOf(l);
   return hsl((((t % 1) + 1) % 1) * 360, 0.55, 0.5);
 }
 
 function status(): string {
-  const parts = [`${tissue.cells} cells`, `step ${tissue.steps}`, `${tissue.divisions} divisions`, `generation ${tissue.deepest}`];
+  const { inner, outer } = tissue.fates;
+  const parts = [`${tissue.cells} cells, ${outer} outer and ${inner} inner`, `step ${tissue.steps}`, `${tissue.divisions} divisions`, `generation ${tissue.deepest}`];
   if (measures && measures.sides.size > 0) {
     const h = measures.histogram;
     const total = measures.sides.size;

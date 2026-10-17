@@ -926,6 +926,24 @@ films had relaxed, 23%, 53% and 24%. Dividing at random, at 253 cells: 22%,
 58%, 14%. One run of each, with samples of under 250 cells, so a few per
 cent either way are noise.
 
+### Outer and inner cells
+
+Cells are told apart by where they are born, as in the inside-outside
+model of the early mouse embryo: a daughter of an outer cell that touches
+the shell, or the medium, is outer, one with cells all round is inner, and
+an inner cell has only inner daughters. *By fate* colours them, and *Outer
+cells stiffer* makes every film with an outer cell on it pull harder. That
+is the rule with a tension for every pair (Esedoglu and Otto): a pixel
+takes the label of least cost, the cost being the pixels of other labels
+round it, each counted by the tension of the film between. In the egg the
+first four cells are outer, and from eight on inner cells appear: 16 of 32,
+96 of 128, and 1896 of 2048 at 768² after eleven rounds, every cell kept,
+with the outer ones a single ring on the shell. With the outer films twice
+as taut, after seven rounds, the outer cells were 1.35 times as wide along
+the shell as across it, against 1.10 without, and the inner mass rounder,
+as an epithelium flattens on the cells it covers; the inner cells stayed
+round (0.99 against 1.02). Eleven rounds at 768² run at 16 steps a second.
+
 ## Running
 
 ```sh

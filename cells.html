@@ -50,7 +50,7 @@
           </label>
           <label>
             <span>Divisions, at most <output id="rounds-out"></output></span>
-            <input id="rounds" type="range" min="1" max="8" step="1" value="5" />
+            <input id="rounds" type="range" min="1" max="11" step="1" value="5" />
           </label>
         </div>
         <div id="pick-colony">
@@ -68,10 +68,21 @@
           <span>Colours</span>
           <select id="colours">
             <option value="clone">By clone: daughters take after their mother</option>
+            <option value="fate">By fate: outer orange, inner blue</option>
             <option value="sides">By sides: 5 green, 6 grey, 7 blue</option>
             <option value="generation">By generation</option>
           </select>
         </label>
+        <label>
+          <span>Outer cells stiffer, times <output id="stiffer-out"></output></span>
+          <input id="stiffer" type="range" min="1" max="3" step="0.1" value="1" />
+        </label>
+        <p class="hint">
+          A cell born on the shell, or on the medium, is outer; one born with
+          cells all round is inner, and so are all its daughters. The films
+          of outer cells pull harder by the factor set. With many divisions
+          the cells get small: past 7 or 8 in the egg, take a larger field.
+        </p>
         <label class="check">
           <input id="measure" type="checkbox" />
           <span>Measure the films</span>
@@ -84,6 +95,7 @@
             <option value="256">256 × 256</option>
             <option value="384" selected>384 × 384</option>
             <option value="512">512 × 512</option>
+            <option value="768">768 × 768</option>
           </select>
         </label>
         <label>
