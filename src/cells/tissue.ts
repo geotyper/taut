@@ -33,6 +33,9 @@ const SQUEEZED = 0.85;
  */
 const ROOM = 0.97;
 
+/** When a tissue stops growing: its cells at the field's edge, when the field is full, or never. */
+export type Stop = 'edge' | 'full' | 'never';
+
 export interface TissueParams {
   /** Radius of the disc a pixel counts labels in, in pixels. */
   radius: number;
@@ -225,24 +228,28 @@ export class Tissue {
    * cell that has grown to what it divides at divides. A cell stops
    * growing while it is within `margin` pixels of the field's edge, or
    * squeezed by its neighbours; the rest of the colony grows on, until
-   * the field is full. With `fill`, the cells grow up to the field's edge
-   * and into its corners, until no medium is left.
+   * the field is full. With `stop` 'full', the cells grow up to the
+   * field's edge and into its corners, until no medium is left; with
+   * 'never', every cell grows and divides on, however pressed.
    */
-  grow(doubling: number, plane: Plane, margin: number, fill = false): void {
-    let held = 0;
-    for (let l = 1; l <= this.labels; l++) held += this.area[l];
+  grow(doubling: number, plane: Plane, margin: number, stop: Stop = 'edge'): void {
+    const fill = stop === 'full';
     if (fill && this.area[MEDIUM] === 0) {
       // Full: once, every cell settles for the area it has, so none crushes another.
       if (!this.full) for (let l = 1; l <= this.labels; l++) if (this.area[l] > 0) this.target[l] = this.area[l];
       this.full = true;
       return;
     }
-    if (!fill && held >= ROOM * (this.w - 2 * margin) * (this.h - 2 * margin)) return;
-    const edge = this.atEdge(fill ? 0 : margin);
+    let held = 0;
+    for (let l = 1; l <= this.labels; l++) held += this.area[l];
+    if (stop === 'edge' && held >= ROOM * (this.w - 2 * margin) * (this.h - 2 * margin)) return;
+    const free = stop === 'never';
+    const edge = this.atEdge(stop === 'edge' ? margin : 0);
     const factor = 2 ** (1 / doubling);
     const due: number[] = [];
     for (let l = 1; l <= this.labels; l++) {
-      if (!(this.area[l] > 0) || edge[l] || this.area[l] < SQUEEZED * this.target[l]) continue;
+      if (!(this.area[l] > 0)) continue;
+      if (!free && (edge[l] || this.area[l] < SQUEEZED * this.target[l])) continue;
       this.target[l] *= factor;
       if (this.target[l] >= this.divideAt[l]) due.push(l);
     }

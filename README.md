@@ -923,13 +923,15 @@ neighbours below 85% of its area (contact inhibition); the rest grow on until
 the cells together take 97% of the field (by the area they have: counted
 by the area they hold to, pressed cells made the colony stop with 14% of the
 field still empty).
-*Grow until the field is full* lets the cells up to the edge and into the
+*Growth stops: when the field is full* lets the cells up to the edge and into the
 corners until no medium is left; then every cell settles for the area it
 has. On a 256 field, 330 cells, 317 left: a few are crushed as it fills.
 In a larger field the middle is pressed harder: on a 384 field 117 of 683
 cells were crushed away. *A cell gives way to no less than* sets a least
 share of its newborn area; below it the cell pushes back hard. At 0.5 none
-of 744 were lost. Coloured
+of 744 were lost.
+*Growth stops: never* takes every limit away: the cells grow and divide on
+however pressed, and the crowded ones are crushed unless they keep a least area. Coloured
 by clone, daughters take after their mother, so the cells of one early
 cell show as a patch. Proliferating epithelia have about 29% pentagons,
 47% hexagons and 20% heptagons (Gibson and others, 2006, the fly's wing

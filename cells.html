@@ -63,9 +63,13 @@
             <span>A newborn cell, pixels across <output id="cell-size-out"></output></span>
             <input id="cell-size" type="range" min="10" max="40" step="1" value="18" />
           </label>
-          <label class="check">
-            <input id="fill" type="checkbox" />
-            <span>Grow until the field is full, into the corners</span>
+          <label>
+            <span>Growth stops</span>
+            <select id="stop">
+              <option value="edge">Cell by cell, at the field's edge or when squeezed</option>
+              <option value="full">When the field is full, into the corners</option>
+              <option value="never">Never: cells grow and divide however pressed</option>
+            </select>
           </label>
         </div>
 
