@@ -920,7 +920,9 @@ junctions are 10.8° rms off 120°.
 the steps set, and a cell divides at twice the area it was born with, give
 or take 15%. A cell stops growing when it nears the field's edge or is squeezed by its
 neighbours below 85% of its area (contact inhibition); the rest grow on until
-the cells together hold to 97% of the field.
+the cells together take 97% of the field (by the area they have: counted
+by the area they hold to, pressed cells made the colony stop with 14% of the
+field still empty).
 *Grow until the field is full* lets the cells up to the edge and into the
 corners until no medium is left; then every cell settles for the area it
 has. On a 256 field, 330 cells, 317 left: a few are crushed as it fills.

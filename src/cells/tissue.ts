@@ -27,8 +27,9 @@ const DIVIDE_SPREAD = 0.15;
  */
 const SQUEEZED = 0.85;
 /**
- * The cells together hold to no more than this share of the field inside
- * the margin: past it there is no room, they would only crush each other.
+ * The cells grow while together they take less than this share of the
+ * field inside the margin; counted by the area they have, not the area
+ * they hold to, which is more when they are pressed.
  */
 const ROOM = 0.97;
 
@@ -229,7 +230,7 @@ export class Tissue {
    */
   grow(doubling: number, plane: Plane, margin: number, fill = false): void {
     let held = 0;
-    for (let l = 1; l <= this.labels; l++) if (this.area[l] > 0) held += this.target[l];
+    for (let l = 1; l <= this.labels; l++) held += this.area[l];
     if (fill && this.area[MEDIUM] === 0) {
       // Full: once, every cell settles for the area it has, so none crushes another.
       if (!this.full) for (let l = 1; l <= this.labels; l++) if (this.area[l] > 0) this.target[l] = this.area[l];
