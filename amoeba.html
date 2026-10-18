@@ -84,9 +84,39 @@
           At 0 the edge counts for nothing and amoebae stick to it, as that
           spares them skin; at 1 it is as the water; above, it pushes them off.
         </p>
+        <label>
+          <span>Drawn</span>
+          <select id="look">
+            <option value="smooth" selected>Smooth, one body with faint walls inside</option>
+            <option value="pixels">Pixels, as computed</option>
+          </select>
+        </label>
+        <div id="smooth-settings">
+          <label>
+            <span>Outer membrane, pixels <output id="outer-width-out"></output></span>
+            <input id="outer-width" type="range" min="0" max="6" step="0.5" value="2.5" />
+          </label>
+          <label>
+            <span>Walls inside, pixels <output id="inner-width-out"></output></span>
+            <input id="inner-width" type="range" min="0" max="2" step="0.1" value="0.6" />
+          </label>
+          <label>
+            <span>Walls inside, how much they show <output id="inner-shows-out"></output></span>
+            <input id="inner-shows" type="range" min="0" max="1" step="0.05" value="0.25" />
+          </label>
+        </div>
+        <p class="hint">
+          Smooth, the films are traced as lines and drawn as splines: the
+          membrane on the water thick, the walls between two amoebae thin and
+          faint, so a body of many reads as one.
+        </p>
         <label class="check">
           <input id="show-smell" type="checkbox" checked />
           <span>Show the smell</span>
+        </label>
+        <label class="check">
+          <input id="show-nuclei" type="checkbox" />
+          <span>Show the nuclei</span>
         </label>
 
         <label>

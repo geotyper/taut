@@ -1007,8 +1007,8 @@ Food under an amoeba is eaten and becomes area to hold to; living burns it
 away, so with nothing to eat a newborn amoeba lasts the steps set. At twice
 its newborn area it divides across its long axis, and the two crawl off
 apart; starved to a third, it dies and shrinks away. Amoebae do not eat each
-other: between two is a film, and they push. A dark dot marks every nucleus;
-the better fed an amoeba, the lighter.
+other: between two is a film, and they push. The better fed an amoeba, the
+lighter; a dark dot can mark every nucleus.
 
 Beyond the field's edge there are no pixels, and counted as nothing the edge
 is a wall the amoebae wet: lying on it spares them a stretch of skin, so they
@@ -1035,3 +1035,10 @@ daughters stay together. *Neighbours share food* lets two amoebae with a
 film between them even out what they hold to, a share of the difference
 every hundred steps, at the full rate once the film is 20 pixels long: the
 cells on the inside, which never touch a crumb, live on what the outer ones eat.
+
+*Drawn smooth*, the films are traced as lines, as on the foam page, and drawn
+as quadratic splines over the water, which is scaled up smooth. Every amoeba
+is filled within the loops its films make. A film on the water or the
+field's edge is the outer membrane, drawn thick over a faint wider rim; a
+film between two amoebae is a wall inside, drawn thin and faint, so a body of
+many reads as one. *Pixels* shows the field as it is computed.
