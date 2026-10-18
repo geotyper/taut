@@ -110,6 +110,42 @@
           membrane on the water thick, the walls between two amoebae thin and
           faint, so a body of many reads as one.
         </p>
+        <label>
+          <span>Colours</span>
+          <select id="palette">
+            <option value="dark" selected>Dark water</option>
+            <option value="microscope">Microscope, phase contrast</option>
+            <option value="fluorescence">Fluorescence</option>
+          </select>
+        </label>
+        <label class="check">
+          <input id="by-body" type="checkbox" />
+          <span>One colour a body</span>
+        </label>
+        <label class="check">
+          <input id="blob" type="checkbox" />
+          <span>Soft blobs, no walls inside</span>
+        </label>
+        <label>
+          <span>Blob softness, pixels <output id="blob-reach-out"></output></span>
+          <input id="blob-reach" type="range" min="1" max="8" step="1" value="3" />
+        </label>
+        <label class="check">
+          <input id="trails" type="checkbox" />
+          <span>Trails where they crawled</span>
+        </label>
+        <label>
+          <span>Trail fades to half in, steps <output id="trail-half-out"></output></span>
+          <input id="trail-half" type="range" min="100" max="10000" step="100" value="1500" />
+        </label>
+        <p class="hint">
+          Any of these together. A body is the amoebae joined by films between
+          them, coloured as its first; the better fed still the lighter. A blob
+          is the amoebae blurred and cut at a level, with a light at every
+          nucleus. Under the microscope the cytoplasm is grainy and clear, with
+          a bright halo outside the membrane; in fluorescence the membranes
+          glow green, the food magenta, the nuclei blue.
+        </p>
         <label class="check">
           <input id="show-smell" type="checkbox" checked />
           <span>Show the smell</span>

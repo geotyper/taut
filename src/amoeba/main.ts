@@ -1,15 +1,13 @@
 import { outlines, traceFilms, WALL, type FilmLine } from '../foam/lines.ts';
-import { Amoebae, MEDIUM, SMELL_CELL, type AmoebaParams, type Sense } from './amoebae.ts';
+import { Amoebae, MEDIUM, type AmoebaParams, type Sense } from './amoebae.ts';
+import { Painter, VECTOR_STYLES, type Look, type Palette, type RGB } from './looks.ts';
 
 /** Time a frame may spend on steps, in ms. */
 const BUDGET = 30;
-/** The smell is drawn by its log, over this many factors of e below the strongest. */
-const SMELL_SHOWN = 12;
 /** Radius of an amoeba's nucleus, in pixels. */
 const NUCLEUS = 2.5;
 
-const COLOR_FILM = rgb(226, 232, 244);
-const COLOR_NUCLEUS = rgb(30, 24, 40);
+const COLOR_NUCLEUS: RGB = [30, 24, 40];
 /** The most canvas pixels a field pixel gets when drawn smooth. */
 const MOST_SCALE = 4;
 
@@ -24,7 +22,10 @@ let image = ctx.createImageData(size, size);
 let pixels = new Uint32Array(image.data.buffer);
 let crumbs = 200;
 let stepsPerFrame = 2;
-let showSmell = true;
+let painter = new Painter(size);
+const look: Look = { palette: 'dark', byBody: false, blob: false, blobReach: 3, trails: false, showSmell: true, waterOnly: false };
+/** Steps over which a trail fades to half. */
+let trailHalf = 1500;
 let showNuclei = false;
 let smooth = false;
 /** The outer membrane's width and the inner walls' width, in field pixels, and how much the inner walls show. */
@@ -54,6 +55,12 @@ bindRange('speed', 0, (v) => (stepsPerFrame = v));
 bindRange('outer-width', 1, (v) => (outerWidth = v));
 bindRange('inner-width', 1, (v) => (innerWidth = v));
 bindRange('inner-shows', 2, (v) => (innerShows = v));
+bindRange('blob-reach', 0, (v) => (look.blobReach = v));
+bindRange('trail-half', 0, (v) => (trailHalf = v));
+onSelect('palette', (v) => (look.palette = v as Palette));
+bindCheck('by-body', (v) => (look.byBody = v));
+bindCheck('blob', (v) => (look.blob = v));
+bindCheck('trails', (v) => (look.trails = v));
 onSelect('look', (v) => {
   smooth = v === 'smooth';
   canvas.classList.toggle('smooth', smooth);
@@ -63,6 +70,7 @@ onSelect('sense', (v) => (params.sense = v as Sense));
 onSelect('field-size', (v) => {
   size = Number(v);
   world = new Amoebae(size, size);
+  painter = new Painter(size);
   image = ctx.createImageData(size, size);
   pixels = new Uint32Array(image.data.buffer);
   restart();
@@ -70,11 +78,8 @@ onSelect('field-size', (v) => {
 const bandToggle = byId<HTMLInputElement>('banded');
 bandToggle.addEventListener('change', () => (params.banded = bandToggle.checked));
 params.banded = bandToggle.checked;
-const smellToggle = byId<HTMLInputElement>('show-smell');
-smellToggle.addEventListener('change', () => (showSmell = smellToggle.checked));
-const nucleiToggle = byId<HTMLInputElement>('show-nuclei');
-nucleiToggle.addEventListener('change', () => (showNuclei = nucleiToggle.checked));
-showNuclei = nucleiToggle.checked;
+bindCheck('show-smell', (v) => (look.showSmell = v));
+bindCheck('show-nuclei', (v) => (showNuclei = v));
 
 const pauseButton = byId<HTMLButtonElement>('pause');
 pauseButton.addEventListener('click', () => {
@@ -108,6 +113,7 @@ requestAnimationFrame(frame);
 
 function restart(): void {
   world.start(crumbs);
+  painter.clearTrails();
 }
 
 function frame(): void {
@@ -119,6 +125,7 @@ function frame(): void {
       if (performance.now() - began > BUDGET) break;
     }
     rateSteps += world.steps - before;
+    if (look.trails) painter.fade(world, world.steps - before, trailHalf);
   }
   const now = performance.now();
   if (now - rateSince > 1000) {
@@ -142,7 +149,8 @@ function renderPixels(): void {
     canvas.width = size;
     canvas.height = size;
   }
-  paintPixels(false);
+  look.waterOnly = false;
+  painter.paint(world, pixels, look);
   if (showNuclei) paintNuclei();
   ctx.putImageData(image, 0, 0);
 }
@@ -163,10 +171,17 @@ function renderSmooth(): void {
     under.width = size;
     under.height = size;
   }
-  paintPixels(true);
+  // A blob is drawn a pixel a pixel already, and only scaled up smooth.
+  look.waterOnly = !look.blob;
+  painter.paint(world, pixels, look);
   underCtx.putImageData(image, 0, 0);
   ctx.imageSmoothingEnabled = true;
   ctx.drawImage(under, 0, 0, canvas.width, canvas.height);
+  if (look.blob) {
+    if (showNuclei) drawNuclei(scale);
+    return;
+  }
+  const style = VECTOR_STYLES[look.palette];
 
   const lines = traceFilms(world.label, size, size);
   const inner: FilmLine[] = [];
@@ -186,17 +201,21 @@ function renderSmooth(): void {
     if (l === MEDIUM) continue;
     ctx.beginPath();
     for (const loop of found) traceLine(closedLoop(loop));
-    ctx.fillStyle = cssColour(amoebaColour(l));
+    ctx.fillStyle = css(painter.colourOf(world, l, look));
+    ctx.globalAlpha = style.fillAlpha;
     ctx.fill('evenodd');
-    // The fill's own seams, hidden under its colour.
-    ctx.strokeStyle = ctx.fillStyle;
-    ctx.lineWidth = 1;
-    ctx.stroke();
+    // The fill's own seams, hidden under its colour, where it is opaque.
+    if (style.fillAlpha === 1) {
+      ctx.strokeStyle = ctx.fillStyle;
+      ctx.lineWidth = 1;
+      ctx.stroke();
+    }
   }
+  ctx.globalAlpha = 1;
   if (innerShows > 0 && innerWidth > 0) {
     ctx.beginPath();
     for (const line of inner) traceLine(line.points);
-    ctx.strokeStyle = `rgba(226, 232, 244, ${innerShows})`;
+    ctx.strokeStyle = css(style.inner, innerShows);
     ctx.lineWidth = innerWidth;
     ctx.stroke();
   }
@@ -204,24 +223,35 @@ function renderSmooth(): void {
     ctx.beginPath();
     for (const line of outer) traceLine(line.points);
     // A soft rim, as the clear ectoplasm, and the membrane itself over it.
-    ctx.strokeStyle = 'rgba(226, 232, 244, 0.25)';
+    ctx.strokeStyle = css(style.rim, style.rimAlpha);
     ctx.lineWidth = outerWidth * 2;
     ctx.stroke();
-    ctx.strokeStyle = 'rgb(226, 232, 244)';
+    if (style.glow > 0) {
+      ctx.shadowColor = css(style.rim);
+      ctx.shadowBlur = style.glow * scale;
+    }
+    ctx.strokeStyle = css(style.outer);
     ctx.lineWidth = outerWidth;
     ctx.stroke();
+    ctx.shadowBlur = 0;
   }
-  if (showNuclei) {
-    ctx.beginPath();
-    for (let l = 1; l <= world.labelCount; l++) {
-      if (!world.isAlive(l)) continue;
-      const [cx, cy] = world.centreOf(l);
-      ctx.moveTo(cx + 0.5 + NUCLEUS, cy + 0.5);
-      ctx.arc(cx + 0.5, cy + 0.5, NUCLEUS, 0, 2 * Math.PI);
-    }
-    ctx.fillStyle = cssColour(COLOR_NUCLEUS);
-    ctx.fill();
+  if (showNuclei) drawNuclei(1);
+  ctx.restore();
+}
+
+/** A dark dot at every nucleus, as a vector, the canvas this many pixels a field pixel. */
+function drawNuclei(scale: number): void {
+  ctx.save();
+  ctx.scale(scale, scale);
+  ctx.beginPath();
+  for (let l = 1; l <= world.labelCount; l++) {
+    if (!world.isAlive(l)) continue;
+    const [cx, cy] = world.centreOf(l);
+    ctx.moveTo(cx + 0.5 + NUCLEUS, cy + 0.5);
+    ctx.arc(cx + 0.5, cy + 0.5, NUCLEUS, 0, 2 * Math.PI);
   }
+  ctx.fillStyle = css(COLOR_NUCLEUS);
+  ctx.fill();
   ctx.restore();
 }
 
@@ -267,41 +297,6 @@ function traceLine(p: Float32Array): void {
   ctx.lineTo(p[p.length - 2], p[p.length - 1]);
 }
 
-/** The water, food and smell into the pixels, and the amoebae and their films unless they are drawn over. */
-function paintPixels(waterOnly: boolean): void {
-  const { label, food, smell, sw } = world;
-  // How lit the water is on every square of the smell's grid, by the log of the smell.
-  let strongest = 0;
-  if (showSmell) for (let i = 0; i < smell.length; i++) strongest = Math.max(strongest, smell[i]);
-  const top = Math.log(strongest + 1e-30);
-  const glow = new Float32Array(smell.length);
-  if (showSmell && strongest > 0) {
-    for (let i = 0; i < smell.length; i++) {
-      const s = Math.max(0, 1 + (Math.log(smell[i] + 1e-30) - top) / SMELL_SHOWN);
-      glow[i] = s * s;
-    }
-  }
-  const tints = new Uint32Array(world.labelCount + 1);
-  for (let l = 1; l <= world.labelCount; l++) tints[l] = amoebaColour(l);
-  for (let y = 0; y < size; y++) {
-    for (let x = 0; x < size; x++) {
-      const i = y * size + x;
-      const here = label[i];
-      const film = !waterOnly && ((x + 1 < size && label[i + 1] !== here) || (y + 1 < size && label[i + size] !== here));
-      if (film) pixels[i] = COLOR_FILM;
-      else if (here !== MEDIUM && !waterOnly) pixels[i] = tints[here];
-      else if (food[i] > 0) {
-        const f = Math.min(1, food[i] * 8);
-        pixels[i] = rgb(Math.round(60 + 120 * f), Math.round(90 + 140 * f), Math.round(40 + 40 * f));
-      } else {
-        // The water, lit faintly where the food smells.
-        const g = glow[Math.floor(y / SMELL_CELL) * sw + Math.floor(x / SMELL_CELL)];
-        pixels[i] = rgb(11, Math.round(13 + 30 * g), Math.round(17 + 22 * g));
-      }
-    }
-  }
-}
-
 /** A dark nucleus in the middle of every living amoeba. */
 function paintNuclei(): void {
   const { label } = world;
@@ -314,17 +309,10 @@ function paintNuclei(): void {
         const x = Math.round(cx) + dx;
         const y = Math.round(cy) + dy;
         if (dx * dx + dy * dy > NUCLEUS * NUCLEUS || x < 0 || x >= size || y < 0 || y >= size) continue;
-        if (label[y * size + x] === l) pixels[y * size + x] = COLOR_NUCLEUS;
+        if (label[y * size + x] === l) pixels[y * size + x] = rgb(...COLOR_NUCLEUS);
       }
     }
   }
-}
-
-/** By its line, a little drift with every division; lighter the better fed. */
-function amoebaColour(l: number): number {
-  const t = world.tintOf(l);
-  const fed = Math.max(0, Math.min(2, world.fedOf(l)));
-  return hsl((((t % 1) + 1) % 1) * 360, 0.5, 0.28 + 0.14 * fed);
 }
 
 function status(): string {
@@ -357,25 +345,23 @@ function bindRange(id: string, digits: number, apply: (value: number) => void): 
   update();
 }
 
+function bindCheck(id: string, apply: (on: boolean) => void): void {
+  const input = byId<HTMLInputElement>(id);
+  input.addEventListener('change', () => apply(input.checked));
+  apply(input.checked);
+}
+
 function byId<T extends HTMLElement = HTMLElement>(id: string): T {
   const el = document.getElementById(id);
   if (!el) throw new Error(`Missing element #${id}`);
   return el as T;
 }
 
-function cssColour(c: number): string {
-  return `rgb(${c & 255}, ${(c >>> 8) & 255}, ${(c >>> 16) & 255})`;
+function css(c: RGB, alpha = 1): string {
+  const [r, g, b] = c.map(Math.round);
+  return alpha === 1 ? `rgb(${r}, ${g}, ${b})` : `rgba(${r}, ${g}, ${b}, ${alpha})`;
 }
 
 function rgb(r: number, g: number, b: number): number {
   return ((255 << 24) | (b << 16) | (g << 8) | r) >>> 0;
-}
-
-function hsl(h: number, s: number, l: number): number {
-  const a = s * Math.min(l, 1 - l);
-  const channel = (n: number) => {
-    const k = (n + h / 30) % 12;
-    return Math.round(255 * (l - a * Math.max(-1, Math.min(k - 3, 9 - k, 1))));
-  };
-  return rgb(channel(0), channel(8), channel(4));
 }

@@ -1042,3 +1042,14 @@ is filled within the loops its films make. A film on the water or the
 field's edge is the outer membrane, drawn thick over a faint wider rim; a
 film between two amoebae is a wall inside, drawn thin and faint, so a body of
 many reads as one. *Pixels* shows the field as it is computed.
+
+The looks go together in any way, over either view. *Colours*: dark water as
+before; *microscope*, light water, the cytoplasm grainy and seen through,
+the membrane dark with a bright halo outside it, as phase contrast shows it;
+*fluorescence*, black water, the membranes glowing green, the food magenta.
+*One colour a body* finds the bodies, amoebae joined by the films between
+them, and colours each as its lowest label, the better fed still the
+lighter. *Soft blobs* blurs the amoebae, their cover and colour, and cuts
+the blur at a level, so a body is one drop with no walls inside and a light
+at every nucleus. *Trails* are full under every amoeba and fade to half over
+the steps set, so the way each has crawled shows.
