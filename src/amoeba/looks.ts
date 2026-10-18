@@ -14,6 +14,7 @@ export interface Look {
   /** A fading trail where the amoebae have been. */
   trails: boolean;
   showSmell: boolean;
+  showLight: boolean;
   /** Only the water, food, trails and glows: the amoebae are drawn over, as vectors. */
   waterOnly: boolean;
 }
@@ -205,6 +206,7 @@ export class Painter {
     if (look.showSmell) for (let i = 0; i < smell.length; i++) strongest = Math.max(strongest, smell[i]);
     const top = Math.log(strongest + 1e-30);
     const lit = look.showSmell && strongest > 0;
+    const shines = look.showLight && world.lightX.length > 0;
 
     for (let y = 0; y < n; y++) {
       for (let x = 0; x < n; x++) {
@@ -230,6 +232,20 @@ export class Painter {
           r = DARK_WATER[0] + 34 * tr;
           gr = DARK_WATER[1] + 30 * g + 26 * tr;
           b = DARK_WATER[2] + 22 * g + 60 * tr;
+        }
+        // The light, warm on the water.
+        if (shines) {
+          const L = world.lightAt(x + 0.5, y + 0.5);
+          if (palette === 'microscope') {
+            r += (255 - r) * L * 0.35;
+            gr += (250 - gr) * L * 0.3;
+            b += (215 - b) * L * 0.2;
+          } else {
+            const k = palette === 'fluorescence' ? 0.5 : 1;
+            r += 70 * L * k;
+            gr += 56 * L * k;
+            b += 14 * L * k;
+          }
         }
         // The food.
         if (food[i] > 0 && here === MEDIUM) {

@@ -150,6 +150,26 @@ of the foam page; the tension matrix, cheap and opening wetting and sorting
 at once; and the Steiner trees, as the most unexpected, showing the rule
 works something out and does not only draw.
 
+## Amoebae
+
+- **A receptor as one spiking neuron.** Every amoeba gets a single neuron,
+  leaky integrate-and-fire: its input is what the edge senses, food's smell
+  and light, and hunger raises its gain, so a starving amoeba reacts more.
+  Its potential leaks away; at a threshold it spikes and resets, and a spike
+  is a burst of pull for the membrane towards where the input was strongest,
+  so the amoeba reaches out in jerks rather than evenly. Further: a neuron
+  per piece of the edge, with lateral inhibition between them, so one
+  pseudopod wins; or the spikes passed across the films of a body, so the
+  cells of one organism reach together.
+- **Light that harms**: weak light draws them, strong light drives them
+  off, so they gather in a ring at the edge of a spot.
+- **Spots drawn with the mouse**: light, shade, poison, salt.
+- **A signal to gather**, as cAMP in Dictyostelium: starving amoebae give
+  it off and the others crawl to them, into one heap.
+- **A predator**: a second kind of amoeba that eats the first.
+- **Stones and mazes** drawn on the field, and a slow **current** carrying
+  the smell and the amoebae.
+
 ## On every page
 
 - **Recording a clip**: a key that records the canvas to a file with

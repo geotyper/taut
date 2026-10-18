@@ -1028,6 +1028,15 @@ same way and food is eaten as an amoeba takes a pixel, so a step costs what
 the membranes are long. The smell, smooth as it is, is worked out on a grid
 four times coarser and read between its squares.
 
+*Spots of light* are food that does not run out. Each spot is a Gaussian of
+the radius set, and the light at a point is that of the brightest spot on
+it. An amoeba lives on the light at its centre, so many newborn areas every
+thousand steps at full light, and its edge leans by the log of the light
+against its mean along the edge, as by the smell: towards light, or away
+from it when the pull is below zero. *Light drifts* sets the spots moving,
+each on a slowly turning way, turned back off the field's edge, so the
+amoebae fed by it must follow or starve.
+
 Two options make a body of many. *Amoebae stick together* lowers the tension
 of a film between two amoebae below that of one on the water, by the share
 set (Esedoglu and Otto's way, as with the cells' stiffer outer films), so

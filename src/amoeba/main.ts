@@ -14,7 +14,7 @@ const MOST_SCALE = 4;
 const canvas = byId<HTMLCanvasElement>('field');
 const ctx = canvas.getContext('2d')!;
 const stat = byId('stat');
-const params: AmoebaParams = { radius: 4, noise: 0.1, sense: 'smell', pull: 0.35, carries: 40, feeds: 0.1, starves: 6000, walls: 1.5, inflow: 0, banded: true, stick: 0, share: 0 };
+const params: AmoebaParams = { radius: 4, noise: 0.1, sense: 'smell', pull: 0.35, carries: 40, feeds: 0.1, starves: 6000, walls: 1.5, inflow: 0, banded: true, stick: 0, share: 0, lights: 0, lightRadius: 60, lightFeeds: 0.3, lightPull: 0.3, lightMoves: 0 };
 
 let size = 384;
 let world = new Amoebae(size, size);
@@ -23,7 +23,7 @@ let pixels = new Uint32Array(image.data.buffer);
 let crumbs = 200;
 let stepsPerFrame = 2;
 let painter = new Painter(size);
-const look: Look = { palette: 'dark', byBody: false, blob: false, blobReach: 3, trails: false, showSmell: true, waterOnly: false };
+const look: Look = { palette: 'dark', byBody: false, blob: false, blobReach: 3, trails: false, showSmell: true, showLight: true, waterOnly: false };
 /** Steps over which a trail fades to half. */
 let trailHalf = 1500;
 let showNuclei = false;
@@ -49,6 +49,11 @@ bindRange('starves', 0, (v) => (params.starves = v));
 bindRange('walls', 1, (v) => (params.walls = v));
 bindRange('stick', 2, (v) => (params.stick = v));
 bindRange('share', 2, (v) => (params.share = v));
+bindRange('lights', 0, (v) => (params.lights = v));
+bindRange('light-radius', 0, (v) => (params.lightRadius = v));
+bindRange('light-feeds', 2, (v) => (params.lightFeeds = v));
+bindRange('light-pull', 2, (v) => (params.lightPull = v));
+bindRange('light-moves', 0, (v) => (params.lightMoves = v));
 bindRange('crumbs', 0, (v) => (crumbs = v));
 bindRange('inflow', 0, (v) => (params.inflow = v));
 bindRange('speed', 0, (v) => (stepsPerFrame = v));
@@ -79,6 +84,7 @@ const bandToggle = byId<HTMLInputElement>('banded');
 bandToggle.addEventListener('change', () => (params.banded = bandToggle.checked));
 params.banded = bandToggle.checked;
 bindCheck('show-smell', (v) => (look.showSmell = v));
+bindCheck('show-light', (v) => (look.showLight = v));
 bindCheck('show-nuclei', (v) => (showNuclei = v));
 
 const pauseButton = byId<HTMLButtonElement>('pause');
