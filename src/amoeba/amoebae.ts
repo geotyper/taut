@@ -40,6 +40,12 @@ export interface AmoebaParams {
   feeds: number;
   /** Steps a newborn amoeba lives with nothing to eat. */
   starves: number;
+  /**
+   * What a pixel beyond the field's edge counts for, as water: zero, it
+   * counts for nothing and an amoeba sticks to the edge, which spares it
+   * a stretch of skin; one, the edge is as the water; more, it pushes away.
+   */
+  walls: number;
 }
 
 /**
@@ -139,6 +145,7 @@ export class Amoebae {
     const { w, h, label, next, smell } = this;
     if (this.discRadius !== p.radius) this.buildDisc(p.radius);
     const disc = this.disc;
+    const radius = p.radius;
     const half = disc.length / 2;
     const jitter = p.noise * half;
     const weight = this.weights();
@@ -169,11 +176,22 @@ export class Amoebae {
           next[i] = here;
           continue;
         }
+        // Near the edge, the water beyond it may have a say too.
+        const nearEdge = p.walls > 0 && (x < radius || y < radius || x >= w - radius || y >= h - radius);
+        let water = -1;
+        if (nearEdge) {
+          water = 0;
+          while (water < kinds && seen[water] !== MEDIUM) water++;
+          if (water === kinds) seen[kinds++] = MEDIUM;
+        }
         count.fill(0, 0, kinds);
         for (let d = 0; d < disc.length; d += 2) {
           const nx = x + disc[d];
           const ny = y + disc[d + 1];
-          if (nx < 0 || nx >= w || ny < 0 || ny >= h) continue;
+          if (nx < 0 || nx >= w || ny < 0 || ny >= h) {
+            if (nearEdge) count[water] += p.walls;
+            continue;
+          }
           const other = label[ny * w + nx];
           for (let k = 0; k < kinds; k++) {
             if (seen[k] === other) {
