@@ -1014,3 +1014,8 @@ Beyond the field's edge there are no pixels, and counted as nothing the edge
 is a wall the amoebae wet: lying on it spares them a stretch of skin, so they
 stick there. *The field's edge pushes away* counts the pixels beyond it as
 water, so many times over: at 1 the edge is as the water, above it pushes.
+
+*Crumbs falling in* keeps food coming: so many crumbs every thousand steps,
+each at random, but not near the field's edge, where the amoebae are kept
+off, nor on an amoeba. Fed steadily, the amoebae can settle to as many as
+the inflow keeps.

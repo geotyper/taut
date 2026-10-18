@@ -14,6 +14,8 @@ const SMELL_GIVEN = 0.05;
 const SMELL_FLOOR = 1e-12;
 /** How far a crumb reaches, in pixels. */
 const CRUMB_RADIUS = 2.5;
+/** Crumbs fall no nearer the field's edge than this, in pixels. */
+const CRUMB_MARGIN = 16;
 /** An amoeba this share of its newborn area, or less, has starved and dies. */
 const STARVED = 0.35;
 /** A newborn amoeba's radius, in pixels. */
@@ -46,6 +48,8 @@ export interface AmoebaParams {
    * a stretch of skin; one, the edge is as the water; more, it pushes away.
    */
   walls: number;
+  /** Crumbs falling in, every thousand steps. */
+  inflow: number;
 }
 
 /**
@@ -75,11 +79,13 @@ export class Amoebae {
   deaths = 0;
   /** Amoebae alive. */
   count = 0;
-  /** Crumbs at the start, and food eaten so far, in crumbs. */
+  /** Crumbs laid so far, and food eaten so far, in crumbs. */
   crumbs = 0;
   eaten = 0;
 
   private next: Uint16Array;
+  /** Crumbs due to fall, short of a whole one. */
+  private owed = 0;
   private smellNext: Float32Array;
   private labels = 0;
   private area = new Float64Array(2);
@@ -118,27 +124,44 @@ export class Amoebae {
         if ((x + 0.5 - w / 2) ** 2 + (y + 0.5 - h / 2) ** 2 <= r * r) label[y * w + x] = mine;
       }
     }
-    // A crumb is a small disc; its food is shared over its pixels, so every crumb is worth one.
-    const offsets: number[] = [];
-    const reach = Math.ceil(CRUMB_RADIUS);
-    for (let dy = -reach; dy <= reach; dy++) for (let dx = -reach; dx <= reach; dx++) if (dx * dx + dy * dy <= CRUMB_RADIUS ** 2) offsets.push(dx, dy);
-    const share = 2 / offsets.length;
-    const clear = (BORN_RADIUS + 6) ** 2;
-    let laid = 0;
-    for (let tries = 0; laid < crumbs && tries < crumbs * 20; tries++) {
-      const cx = reach + Math.floor(Math.random() * (w - 2 * reach));
-      const cy = reach + Math.floor(Math.random() * (h - 2 * reach));
-      if ((cx - w / 2) ** 2 + (cy - h / 2) ** 2 < clear) continue;
-      for (let d = 0; d < offsets.length; d += 2) food[(cy + offsets[d + 1]) * w + cx + offsets[d]] += share;
-      laid++;
-    }
-    this.crumbs = laid;
     this.measure();
+    for (let laid = 0, tries = 0; laid < crumbs && tries < crumbs * 20; tries++) if (this.drop()) laid++;
     this.target[mine] = this.area[mine];
     this.born[mine] = this.area[mine];
   }
 
+  /**
+   * A crumb at random, away from the field's edge and not on an amoeba;
+   * false when the place drawn would not do. A crumb is a small disc, its
+   * food shared over its pixels, so every crumb is worth one.
+   */
+  drop(): boolean {
+    const { w, h, label, food } = this;
+    const reach = Math.ceil(CRUMB_RADIUS);
+    const keep = CRUMB_MARGIN + reach;
+    const cx = keep + Math.floor(Math.random() * (w - 2 * keep));
+    const cy = keep + Math.floor(Math.random() * (h - 2 * keep));
+    const offsets: number[] = [];
+    for (let dy = -reach; dy <= reach; dy++) {
+      for (let dx = -reach; dx <= reach; dx++) {
+        if (dx * dx + dy * dy > CRUMB_RADIUS ** 2) continue;
+        if (label[(cy + dy) * w + cx + dx] !== MEDIUM) return false;
+        offsets.push(dx, dy);
+      }
+    }
+    const share = 2 / offsets.length;
+    for (let d = 0; d < offsets.length; d += 2) food[(cy + offsets[d + 1]) * w + cx + offsets[d]] += share;
+    this.crumbs++;
+    return true;
+  }
+
   step(p: AmoebaParams): void {
+    // New crumbs fall at the rate set, a share of one every step.
+    this.owed += p.inflow / 1000;
+    while (this.owed >= 1) {
+      this.owed--;
+      for (let tries = 0; tries < 20 && !this.drop(); tries++);
+    }
     this.spreadSmell(p.carries);
     this.feed(p);
     this.look();
@@ -433,6 +456,8 @@ export class Amoebae {
     this.divisions = 0;
     this.deaths = 0;
     this.eaten = 0;
+    this.crumbs = 0;
+    this.owed = 0;
     this.area = new Float64Array(64);
     this.target = new Float64Array(64);
     this.born = new Float64Array(64);

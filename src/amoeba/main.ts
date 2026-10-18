@@ -13,7 +13,7 @@ const COLOR_NUCLEUS = rgb(30, 24, 40);
 const canvas = byId<HTMLCanvasElement>('field');
 const ctx = canvas.getContext('2d')!;
 const stat = byId('stat');
-const params: AmoebaParams = { radius: 4, noise: 0.1, sense: 'smell', pull: 0.35, carries: 40, feeds: 0.1, starves: 6000, walls: 1.5 };
+const params: AmoebaParams = { radius: 4, noise: 0.1, sense: 'smell', pull: 0.35, carries: 40, feeds: 0.1, starves: 6000, walls: 1.5, inflow: 0 };
 
 let size = 384;
 let world = new Amoebae(size, size);
@@ -35,6 +35,7 @@ bindRange('feeds', 2, (v) => (params.feeds = v));
 bindRange('starves', 0, (v) => (params.starves = v));
 bindRange('walls', 1, (v) => (params.walls = v));
 bindRange('crumbs', 0, (v) => (crumbs = v));
+bindRange('inflow', 0, (v) => (params.inflow = v));
 bindRange('speed', 0, (v) => (stepsPerFrame = v));
 onSelect('sense', (v) => (params.sense = v as Sense));
 onSelect('field-size', (v) => {
@@ -157,7 +158,7 @@ function status(): string {
     `${world.count} amoebae`,
     `step ${world.steps}`,
     `${world.divisions} divisions, ${world.deaths} deaths`,
-    `food left ${world.foodLeft.toFixed(0)} of ${world.crumbs} crumbs`,
+    `food left ${world.foodLeft.toFixed(0)} of ${world.crumbs} crumbs laid`,
     `${Math.round(rate)} steps/s`,
   ];
   return parts.join(' · ');
