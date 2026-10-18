@@ -23,8 +23,6 @@ const CRUMB_RADIUS = 2.5;
 const CRUMB_MARGIN = 16;
 /** An amoeba this share of its newborn area, or less, has starved and dies. */
 const STARVED = 0.35;
-/** A newborn amoeba's radius, in pixels. */
-const BORN_RADIUS = 14;
 /** How fast the way a blind amoeba reaches turns, in radians per step, as a random walk. */
 const WANDER = 0.04;
 /** Two amoebae with this many pixels of film between them share food at the full rate. */
@@ -90,6 +88,22 @@ export interface AmoebaParams {
   lightPull: number;
   /** How fast the spots drift, in pixels every hundred steps; zero, they stay. */
   lightMoves: number;
+  /** A newborn amoeba's radius, in pixels: the first, and every daughter divided from now on. */
+  bornRadius: number;
+  /** An amoeba divides at this many times its newborn area. */
+  divides: number;
+  /**
+   * How much a fed amoeba loses interest: at one, one about to divide no
+   * longer reaches for food or light and wanders instead, and the hungrier,
+   * the harder it reaches.
+   */
+  sated: number;
+  /**
+   * Steps over which an amoeba gets used to the light it is in, so even
+   * light stops drawing it and it wanders until the light changes; zero,
+   * it never does.
+   */
+  adapts: number;
 }
 
 /**
@@ -157,6 +171,14 @@ export class Amoebae {
   private edgeSmell = new Float64Array(2);
   /** The mean log light along every amoeba's edge. */
   private edgeLight = new Float64Array(2);
+  /** The log light every amoeba is used to; NaN until it has been in some. */
+  private usedTo = new Float64Array(2);
+  /** How hard every amoeba reaches for food and for light this step, and how much it wanders. */
+  private wantsFood = new Float64Array(2);
+  private wantsLight = new Float64Array(2);
+  private wanders = new Float64Array(2);
+  /** A newborn's area, by the radius set. */
+  private bornArea = Math.PI * 14 * 14;
   /** The spots of light: where each is, and the way it drifts. */
   readonly lightX: number[] = [];
   readonly lightY: number[] = [];
@@ -183,7 +205,7 @@ export class Amoebae {
   }
 
   /** One amoeba in the middle, and crumbs scattered round it. */
-  start(crumbs: number): void {
+  start(crumbs: number, bornRadius = 14): void {
     const { w, h, label } = this;
     this.reset();
     label.fill(MEDIUM);
@@ -195,7 +217,7 @@ export class Amoebae {
     this.foodCell.fill(0);
     this.smell.fill(0);
     const mine = this.newLabel(Math.random());
-    const r = BORN_RADIUS;
+    const r = bornRadius;
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
         if ((x + 0.5 - w / 2) ** 2 + (y + 0.5 - h / 2) ** 2 <= r * r) label[y * w + x] = mine;
@@ -248,6 +270,8 @@ export class Amoebae {
     this.spreadSmell(p.carries);
     this.moveLights(p);
     this.look();
+    this.bornArea = Math.PI * p.bornRadius * p.bornRadius;
+    this.drives(p);
     const { w, h, label } = this;
     if (this.discRadius !== p.radius) this.buildDisc(p.radius);
     const disc = this.disc;
@@ -259,7 +283,7 @@ export class Amoebae {
     const blind = p.sense === 'blind';
     const stick = p.stick;
     const lightReach = this.lightX.length > 0 ? p.lightPull * half : 0;
-    const { edgeLight } = this;
+    const { edgeLight, wantsFood, wantsLight, wanders } = this;
     const { sum, area, edgeSmell, heading, changed, changedTo } = this;
     const seen = new Uint16Array(10);
     const count = new Float64Array(10);
@@ -322,19 +346,14 @@ export class Amoebae {
         if (stick !== 0 && l !== MEDIUM) score += stick * (cells - count[k]);
         if (l !== MEDIUM && reach !== 0 && area[l] > 0) {
           // Out where it smells more than the rest of the edge, or the way it wanders.
-          let lean: number;
-          if (blind) {
-            const dx = x - sum[l * 2] / area[l];
-            const dy = y - sum[l * 2 + 1] / area[l];
-            const r = Math.hypot(dx, dy) || 1;
-            lean = (dx * Math.cos(heading[l]) + dy * Math.sin(heading[l])) / r;
-          } else {
-            lean = Math.max(-1, Math.min(1, scent - edgeSmell[l]));
-          }
-          score += reach * lean;
+          const dx = x - sum[l * 2] / area[l];
+          const dy = y - sum[l * 2 + 1] / area[l];
+          const away = (dx * Math.cos(heading[l]) + dy * Math.sin(heading[l])) / (Math.hypot(dx, dy) || 1);
+          if (blind) score += reach * away;
+          else score += reach * (wantsFood[l] * Math.max(-1, Math.min(1, scent - edgeSmell[l])) + wanders[l] * away);
         }
         // Out where it is lighter than the rest of the edge, or darker.
-        if (l !== MEDIUM && lightReach !== 0 && area[l] > 0) score += lightReach * Math.max(-1, Math.min(1, shine - edgeLight[l]));
+        if (l !== MEDIUM && lightReach !== 0 && area[l] > 0) score += lightReach * wantsLight[l] * Math.max(-1, Math.min(1, shine - edgeLight[l]));
         if (score > bestScore) {
           bestScore = score;
           best = l;
@@ -412,6 +431,30 @@ export class Amoebae {
     const top = smell[i] + (smell[i + 1] - smell[i]) * fx;
     const bottom = smell[i + sw] + (smell[i + sw + 1] - smell[i + sw]) * fx;
     return top + (bottom - top) * fy;
+  }
+
+  /**
+   * How hard every amoeba reaches this step. Fed, it wants less, by `sated`:
+   * nothing at all about to divide. Used to the light it is in, by
+   * `adapts`, light draws it only as much as it differs from what it is used
+   * to, a factor of e for the full pull. What it does not want, it wanders.
+   */
+  private drives(p: AmoebaParams): void {
+    const { target, born, edgeLight, usedTo, wantsFood, wantsLight, wanders } = this;
+    const lit = this.lightX.length > 0;
+    for (let l = 1; l <= this.labels; l++) {
+      const full = born[l] > 0 ? Math.max(0, Math.min(1, (target[l] / born[l] - STARVED) / (p.divides - STARVED))) : 0;
+      const hungry = 1 - p.sated * full;
+      let fresh = 1;
+      if (lit && p.adapts > 0) {
+        if (Number.isNaN(usedTo[l])) usedTo[l] = edgeLight[l];
+        fresh = Math.min(1, Math.abs(edgeLight[l] - usedTo[l]));
+        usedTo[l] += (edgeLight[l] - usedTo[l]) / p.adapts;
+      }
+      wantsFood[l] = hungry;
+      wantsLight[l] = hungry * fresh;
+      wanders[l] = 1 - (lit && p.adapts > 0 ? hungry * fresh : hungry);
+    }
   }
 
   /** The light at a point, from the brightest spot on it: 1 at a spot's middle. */
@@ -587,7 +630,7 @@ export class Amoebae {
         target[l] = 0;
         this.deaths++;
         this.count--;
-      } else if (target[l] >= 2 * born[l]) due.push(l);
+      } else if (target[l] >= p.divides * born[l]) due.push(l);
     }
     if (due.length > 0) this.divide(due);
   }
@@ -697,7 +740,9 @@ export class Amoebae {
       const half = this.target[l] / 2;
       this.target[l] = half;
       this.target[child] = half;
-      this.born[child] = this.born[l];
+      this.born[l] = this.bornArea;
+      this.born[child] = this.bornArea;
+      this.usedTo[child] = this.usedTo[l];
       // The daughters crawl off apart.
       this.heading[l] = angle;
       this.heading[child] = angle + Math.PI;
@@ -750,6 +795,10 @@ export class Amoebae {
     this.heading = new Float64Array(64);
     this.edgeSmell = new Float64Array(64);
     this.edgeLight = new Float64Array(64);
+    this.usedTo = new Float64Array(64).fill(NaN);
+    this.wantsFood = new Float64Array(64);
+    this.wantsLight = new Float64Array(64);
+    this.wanders = new Float64Array(64);
   }
 
   private newLabel(tint: number): number {
@@ -768,6 +817,12 @@ export class Amoebae {
       this.heading = grow(this.heading, (n) => new Float64Array(n));
       this.edgeSmell = grow(this.edgeSmell, (n) => new Float64Array(n));
       this.edgeLight = grow(this.edgeLight, (n) => new Float64Array(n));
+      const used = this.usedTo.length;
+      this.usedTo = grow(this.usedTo, (n) => new Float64Array(n));
+      this.usedTo.fill(NaN, used);
+      this.wantsFood = grow(this.wantsFood, (n) => new Float64Array(n));
+      this.wantsLight = grow(this.wantsLight, (n) => new Float64Array(n));
+      this.wanders = grow(this.wanders, (n) => new Float64Array(n));
     }
     this.tint[mine] = tint;
     this.heading[mine] = Math.random() * 2 * Math.PI;

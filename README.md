@@ -1037,6 +1037,22 @@ from it when the pull is below zero. *Light drifts* sets the spots moving,
 each on a slowly turning way, turned back off the field's edge, so the
 amoebae fed by it must follow or starve.
 
+*Newborn radius* sets the size of the first amoeba and of every daughter
+divided from then on, and *Divides at* how many times its newborn area an
+amoeba grows to before it divides; the daughters share what it held, so
+above twice they are born larger than a newborn.
+
+A still spot of light holds an amoeba: in the middle the light is even all
+round its edge, so nothing draws it on, and it is fed. Two options move it.
+*Fed, it loses interest* scales how hard it reaches for food and light by
+how hungry it is, between starving and about to divide, and what it does
+not want it gives to wandering, the way a blind amoeba reaches. *Gets used
+to the light* keeps for every amoeba the log light it is used to, following
+the light along its edge over the steps set; light then draws it only by
+how far that differs from what it is used to, the full pull at a factor of
+e. In an even spot it gets used to it and wanders off; out of the light,
+the change is large and draws it back.
+
 Two options make a body of many. *Amoebae stick together* lowers the tension
 of a film between two amoebae below that of one on the water, by the share
 set (Esedoglu and Otto's way, as with the cells' stiffer outer films), so

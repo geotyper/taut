@@ -14,7 +14,7 @@ const MOST_SCALE = 4;
 const canvas = byId<HTMLCanvasElement>('field');
 const ctx = canvas.getContext('2d')!;
 const stat = byId('stat');
-const params: AmoebaParams = { radius: 4, noise: 0.1, sense: 'smell', pull: 0.35, carries: 40, feeds: 0.1, starves: 6000, walls: 1.5, inflow: 0, banded: true, stick: 0, share: 0, lights: 0, lightRadius: 60, lightFeeds: 0.3, lightPull: 0.3, lightMoves: 0 };
+const params: AmoebaParams = { radius: 4, noise: 0.1, sense: 'smell', pull: 0.35, carries: 40, feeds: 0.1, starves: 6000, walls: 1.5, inflow: 0, banded: true, stick: 0, share: 0, lights: 0, lightRadius: 60, lightFeeds: 0.3, lightPull: 0.3, lightMoves: 0, bornRadius: 14, divides: 2, sated: 0, adapts: 0 };
 
 let size = 384;
 let world = new Amoebae(size, size);
@@ -54,6 +54,10 @@ bindRange('light-radius', 0, (v) => (params.lightRadius = v));
 bindRange('light-feeds', 2, (v) => (params.lightFeeds = v));
 bindRange('light-pull', 2, (v) => (params.lightPull = v));
 bindRange('light-moves', 0, (v) => (params.lightMoves = v));
+bindRange('born-radius', 0, (v) => (params.bornRadius = v));
+bindRange('divides', 1, (v) => (params.divides = v));
+bindRange('sated', 2, (v) => (params.sated = v));
+bindRange('adapts', 0, (v) => (params.adapts = v));
 bindRange('crumbs', 0, (v) => (crumbs = v));
 bindRange('inflow', 0, (v) => (params.inflow = v));
 bindRange('speed', 0, (v) => (stepsPerFrame = v));
@@ -118,7 +122,7 @@ Object.assign(window, { amoebaPage: { world: () => world } });
 requestAnimationFrame(frame);
 
 function restart(): void {
-  world.start(crumbs);
+  world.start(crumbs, params.bornRadius);
   painter.clearTrails();
 }
 

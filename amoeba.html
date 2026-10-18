@@ -77,6 +77,33 @@
           film between them even out their food, the faster the longer the film.
         </p>
         <label>
+          <span>Newborn radius, pixels <output id="born-radius-out"></output></span>
+          <input id="born-radius" type="range" min="5" max="40" step="1" value="14" />
+        </label>
+        <label>
+          <span>Divides at, times its newborn area <output id="divides-out"></output></span>
+          <input id="divides" type="range" min="1.4" max="4" step="0.1" value="2" />
+        </label>
+        <p class="hint">
+          The radius holds for the first amoeba and for every daughter from
+          now on. Divided, the two share what it held, so above 2 the
+          daughters are born larger than a newborn.
+        </p>
+        <label>
+          <span>Fed, it loses interest <output id="sated-out"></output></span>
+          <input id="sated" type="range" min="0" max="1" step="0.05" value="0" />
+        </label>
+        <label>
+          <span>Gets used to the light in, steps <output id="adapts-out"></output></span>
+          <input id="adapts" type="range" min="0" max="3000" step="50" value="0" />
+        </label>
+        <p class="hint">
+          Fed, an amoeba reaches less for food and light and wanders instead,
+          at 1 not at all when about to divide. Used to its light, it is drawn
+          only by a change in it: in an even spot it wanders off, and out of
+          the light, it is drawn back. 0, never.
+        </p>
+        <label>
           <span>Spots of light <output id="lights-out"></output></span>
           <input id="lights" type="range" min="0" max="6" step="1" value="0" />
         </label>
