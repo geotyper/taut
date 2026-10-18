@@ -1027,3 +1027,11 @@ step round the pixels that changed. The areas and centres are kept up the
 same way and food is eaten as an amoeba takes a pixel, so a step costs what
 the membranes are long. The smell, smooth as it is, is worked out on a grid
 four times coarser and read between its squares.
+
+Two options make a body of many. *Amoebae stick together* lowers the tension
+of a film between two amoebae below that of one on the water, by the share
+set (Esedoglu and Otto's way, as with the cells' stiffer outer films), so
+daughters stay together. *Neighbours share food* lets two amoebae with a
+film between them even out what they hold to, a share of the difference
+every hundred steps, at the full rate once the film is 20 pixels long: the
+cells on the inside, which never touch a crumb, live on what the outer ones eat.

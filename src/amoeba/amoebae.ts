@@ -27,6 +27,8 @@ const STARVED = 0.35;
 const BORN_RADIUS = 14;
 /** How fast the way a blind amoeba reaches turns, in radians per step, as a random walk. */
 const WANDER = 0.04;
+/** Two amoebae with this many pixels of film between them share food at the full rate. */
+const FULL_CONTACT = 20;
 /** The two daughters' colours part by this much round the hues. */
 const TINT_PART = 0.08;
 
@@ -61,6 +63,16 @@ export interface AmoebaParams {
    * keeps it. The same result, for much less work on a large field.
    */
   banded: boolean;
+  /**
+   * How much less the film between two amoebae pulls than one on the water,
+   * as a share: above zero they stick together, as the cells of one body.
+   */
+  stick: number;
+  /**
+   * The share of the difference in food two amoebae sharing a film even
+   * out every hundred steps; zero, each keeps its own.
+   */
+  share: number;
 }
 
 /**
@@ -216,6 +228,7 @@ export class Amoebae {
     const weight = this.weights();
     const reach = p.pull * half;
     const blind = p.sense === 'blind';
+    const stick = p.stick;
     const { sum, area, edgeSmell, heading, changed, changedTo } = this;
     const seen = new Uint16Array(10);
     const count = new Float64Array(10);
@@ -266,11 +279,15 @@ export class Amoebae {
         }
       }
       const scent = blind || reach === 0 ? 0 : Math.log(this.smellAt(x, y) + SMELL_FLOOR);
+      // All the amoebae round, for the films between them, which pull less with `stick`.
+      let cells = 0;
+      if (stick !== 0) for (let k = 0; k < kinds; k++) if (seen[k] !== MEDIUM) cells += count[k];
       let best = here;
       let bestScore = -Infinity;
       for (let k = 0; k < kinds; k++) {
         const l = seen[k];
         let score = count[k] * weight[l] + jitter * (Math.random() - 0.5);
+        if (stick !== 0 && l !== MEDIUM) score += stick * (cells - count[k]);
         if (l !== MEDIUM && reach !== 0 && area[l] > 0) {
           // Out where it smells more than the rest of the edge, or the way it wanders.
           let lean: number;
@@ -296,6 +313,7 @@ export class Amoebae {
     }
     this.apply(changes, p.feeds);
     this.steps++;
+    if (p.share > 0) this.shareFood(p.share);
     this.live(p.starves);
     for (let l = 1; l <= this.labels; l++) heading[l] += WANDER * gauss();
   }
@@ -442,6 +460,38 @@ export class Amoebae {
       }
     }
     return false;
+  }
+
+  /**
+   * Amoebae with a film between them even out their food, the faster the
+   * longer the film: what one has over the other flows across it.
+   */
+  private shareFood(share: number): void {
+    const { w, label, band, target } = this;
+    const n = this.labels + 1;
+    const contact = new Map<number, number>();
+    for (let t = 0; t < this.bandSize; t++) {
+      const i = band[t];
+      const a = label[i];
+      if (a === MEDIUM || !(target[a] > 0)) continue;
+      const x = i % w;
+      // Each film pixel once: to the right and below.
+      for (const j of [x + 1 < w ? i + 1 : -1, i + w < label.length ? i + w : -1]) {
+        if (j < 0) continue;
+        const b = label[j];
+        if (b === MEDIUM || b === a || !(target[b] > 0)) continue;
+        const key = a < b ? a * n + b : b * n + a;
+        contact.set(key, (contact.get(key) ?? 0) + 1);
+      }
+    }
+    const rate = share / 100;
+    for (const [key, film] of contact) {
+      const a = Math.floor(key / n);
+      const b = key % n;
+      const flow = rate * Math.min(1, film / FULL_CONTACT) * (target[a] - target[b]) * 0.5;
+      target[a] -= flow;
+      target[b] += flow;
+    }
   }
 
   /** Every amoeba burns some of what it holds to; one starved dies, one fed to twice its size divides. */

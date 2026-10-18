@@ -13,7 +13,7 @@ const COLOR_NUCLEUS = rgb(30, 24, 40);
 const canvas = byId<HTMLCanvasElement>('field');
 const ctx = canvas.getContext('2d')!;
 const stat = byId('stat');
-const params: AmoebaParams = { radius: 4, noise: 0.1, sense: 'smell', pull: 0.35, carries: 40, feeds: 0.1, starves: 6000, walls: 1.5, inflow: 0, banded: true };
+const params: AmoebaParams = { radius: 4, noise: 0.1, sense: 'smell', pull: 0.35, carries: 40, feeds: 0.1, starves: 6000, walls: 1.5, inflow: 0, banded: true, stick: 0, share: 0 };
 
 let size = 384;
 let world = new Amoebae(size, size);
@@ -34,6 +34,8 @@ bindRange('carries', 0, (v) => (params.carries = v));
 bindRange('feeds', 2, (v) => (params.feeds = v));
 bindRange('starves', 0, (v) => (params.starves = v));
 bindRange('walls', 1, (v) => (params.walls = v));
+bindRange('stick', 2, (v) => (params.stick = v));
+bindRange('share', 2, (v) => (params.share = v));
 bindRange('crumbs', 0, (v) => (crumbs = v));
 bindRange('inflow', 0, (v) => (params.inflow = v));
 bindRange('speed', 0, (v) => (stepsPerFrame = v));

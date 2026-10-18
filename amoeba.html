@@ -64,6 +64,19 @@
           <input id="starves" type="range" min="500" max="20000" step="500" value="6000" />
         </label>
         <label>
+          <span>Amoebae stick together <output id="stick-out"></output></span>
+          <input id="stick" type="range" min="0" max="0.6" step="0.02" value="0" />
+        </label>
+        <label>
+          <span>Neighbours share food, per 100 steps <output id="share-out"></output></span>
+          <input id="share" type="range" min="0" max="1" step="0.05" value="0" />
+        </label>
+        <p class="hint">
+          Sticking, the film between two amoebae pulls less than one on the
+          water, so daughters stay together as one body. Sharing, two with a
+          film between them even out their food, the faster the longer the film.
+        </p>
+        <label>
           <span>The field's edge pushes away <output id="walls-out"></output></span>
           <input id="walls" type="range" min="0" max="3" step="0.1" value="1.5" />
         </label>
