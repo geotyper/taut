@@ -26,7 +26,7 @@ let crumbs = 200;
 let stepsPerFrame = 2;
 let showSmell = true;
 let showNuclei = false;
-let smooth = true;
+let smooth = false;
 /** The outer membrane's width and the inner walls' width, in field pixels, and how much the inner walls show. */
 let outerWidth = 2.5;
 let innerWidth = 0.6;
