@@ -1019,3 +1019,11 @@ water, so many times over: at 1 the edge is as the water, above it pushes.
 each at random, but not near the field's edge, where the amoebae are kept
 off, nor on an amoeba. Fed steadily, the amoebae can settle to as many as
 the inflow keeps.
+
+Fields go up to 1024². A pixel takes a label from the 3×3 round it, so one
+with its own label all round cannot change, and *Count only by the
+membranes* looks only at the pixels by one: a band kept up from step to
+step round the pixels that changed. The areas and centres are kept up the
+same way and food is eaten as an amoeba takes a pixel, so a step costs what
+the membranes are long. The smell, smooth as it is, is worked out on a grid
+four times coarser and read between its squares.

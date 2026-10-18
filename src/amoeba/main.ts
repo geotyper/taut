@@ -1,4 +1,4 @@
-import { Amoebae, MEDIUM, type AmoebaParams, type Sense } from './amoebae.ts';
+import { Amoebae, MEDIUM, SMELL_CELL, type AmoebaParams, type Sense } from './amoebae.ts';
 
 /** Time a frame may spend on steps, in ms. */
 const BUDGET = 30;
@@ -13,7 +13,7 @@ const COLOR_NUCLEUS = rgb(30, 24, 40);
 const canvas = byId<HTMLCanvasElement>('field');
 const ctx = canvas.getContext('2d')!;
 const stat = byId('stat');
-const params: AmoebaParams = { radius: 4, noise: 0.1, sense: 'smell', pull: 0.35, carries: 40, feeds: 0.1, starves: 6000, walls: 1.5, inflow: 0 };
+const params: AmoebaParams = { radius: 4, noise: 0.1, sense: 'smell', pull: 0.35, carries: 40, feeds: 0.1, starves: 6000, walls: 1.5, inflow: 0, banded: true };
 
 let size = 384;
 let world = new Amoebae(size, size);
@@ -47,6 +47,9 @@ onSelect('field-size', (v) => {
   pixels = new Uint32Array(image.data.buffer);
   restart();
 });
+const bandToggle = byId<HTMLInputElement>('banded');
+bandToggle.addEventListener('change', () => (params.banded = bandToggle.checked));
+params.banded = bandToggle.checked;
 const smellToggle = byId<HTMLInputElement>('show-smell');
 smellToggle.addEventListener('change', () => (showSmell = smellToggle.checked));
 
@@ -106,10 +109,18 @@ function frame(): void {
 }
 
 function render(): void {
-  const { label, food, smell } = world;
+  const { label, food, smell, sw } = world;
+  // How lit the water is on every square of the smell's grid, by the log of the smell.
   let strongest = 0;
   if (showSmell) for (let i = 0; i < smell.length; i++) strongest = Math.max(strongest, smell[i]);
   const top = Math.log(strongest + 1e-30);
+  const glow = new Float32Array(smell.length);
+  if (showSmell && strongest > 0) {
+    for (let i = 0; i < smell.length; i++) {
+      const s = Math.max(0, 1 + (Math.log(smell[i] + 1e-30) - top) / SMELL_SHOWN);
+      glow[i] = s * s;
+    }
+  }
   const tints = new Uint32Array(world.labelCount + 1);
   for (let l = 1; l <= world.labelCount; l++) tints[l] = amoebaColour(l);
   for (let y = 0; y < size; y++) {
@@ -124,8 +135,8 @@ function render(): void {
         pixels[i] = rgb(Math.round(60 + 120 * f), Math.round(90 + 140 * f), Math.round(40 + 40 * f));
       } else {
         // The water, lit faintly where the food smells.
-        const s = showSmell && strongest > 0 ? Math.max(0, 1 + (Math.log(smell[i] + 1e-30) - top) / SMELL_SHOWN) : 0;
-        pixels[i] = rgb(11, Math.round(13 + 30 * s * s), Math.round(17 + 22 * s * s));
+        const g = glow[Math.floor(y / SMELL_CELL) * sw + Math.floor(x / SMELL_CELL)];
+        pixels[i] = rgb(11, Math.round(13 + 30 * g), Math.round(17 + 22 * g));
       }
     }
   }
@@ -159,6 +170,7 @@ function status(): string {
     `step ${world.steps}`,
     `${world.divisions} divisions, ${world.deaths} deaths`,
     `food left ${world.foodLeft.toFixed(0)} of ${world.crumbs} crumbs laid`,
+    `${world.bandPixels} pixels by membranes, ${((100 * world.bandPixels) / (size * size)).toFixed(1)}% of the field`,
     `${Math.round(rate)} steps/s`,
   ];
   return parts.join(' · ');

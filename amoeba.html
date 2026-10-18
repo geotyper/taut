@@ -82,8 +82,19 @@
             <option value="256">256 × 256</option>
             <option value="384" selected>384 × 384</option>
             <option value="512">512 × 512</option>
+            <option value="768">768 × 768</option>
+            <option value="1024">1024 × 1024</option>
           </select>
         </label>
+        <label class="check">
+          <input id="banded" type="checkbox" checked />
+          <span>Count only by the membranes</span>
+        </label>
+        <p class="hint">
+          A pixel takes a label from round it, so only those by a membrane
+          can change; counting only those gives the same, much faster on a
+          large field. Off, every pixel is looked at, to compare.
+        </p>
         <label>
           <span>Kernel radius <output id="radius-out"></output></span>
           <input id="radius" type="range" min="2" max="8" step="1" value="4" />
