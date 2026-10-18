@@ -991,3 +991,21 @@ npm run dev
 
 The numbers under each field are the step count and the band's area and length
 relative to the convex hull; a taut band reads 1.000 for both.
+
+## Amoebae
+
+`amoeba.html` puts one amoeba in water with crumbs of food scattered round
+it. The amoeba is a bubble of the same foam rule: its skin pulls taut and it
+keeps its area. Its edge reaches out as well. *By the smell*, food gives off
+a smell that spreads and fades over the distance set, and a pixel counts for
+the amoeba more where the log of the smell is above its mean along the edge,
+so a pseudopod goes out towards food and the back draws in. *Blind*, the
+amoeba reaches the way it wanders, a direction turning at random, and finds
+food only by touching it.
+
+Food under an amoeba is eaten and becomes area to hold to; living burns it
+away, so with nothing to eat a newborn amoeba lasts the steps set. At twice
+its newborn area it divides across its long axis, and the two crawl off
+apart; starved to a third, it dies and shrinks away. Amoebae do not eat each
+other: between two is a film, and they push. A dark dot marks every nucleus;
+the better fed an amoeba, the lighter.

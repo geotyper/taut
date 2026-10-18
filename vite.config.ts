@@ -5,7 +5,7 @@ export default defineConfig({
   base: './',
   build: {
     rollupOptions: {
-      input: { main: 'index.html', three: '3d.html', clusters: 'clusters.html', foam: 'foam.html', foam3d: 'foam3d.html', wire: 'wire.html', cells: 'cells.html' },
+      input: { main: 'index.html', three: '3d.html', clusters: 'clusters.html', foam: 'foam.html', foam3d: 'foam3d.html', wire: 'wire.html', cells: 'cells.html', amoeba: 'amoeba.html' },
     },
   },
 });
