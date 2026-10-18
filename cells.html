@@ -88,6 +88,14 @@
           of outer cells pull harder by the factor set. With many divisions
           the cells get small: past 7 or 8 in the egg, take a larger field.
         </p>
+        <label>
+          <span>A cell gives way to no less than <output id="least-out"></output> of its newborn area</span>
+          <input id="least" type="range" min="0" max="0.9" step="0.05" value="0" />
+        </label>
+        <p class="hint">
+          Zero lets crowded cells be crushed away, as they are in a foam; above
+          it, a cell squeezed that far pushes back hard and stays.
+        </p>
         <label class="check">
           <input id="measure" type="checkbox" />
           <span>Measure the films</span>

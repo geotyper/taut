@@ -8,6 +8,8 @@ const PRESSURE_GAIN = 4;
 const PRESSURE_LIMIT = 0.5;
 /** Cells smaller than this many squared kernel radii push more gently, as in the foam. */
 const GENTLE_BELOW = 50;
+/** How hard a cell pushes back once squeezed below its least area, with that option on. */
+const FLOOR_PUSH = 1.5;
 /**
  * A cell rounder than this, its long axis over its short one, has no long
  * axis to speak of and divides in a direction at random. A round egg would
@@ -40,6 +42,11 @@ export interface TissueParams {
    * either side of it: one, and the outer cells are as the inner.
    */
   stiffer: number;
+  /**
+   * The least share of the area it was born with that a cell lets itself
+   * be squeezed to; below it, the cell pushes back hard. Zero, no least area.
+   */
+  least: number;
 }
 
 /**
@@ -85,6 +92,8 @@ export class Tissue {
   private area = new Float64Array(2);
   /** The area each cell holds to. */
   private target = new Float64Array(2);
+  /** The area each cell held to when it was born. */
+  private born = new Float64Array(2);
   /** The area it holds to when it divides next, with a growing tissue. */
   private divideAt = new Float64Array(2);
   /** Divisions from the egg or the first cell. */
@@ -115,6 +124,7 @@ export class Tissue {
     }
     this.measure();
     this.target[mine] = this.area[mine];
+    this.born[mine] = this.area[mine];
     this.divideAt[mine] = Infinity;
     this.fate[mine] = OUTER;
   }
@@ -131,6 +141,7 @@ export class Tissue {
     }
     this.measure();
     this.target[mine] = this.area[mine];
+    this.born[mine] = this.area[mine];
     this.divideAt[mine] = this.spread(2 * this.area[mine]);
     this.fate[mine] = OUTER;
   }
@@ -308,6 +319,8 @@ export class Tissue {
       this.fate[child] = this.fate[l];
       this.target[l] = half;
       this.target[child] = half;
+      this.born[l] = half;
+      this.born[child] = half;
       // In a shell nothing grows, so nothing divides of itself.
       const grows = Number.isFinite(this.divideAt[l]);
       this.divideAt[l] = grows ? this.spread(2 * half) : Infinity;
@@ -410,6 +423,10 @@ export class Tissue {
         weight[l] = 1 - PRESSURE_LIMIT;
         continue;
       }
+      if (this.area[l] < p.least * this.born[l]) {
+        weight[l] = 1 + FLOOR_PUSH;
+        continue;
+      }
       const gentle = Math.min(1, Math.sqrt(hold / (GENTLE_BELOW * p.radius * p.radius)));
       const lack = (gentle * PRESSURE_GAIN * (hold - this.area[l])) / hold;
       weight[l] = 1 + Math.max(-PRESSURE_LIMIT, Math.min(PRESSURE_LIMIT, lack));
@@ -428,6 +445,7 @@ export class Tissue {
     this.divisions = 0;
     this.area = new Float64Array(64);
     this.target = new Float64Array(64);
+    this.born = new Float64Array(64);
     this.divideAt = new Float64Array(64);
     this.generation = new Uint8Array(64);
     this.fate = new Uint8Array(64);
@@ -444,6 +462,7 @@ export class Tissue {
       };
       this.area = grow(this.area, (n) => new Float64Array(n));
       this.target = grow(this.target, (n) => new Float64Array(n));
+      this.born = grow(this.born, (n) => new Float64Array(n));
       this.divideAt = grow(this.divideAt, (n) => new Float64Array(n));
       this.generation = grow(this.generation, (n) => new Uint8Array(n));
       this.fate = grow(this.fate, (n) => new Uint8Array(n));

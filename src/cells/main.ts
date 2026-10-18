@@ -29,7 +29,7 @@ const canvas = byId<HTMLCanvasElement>('field');
 const ctx = canvas.getContext('2d')!;
 const stat = byId('stat');
 const plot = byId<HTMLCanvasElement>('measure-plot');
-const params: TissueParams = { radius: 4, noise: 0.1, stiffer: 1 };
+const params: TissueParams = { radius: 4, noise: 0.1, stiffer: 1, least: 0 };
 
 let size = 384;
 let tissue = new Tissue(size, size);
@@ -59,6 +59,7 @@ const seepage = new Seepage();
 bindRange('radius', 0, (v) => (params.radius = v));
 bindRange('noise', 2, (v) => (params.noise = v));
 bindRange('stiffer', 1, (v) => (params.stiffer = v));
+bindRange('least', 2, (v) => (params.least = v));
 bindRange('speed', 0, (v) => (stepsPerFrame = v));
 bindRange('every', 0, (v) => (every = v));
 bindRange('rounds', 0, (v) => (rounds = v));
