@@ -178,16 +178,55 @@ works something out and does not only draw.
 - **Shareable links** that carry the stones or the centres as well as the
   settings.
 
-## Membrane and clusters, briefly
+## Membrane and clusters
 
-These are described in full in `future_ideas.md` and `progress.md`.
+These are described in full in `future_ideas.md` and `progress.md`; here
+all of them in one list, as they stand.
 
-- Real friction: the band grips a stone where it first touches it.
-- An exact convex hull in 3D (quickhull) drawn as a wireframe, with the volume
-  compared against it.
-- Stones taken away on the fly, which can split a cluster.
-- The whole merge tree of the clusters, from a sweep of the radius.
-- Clusters by density, as in DBSCAN, so that lone stones and thin chains are
+The band itself (2D):
+
+- **Real friction**: the band grips a stone where it first touches it, so
+  the shape depends on the side the wave came from. The band needs a memory
+  for it: a third state, "band", a "stuck since step N" counter, or a
+  quantity carried along the front.
+- **Deterministic tension**: a rule with no noise that does not stall, with
+  a larger neighbourhood or lines as in 3D.
+- **The hull grown from the stones by a local rule**: a signal, a field of
+  distances, spreads from the stones first and the growth reads it; or
+  several rounds of a growing radius.
+- **Padding**, as in 3D: without it a band on two near stones is a sliver,
+  and a lone stone has none.
+- **A uniform start**: random numbers on the first step instead of indices.
+
+The field:
+
+- **A hexagonal lattice**: six equal neighbours, less anisotropy.
+- **Walls the band cannot cross**, for a hull relative to them.
+- **A torus, or a field with holes**, where the outside is not one region.
+- **Alpha shapes**, against an exact one as the band is against the hull.
+- **The band as a path**: the shortest closed curve round some stones,
+  free to leave others out.
+
+3D:
+
+- **An honest convex hull**: the line rule settles at 72–82% of the hull's
+  volume. More directions, directions by the local normal, or planes; and
+  an exact quickhull drawn as a wireframe to compare.
+- **Inflation by a rule**, with a volume or area constraint, not a blur.
+- **A fixed area**: the membrane no smaller than set, bulging between stones.
+
+Clusters:
+
+- **The merge tree**: the radius swept from zero up, and the radius at which
+  clusters merge recorded, the single-linkage dendrogram, and a film of it.
+- **Clusters by density**, as DBSCAN, so lone stones and thin bridges are
   left out.
-- A hexagonal lattice in 2D.
-- Walls that the band cannot cross, so the answer is a hull relative to them.
+- **A stone taken away splitting a cluster**, with labels that can split.
+
+Presentation:
+
+- **Area and length plotted over the steps**, to see how it converges.
+- **A map of the step each cell settled at.**
+- **The 3D membrane exported** as STL or OBJ.
+- **A clip recorded** with a key, by MediaRecorder.
+- **Links carrying the stones** and the settings.

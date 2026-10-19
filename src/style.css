@@ -115,6 +115,11 @@ canvas.plot {
   image-rendering: auto;
 }
 
+canvas.tree {
+  height: 220px;
+  cursor: pointer;
+}
+
 canvas.smooth {
   image-rendering: auto;
 }

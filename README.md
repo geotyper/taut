@@ -255,6 +255,19 @@ the choice, because the wide kernel erases anything thinner than its radius, a
 band stretched between two small stones included. As the cluster radius grows
 the clusters merge, and at the top it is the single hull again.
 
+**The merge tree.** *Grow the merge tree* (key `T`) sweeps the cluster
+radius up from nothing and draws, as it goes, the radius at which every two
+clusters merge: the single-linkage dendrogram. It is the same wave as the
+first stage, let run on: after t steps it has grown every stone by a disc of
+radius t, and a cell it reaches joins the blobs round it, by a union-find;
+where it joins two that were apart, their clusters merge at t. Every joined
+piece of stone is a leaf, and a merged cluster keeps the colour of its
+larger half, so on the field a colour spreads as its cluster takes in the
+others. The dashed line on the tree is the cluster radius set, with the
+clusters under it in colour; a click on the tree sets the radius to that
+height, and the bands are pulled taut at it. Once one cluster is left the
+field goes back to the bands.
+
 ## Foam
 
 `foam.html` has no stones. Bubbles grow from scattered centres until they

@@ -25,12 +25,13 @@
         </p>
         <p class="hint">
           Left button draws stones, right button or Shift erases. Keys:
-          <kbd>N</kbd> new stones, <kbd>A</kbd> add a stone, <kbd>R</kbd> restart, <kbd>Space</kbd> pause.
+          <kbd>N</kbd> new stones, <kbd>A</kbd> add a stone, <kbd>R</kbd> restart,
+          <kbd>T</kbd> grow the merge tree, <kbd>Space</kbd> pause.
         </p>
 
         <label>
           <span>Cluster radius <output id="reach-out"></output></span>
-          <input id="reach" type="range" min="1" max="40" step="1" value="10" />
+          <input id="reach" type="range" min="1" max="100" step="1" value="10" />
         </label>
 
         <label>
@@ -92,6 +93,18 @@
             <input id="speed" type="range" min="1" max="8" step="1" value="4" />
           </label>
         </section>
+
+        <h2>Merge tree</h2>
+        <canvas id="tree" class="plot tree"></canvas>
+        <p class="hint">
+          The radius swept up from nothing: the wave grows every stone a cell
+          a step, and where two blobs first touch, their clusters merge at that
+          radius. The dashed line is the cluster radius set, and the clusters
+          under it are in colour; click the tree to cut it at another.
+        </p>
+        <div class="buttons">
+          <button id="grow-tree">Grow the merge tree</button>
+        </div>
 
         <h2>Stones</h2>
         <label>
